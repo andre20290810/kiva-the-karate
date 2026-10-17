@@ -70,7 +70,8 @@ export class FrameStore {
 
   _decode(i) {
     if (this.bitmaps.has(i) || this.pending.has(i) || !this.blobs[i]) return;
-    const opts = this.decodeHeight ? { resizeHeight: this.decodeHeight, resizeQuality: 'high' } : {};
+    // WebGL でも Canvas でも同じ見え方になるよう、アルファはプリマルチで統一
+    const opts = { premultiplyAlpha: 'premultiply', ...(this.decodeHeight ? { resizeHeight: this.decodeHeight, resizeQuality: 'high' } : {}) };
     const p = createImageBitmap(this.blobs[i], opts)
       .then((bmp) => { this.bitmaps.set(i, bmp); })
       .catch((e) => { this.failed.push(`${this.frames[i].file}: decode ${e.message}`); })

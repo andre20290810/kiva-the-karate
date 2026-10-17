@@ -7,11 +7,18 @@ import { Judge, DEFAULT_WINDOWS } from './judge.js';
 import { AutoPlayer } from './auto.js';
 import { InputRouter } from './input.js';
 import { FrameStore } from './frames.js';
-import { StageRenderer } from './renderer.js';
 import { TrackRenderer } from './track.js';
-import { Effects } from './effects.js';
+import { Scene } from './gfx/scene.js';
+import { buildControlMap } from './controls.js';
+import { ControllerUI } from './ui/controller-ui.js';
+import { PadPanel } from './ui/pad-panel.js';
 
 const $ = (s) => document.querySelector(s);
+// 設定の保存（プライベートブラウズ等で localStorage が使えなくても動作を続ける）
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
+};
 
 class LoadError extends Error {
   constructor(stage, url, cause) {
@@ -33,11 +40,10 @@ export class Game {
     this.params = new URLSearchParams(location.search);
     this.chartUrl = new URL(this.params.get('chart') || 'charts/seipai.chart.json', location.href).href;
     this.clock = new AudioClock();
-    this.effects = new Effects();
     this.mode = this.params.get('mode') === 'manual' ? 'manual' : 'auto';
     this.generation = 0;
     this.state = 'loading'; // loading | ready | playing | paused | ended | error
-    this.inputLatency = Number(localStorage.getItem('kr.inputLatency') || 0) / 1000;
+    this.inputLatency = Number(store.get('kr.inputLatency') || 0) / 1000;
     this.lastT = 0;
     this.log = [];
   }
@@ -102,31 +108,48 @@ export class Game {
   }
 
   setupView() {
-    this.stage = new StageRenderer($('#stage'), this.frames, this.chart.camera);
-    this.stage.debug = this.params.has('debug');
-    this.track = new TrackRenderer($('#track'), this.chart.commands);
-    this.track.judgeEl = $('#judgeText');
-    const pad = $('#pad');
-    pad.innerHTML = '';
-    const buttons = this.chart.commands.map((c, i) => {
-      const b = document.createElement('button');
-      b.className = 'padbtn';
-      b.style.setProperty('--c', c.color || '#fc6');
-      b.innerHTML = `<span class="lbl">${c.label}</span><span class="key">${c.keyHint || ''}</span>`;
-      b.setAttribute('aria-label', `${c.name || c.label}（レーン${i + 1}）`);
-      pad.appendChild(b);
-      return b;
+    // ボタン ⇔ 譜面コマンドの対応はここで1回だけ作り、画面ボタン・譜面レーン・入力で共有する
+    this.controls = buildControlMap(this.chart.commands);
+    const quality = this.params.get('quality') || store.get('kiva.quality') || 'AUTO';
+    this.scene = new Scene($('#stage'), this.frames, { camera: this.chart.camera, stage: this.rawChart.stage }, {
+      quality: quality.toUpperCase(), forceCanvas: this.params.has('canvas2d'),
     });
-    this.input = new InputRouter(this.chart.commands.map((c) => c.id), (ev) => this.onCommand(ev));
+    $('#quality').value = this.scene.qualityMode;
+    this.debug = this.params.has('debug');
+    this.track = new TrackRenderer($('#track'), this.controls);
+    this.track.judgeEl = $('#judgeText');
+    this.pad = new ControllerUI($('#pad'), this.controls);
+    this.input = new InputRouter(this.controls, (ev) => this.onCommand(ev));
+    this.input.onHeldChange = (b, d) => this.pad.setHeld(b, d);
     this.input.attachKeyboard();
-    this.input.attachButtons(buttons);
-    const onResize = () => { this.stage.resize(); this.track.resize(); this.render(); };
+    this.input.attachButtons(this.pad.buttons);
+    this.padPanel = new PadPanel($('#padPanel'), this.input, this.controls);
+    this.input.onPadsChange = () => this.padPanel.update();
+    const onResize = () => {
+      this.scene.resize(); this.track.resize();
+      if (this.state !== 'playing') this.render();
+    };
     window.addEventListener('resize', onResize);
-    window.addEventListener('orientationchange', () => setTimeout(onResize, 200));
-    new ResizeObserver(onResize).observe($('#stage'));
+    window.addEventListener('orientationchange', () => setTimeout(onResize, 250));
+    new ResizeObserver(onResize).observe($('#stageWrap'));
+    new ResizeObserver(() => { this.track.resize(); if (this.state !== 'playing') this.render(); }).observe($('#track'));
     onResize();
-    window.addEventListener('gamepadconnected', () => this.updatePadStatus());
-    window.addEventListener('gamepaddisconnected', () => this.updatePadStatus());
+    window.addEventListener('gamepadconnected', () => this.padPanel.update());
+    window.addEventListener('gamepaddisconnected', () => this.padPanel.update());
+    $('#rendererInfo').textContent = this.scene.rendererKind === 'webgl2' ? 'WebGL2' : 'Canvas2D（互換表示）';
+    this.idleLoop();
+  }
+
+  /** 再生していない間もゲームパッドの押下表示と待機中のステージを更新する（判定には不使用） */
+  idleLoop() {
+    const tick = () => {
+      if (this.state !== 'playing') {
+        this.input.pollGamepads(performance.now());
+        this.render(undefined, { idle: true });
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
   }
 
   // ---------- 進行 ----------
@@ -136,8 +159,9 @@ export class Game {
     this.judge = new Judge(this.chart.notes, windows);
     this.auto = this.mode === 'auto' ? new AutoPlayer(this.judge, { generation: this.generation }) : null;
     this.judge.on((e) => (e.type === 'judged' ? this.onJudged(e) : this.onStray(e)));
-    this.effects.clear();
+    this.scene.reset();
     this.track.flashes = [];
+    this.track.bursts = [];
     this.lastT = 0;
     this.log = [];
     $('#result').hidden = true;
@@ -192,6 +216,7 @@ export class Game {
   setMode(mode) {
     if (this.state === 'playing' || this.state === 'paused') return;
     this.mode = mode;
+    this.pad?.setDimmed(mode === 'auto');
     this.updateButtons();
     this.updateHud();
   }
@@ -209,12 +234,15 @@ export class Game {
 
   loop() {
     if (this._raf) return;
-    const tick = () => {
+    const tick = (ts) => {
       this._raf = 0;
       if (this.state !== 'playing') { this.render(); return; }
+      this._frameMs = this._lastTs ? ts - this._lastTs : 16.7;
+      this._lastTs = ts;
       this.frame();
       this._raf = requestAnimationFrame(tick);
     };
+    this._lastTs = 0;
     this._raf = requestAnimationFrame(tick);
   }
 
@@ -227,7 +255,6 @@ export class Game {
     this.auto?.update(t);           // AUTO: 予定時刻ちょうどの入力を共通判定へ
     this.judge.update(t);           // 期限超過 → MISS
     this.render(t);
-    if (this._padTick++ % 30 === 0) this.updatePadStatus();
   }
 
   onCommand(ev) {
@@ -246,52 +273,39 @@ export class Game {
     const n = this.chart.notes.find((x) => x.id === e.note.id);
     this.log.push({ id: n.id, t: n.t, result: e.result, delta: e.delta, source: e.source });
     const now = this.lastT;
-    this.track.mark(e.result, e.result === 'MISS' ? now : (e.time ?? now));
+    const button = this.controls.buttonFor(n.cmd);
+    this.track.mark(e.result, e.result === 'MISS' ? now : (e.time ?? now), button);
+    this.pad.flash(button, e.result);
     this.updateHud();
-    if (e.result === 'MISS') return; // 失敗時は成功エフェクトを出さない
-    // エフェクトは技の「決め」（= ノーツ時刻）に合わせて発生。遅れた入力は入力時刻で。
-    const at = Math.max(n.t, e.time ?? n.t);
-    const vt = this.chart.warp.map(n.t);
-    const fi = this.frames.indexAt(vt);
-    for (const fx of n.fx) {
-      const p = this.fxPosition(fx, fi);
-      if (!p) continue;
-      this.effects.spawn(fx.type, at, { ...p, dir: fx.dir, color: fx.color, seed: Math.random() * 6 });
-    }
-    if (e.combo >= 5) {
-      // 連続成功: 控えめな残像（直前の動作の2コマ）
-      this.effects.spawn('afterimage', at, { videoTime: vt - 0.2 });
-      this.effects.spawn('afterimage', at + 0.04, { videoTime: vt - 0.4 });
-    }
-    if (e.combo > 0 && e.combo % 10 === 0) this.effects.spawn('flash', at, {});
-  }
-
-  /** エフェクト位置（元画像座標）: 手動指定 > 関節推定 > 人物領域の相対位置 */
-  fxPosition(fx, fi) {
-    const at = fx.at || {};
-    if (at.x != null) return { x: at.x, y: at.y };
-    if (at.joint) {
-      const j = this.frames.joint(fi, at.joint);
-      if (j && j.c >= (at.minConf ?? 0.3)) return { x: j.x + (at.dx || 0), y: j.y + (at.dy || 0) };
-    }
-    const b = this.frames.bbox(fi);
-    const rel = at.rel || [0.5, 0.4];
-    if (b) return { x: b[0] + b[2] * rel[0], y: b[1] + b[3] * rel[1] };
-    return null;
-  }
-
-  render(t = this.clock.now()) {
-    if (!this.stage) return;
-    const vt = this.chart.warp.map(t);
-    const beatPulse = this.judge ? Math.max(0, 1 - (t - (this._lastHit ?? -9)) / 0.3) : 0;
-    this.stage.draw(t, vt, this.effects, {
-      pulse: beatPulse,
-      info: { rate: this.chart.warp.rateAt(t), extra: `notes ${this.judge ? this.judge.notes.filter((n) => n.result).length : 0}/${this.chart.notes.length}` },
+    // 演出: 成功は技の「決め」（= ノーツ時刻）に合わせる。遅れた入力は入力時刻。AUTO/MANUAL で同じ規則。
+    // 失敗は判定が確定した時刻に不発演出（成功エフェクトは出さない）。
+    const at = e.result === 'MISS' ? now : Math.max(n.t, e.time ?? n.t);
+    this.scene.hit({
+      key: `${this.generation}:${n.id}`, grade: e.result, tech: n.move.vfx || 'generic', t: at,
+      kimeVideoTime: this.chart.warp.map(e.result === 'MISS' ? now : n.t), fx: n.fx, combo: e.combo,
     });
+    if (e.result === 'MISS') {
+      const app = $('#app');
+      app.classList.remove('combo-break'); void app.offsetWidth; app.classList.add('combo-break');
+    }
+  }
+
+  render(t = this.clock.now(), { idle = false } = {}) {
+    if (!this.scene) return;
+    const vt = this.chart.warp.map(t);
+    // 待機中だけはステージの床を壁時計で流す（再生中・一時停止中は音声時刻のみ）
+    const stageT = idle && (this.state === 'ready' || this.state === 'ended') ? performance.now() / 1000 % 600 : t;
+    const { shownIdx } = this.scene.render(t, vt, { frameMs: this._frameMs || 16.7, stageT });
     this.track.draw(t, this.judge ? this.judge.notes : this.chart.notes);
     const p = this.clock.duration ? t / this.clock.duration : 0;
     $('#timebar').style.setProperty('--p', p);
-    window.__debug = { t, vt, frame: this.frames.indexAt(vt), shown: this.stage.lastShown, state: this.state };
+    window.__debug = { t, vt, frame: this.frames.indexAt(vt), shown: shownIdx, state: this.state, perf: this.scene.perf, vfx: this.scene.vfx.stats };
+    if (this.debug) {
+      const pf = this.scene.perf;
+      $('#debug').textContent = `song ${t.toFixed(3)}s  video ${vt.toFixed(3)}s  frame ${shownIdx}/${this.frames.count} (5fps)\n` +
+        `rate ${this.chart.warp.rateAt(t).toFixed(2)}x  ${this.scene.rendererKind} ${this.scene.q.name}  draw ${pf.avgMs.toFixed(1)}ms  fps ${pf.fps.toFixed(0)}\n` +
+        `particles ${pf.particles}  sprites ${pf.sprites}  decoded ${this.frames.bitmaps.size}`;
+    }
   }
 
   // ---------- UI ----------
@@ -305,7 +319,6 @@ export class Game {
     $('#score').textContent = s.score.toLocaleString();
     $('#combo').textContent = this.judge.combo;
     $('#counts').textContent = `P ${s.perfect} / G ${s.good} / M ${s.miss}`;
-    if (this.judge.combo > 0) this._lastHit = this.lastT;
   }
 
   showResult() {
@@ -337,14 +350,6 @@ export class Game {
     this.updateHud();
   }
 
-  updatePadStatus() {
-    const el = $('#padStatus');
-    const pads = this.input?.gamepads?.length ? this.input.gamepads
-      : (navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean).map((p) => ({ id: p.id, mapping: p.mapping, pressed: [] })) : []);
-    if (!pads.length) { el.textContent = 'ゲームパッド: 未接続（ボタンを押すと認識されます）'; return; }
-    el.textContent = pads.map((p) => `ゲームパッド: ${p.id.slice(0, 40)}（${p.mapping || '非標準配置'}） 押下中: [${p.pressed.join(',')}]`).join(' / ');
-  }
-
   bindUi() {
     $('#btnStart').addEventListener('click', () => this.start());
     $('#btnPause').addEventListener('click', () => (this.state === 'paused' ? this.resume() : this.pause()));
@@ -352,20 +357,28 @@ export class Game {
     $('#btnResultClose').addEventListener('click', () => { $('#result').hidden = true; });
     document.querySelectorAll('input[name=mode]').forEach((r) => r.addEventListener('change', () => this.setMode(r.value)));
     const vol = $('#volume');
-    vol.value = Number(localStorage.getItem('kr.volume') ?? 0.8);
+    vol.value = Number(store.get('kr.volume') ?? 0.8);
     this.clock.setVolume(Number(vol.value));
-    vol.addEventListener('input', () => { this.clock.setVolume(Number(vol.value)); localStorage.setItem('kr.volume', vol.value); });
+    vol.addEventListener('input', () => { this.clock.setVolume(Number(vol.value)); store.set('kr.volume', vol.value); });
     const lat = $('#latency');
     lat.value = Math.round(this.inputLatency * 1000);
-    lat.addEventListener('change', () => { this.inputLatency = Number(lat.value) / 1000; localStorage.setItem('kr.inputLatency', lat.value); });
+    lat.addEventListener('change', () => { this.inputLatency = Number(lat.value) / 1000; store.set('kr.inputLatency', lat.value); });
+    $('#quality').addEventListener('change', (e) => {
+      store.set('kiva.quality', e.target.value);
+      this.scene?.setQuality(e.target.value, this.lastT);
+      if (this.state !== 'playing') this.render();
+    });
+    // 限定公開サーバー（認証あり）で配信されているときだけログアウトを表示
+    fetch('/__auth/me', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).then((me) => {
+      if (me?.user) { $('#logout').hidden = false; $('#who').textContent = me.user; }
+    }).catch(() => {});
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.pause('タブが非表示になりました'); });
     window.addEventListener('pagehide', () => this.pause('ページ離脱'));
     window.addEventListener('keydown', (e) => {
+      if (e.target?.closest?.('input, select, textarea')) return;
       if (e.code === 'Space') { e.preventDefault(); if (this.state === 'playing') this.pause(); else if (this.state === 'paused') this.resume(); else this.start(); }
       if (e.code === 'KeyR' && !e.repeat) this.restart();
     });
-    this._padTick = 0;
-    setInterval(() => { if (this.state !== 'playing') { this.input?.pollGamepads(); this.updatePadStatus(); } }, 500); // 状態表示のみ（同期には不使用）
   }
 }
 

@@ -1,6 +1,9 @@
 {
  "title": "合成テスト譜面（E2E用・ゲーム素材ではない）",
- "audio": ["audio.m4a", "audio.ogg"],
+ "audio": [
+  "audio.m4a",
+  "audio.ogg"
+ ],
  "frames": "frames.json",
  "commands": [
   {
@@ -44,7 +47,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "generic"
   },
   {
    "id": "move02",
@@ -61,7 +65,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "tsuki"
   },
   {
    "id": "move03",
@@ -81,7 +86,8 @@
       ]
      }
     }
-   ]
+   ],
+   "vfx": "uke"
   },
   {
    "id": "move04",
@@ -98,7 +104,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "keri"
   },
   {
    "id": "move05",
@@ -115,7 +122,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "fumikomi"
   },
   {
    "id": "move06",
@@ -132,7 +140,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "kime"
   },
   {
    "id": "move07",
@@ -152,7 +161,8 @@
       ]
      }
     }
-   ]
+   ],
+   "vfx": "generic"
   },
   {
    "id": "move08",
@@ -169,7 +179,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "tsuki"
   },
   {
    "id": "move09",
@@ -186,7 +197,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "uke"
   },
   {
    "id": "move10",
@@ -203,7 +215,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "keri"
   },
   {
    "id": "move11",
@@ -223,7 +236,8 @@
       ]
      }
     }
-   ]
+   ],
+   "vfx": "fumikomi"
   },
   {
    "id": "move12",
@@ -240,7 +254,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "kime"
   },
   {
    "id": "move13",
@@ -257,7 +272,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "generic"
   },
   {
    "id": "move14",
@@ -274,7 +290,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "tsuki"
   },
   {
    "id": "move15",
@@ -294,7 +311,8 @@
       ]
      }
     }
-   ]
+   ],
+   "vfx": "uke"
   },
   {
    "id": "move16",
@@ -311,7 +329,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "keri"
   },
   {
    "id": "move17",
@@ -328,7 +347,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "fumikomi"
   },
   {
    "id": "move18",
@@ -345,7 +365,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "kime"
   },
   {
    "id": "move19",
@@ -365,7 +386,8 @@
       ]
      }
     }
-   ]
+   ],
+   "vfx": "generic"
   },
   {
    "id": "move20",
@@ -382,7 +404,8 @@
       "joint": "right_wrist"
      }
     }
-   ]
+   ],
+   "vfx": "tsuki"
   }
  ],
  "notes": [
