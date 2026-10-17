@@ -10,7 +10,8 @@
     "test:e2e": "node tests/e2e.mjs",
     "test:fallback": "node tests/fallback-quality.mjs",
     "shots": "node tests/visual-shots.mjs",
-    "build:dist": "node tools/build-dist.mjs"
+    "build:dist": "node tools/build-dist.mjs",
+    "test:characters": "node tests/character-switch.mjs"
   },
   "devDependencies": {
     "@ffmpeg-installer/ffmpeg": "1.1.0",

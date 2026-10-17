@@ -33,7 +33,10 @@ export class Scene {
     this.qualityMode = opts.quality || 'AUTO';
     this.q = pickQuality(this.qualityMode === 'AUTO' ? null : this.qualityMode, { webgl2: this.renderer.kind === 'webgl2', lowMemory: (navigator.deviceMemory || 8) <= 2 });
     this.st = new StageSpace({ ...(chartView.stage || {}), speed: this.q.floorSpeed });
-    this.rig = new CharacterRig(frames, chartView.camera || {});
+    // frames は動作の時間軸の基準（KIVA のセーパイ演武）。表示する人物画像は setCharacter で切り替える
+    this.cameraDef = chartView.camera || {};
+    this.rig = new CharacterRig(frames, this.cameraDef);
+    this.disp = { frames, rig: this.rig };
     this.vfx = new VfxEngine(this.q);
     this.batches = { fx: new SpriteBatch(4096), dustB: new SpriteBatch(512), dustF: new SpriteBatch(512), under: new SpriteBatch(16) };
     this.governor = new FrameRateGovernor();
@@ -46,6 +49,16 @@ export class Scene {
   }
 
   get rendererKind() { return this.renderer.kind; }
+
+  /**
+   * 表示する人物画像を切り替える（時間軸・判定・音声には影響しない）。
+   * @param {import('../frames.js').FrameStore|null} store null = 人物を描かない（未完成のキャラクター）
+   */
+  setCharacter(store) {
+    if (store && store !== this.frames && store.count !== this.frames.count) throw new Error('基準と時間軸が異なる人物画像は使えません');
+    this.disp = store ? { frames: store, rig: store === this.frames ? this.rig : new CharacterRig(store, this.cameraDef) } : null;
+    this.renderer.clearTextures?.(); // テクスチャはフレーム番号で保持しているため、別人物の画像と混ざらないよう破棄
+  }
 
   setQuality(mode, t = 0) {
     this.qualityMode = mode;
@@ -79,9 +92,11 @@ export class Scene {
   hit(o) {
     const idx = this.frames.indexAt(o.kimeVideoTime);
     const impact = (o.fx || []).find((f) => f.type === 'impact' || f.type === 'arc' || f.type === 'flash') || (o.fx || [])[0];
-    const anchor = this.rig.anchor(impact, idx);
-    const foot = this.rig.foot(idx);
-    const dir = o.dir ?? this.rig.direction(idx, anchor);
+    // 演出位置は表示中の人物の画像座標（人物を描かない場合は基準の動作位置）
+    const rig = (this.disp ?? { rig: this.rig }).rig;
+    const anchor = rig.anchor(impact, idx);
+    const foot = rig.foot(idx);
+    const dir = o.dir ?? rig.direction(idx, anchor);
     const ev = this.vfx.spawn({ key: o.key, grade: o.grade, tech: o.tech || 'generic', t: o.t, anchor, foot, dir });
     if (!ev) return null;
     if (ev.signals.boost) this.st.boost(o.t, this.q.floorBoost * ev.signals.boost);
@@ -101,12 +116,14 @@ export class Scene {
     const recent = Math.max(0, 1 - (t - this.lastHitT) / 0.6);
     this.energy = Math.min(1, Math.min(1, this.combo / 20) * 0.45 + recent * 0.55);
 
+    const D = this.disp;
+    const geo = D ?? { frames: this.frames, rig: this.rig };
     const idx = this.frames.indexAt(vt);
-    this.frames.prefetch(idx);
-    const fr = this.frames.get(idx);
-    const cam = this.rig.camera(t, this.view);
+    let fr = null;
+    if (D) { D.frames.prefetch(idx); fr = D.frames.get(idx); }
+    const cam = geo.rig.camera(t, this.view);
     const shownIdx = fr ? fr.index : idx;
-    const foot = this.rig.foot(shownIdx);
+    const foot = geo.rig.foot(shownIdx);
     const footS = cam.toScreen(foot.x, foot.y);
     const charZ = this.st.depthAtScreenY(footS.y);
     const charW = this.st.unproject(footS.x, Math.max(footS.y, this.st.horizonY + 1)) || { x: 0 };
@@ -125,20 +142,22 @@ export class Scene {
     for (const d of world.dustBehind) dustB.push(d.x, d.y, d.r * 6, d.r * 6, 0, KIND.GLOW, 0, 0, 0, 0.5 + d.hue * 0.4, 0.75, 1, d.a * 0.6, 1);
     for (const d of world.dustFront) dustF.push(d.x, d.y, d.r * 6, d.r * 6, 0, KIND.GLOW, 0, 0, 0, 0.5 + d.hue * 0.4, 0.75, 1, d.a * 0.6, 1);
 
-    // 接地影（足の位置・広がりから。画像と同じフレームで切り替わる）
-    const sw = foot.spread * cam.scale * 2.4;
-    under.push(footS.x, footS.y + 2, sw * 1.5, sw * 0.26, 0, KIND.GLOW, 0, 0, 0, 0, 0, 0, 0.55, 0);
-    under.push(footS.x, footS.y + 1, sw * 0.8, sw * 0.12, 0, KIND.GLOW, 0, 0, 0, 0, 0, 0, 0.75, 0);
-    // 背面の光（人物を背景から浮かび上がらせる）
-    const body = cam.toScreen(foot.x, foot.y - 420);
-    under.push(body.x, body.y, cam.rect.w * 1.25, cam.rect.h * 0.95, 0, KIND.GLOW, 0, 0, 0, 0.25, 0.42, 0.85, 0.22 + this.energy * 0.25, 1);
+    if (fr) {
+      // 接地影（足の位置・広がりから。画像と同じフレームで切り替わる）
+      const sw = foot.spread * cam.scale * 2.4;
+      under.push(footS.x, footS.y + 2, sw * 1.5, sw * 0.26, 0, KIND.GLOW, 0, 0, 0, 0, 0, 0, 0.55, 0);
+      under.push(footS.x, footS.y + 1, sw * 0.8, sw * 0.12, 0, KIND.GLOW, 0, 0, 0, 0, 0, 0, 0.75, 0);
+      // 背面の光（人物を背景から浮かび上がらせる）
+      const body = cam.toScreen(foot.x, foot.y - 420);
+      under.push(body.x, body.y, cam.rect.w * 1.25, cam.rect.h * 0.95, 0, KIND.GLOW, 0, 0, 0, 0.25, 0.42, 0.85, 0.22 + this.energy * 0.25, 1);
+    }
 
     const ghosts = [];
     if (sig.afterimage > 0.02 && fr) {
       for (let k = 1; k <= q.afterimages; k++) {
         const gi = this.frames.indexAt(vt - 0.2 * k);
         if (gi === shownIdx) continue;
-        const gf = this.frames.get(gi);
+        const gf = D.frames.get(gi);
         if (gf && gf.exact) ghosts.push({ index: gf.index, bmp: gf.bmp, alpha: sig.afterimage * (0.55 / k) });
       }
     }
@@ -166,7 +185,7 @@ export class Scene {
       this.resize();
     }
     p.fps = this.governor.fps;
-    this.last = { idx, shownIdx, foot, footS, charZ, cam };
+    this.last = { idx, shownIdx, foot, footS, charZ, cam, drawn: !!fr };
     return { cam, shownIdx };
   }
 }

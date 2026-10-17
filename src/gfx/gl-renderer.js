@@ -580,6 +580,11 @@ export class GLRenderer {
     });
   }
 
+  clearTextures() {
+    for (const t of this.textures.values()) this.gl.deleteTexture(t.tex);
+    this.textures.clear();
+  }
+
   dispose() {
     const gl = this.gl;
     for (const t of this.textures.values()) gl.deleteTexture(t.tex);

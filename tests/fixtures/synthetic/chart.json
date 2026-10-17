@@ -536,5 +536,21 @@
    "use": 6,
    "reason": "置換テスト"
   }
+ ],
+ "characters": [
+  {
+   "id": "kiva",
+   "name": "KIVA",
+   "frames": "frames.json"
+  },
+  {
+   "id": "alexandre",
+   "name": "ALEXANDRE",
+   "frames": "alexandre/frames.json",
+   "status": "pending",
+   "references": [
+    "alexandre.mp4"
+   ]
+  }
  ]
 }

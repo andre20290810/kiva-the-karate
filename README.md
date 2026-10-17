@@ -11,6 +11,7 @@
 | ABXY ひし形UI・GameSir/XInput/標準ゲームパッド・キャリブレーション | 実装済み（モック検証のみ。実機未確認） |
 | 疑似3Dステージ・VFX（WebGL2 / Canvas2D フォールバック）・画質切替 | 実装済み（合成データで見た目確認。実素材での確認は未実施） |
 | 縦横・タブレット・PC レイアウト | 11 サイズ + 回転で自動検証（実機未確認） |
+| キャラクター切替（KIVA ⇄ ALEXANDRE） | 実装済み。**ALEXANDRE の演武フレームは未作成のため「未完成」表示**（人物は描かない） |
 | パスワード認証（Cloudflare Worker） | 実装済み・ローカル workerd で検証。**本番デプロイ・DNS は未実施** |
 | 人物画像 412 枚の品質改善 | **未着手**（実素材がこの作業環境にないため） |
 | 譜面 `charts/seipai.chart.json` | 23件の未校正の動作候補。技名・分類・決め時刻は未検証（正解データとして使用不可） |
@@ -26,6 +27,7 @@ npm run test:sync               # 一時停止/再開/リスタートの時刻�
 npm run test:e2e                # AUTO 全編・MANUAL 判定・レイアウト・読み込み失敗表示
 npm run test:fallback           # WebGL2 非対応時の Canvas2D 切替・画質切替の連続性
 CHART=tests/fixtures/synthetic/chart.json npm run test:layout   # 11 画面サイズ + 回転
+npm run test:characters         # キャラクター切替（時刻・判定に影響しないこと）
 npm run shots                   # PERFECT/GOOD/MISS 等の確認用スクリーンショット（見た目専用）
 ```
 
@@ -47,6 +49,18 @@ URL パラメータ: `?mode=manual` / `?debug`（時刻・フレーム・描画�
 ゲームパッドが標準配置で認識されない場合は、操作欄の「ボタン設定」で4ボタンを押して割り当てます（端末ごとに保存）。
 譜面のコマンドとボタンの対応は `src/controls.js` で一元管理（譜面の `commands[].button` で変更可）。
 
+## キャラクター切替
+
+ステージ左上の小さなボタンを押すたびに **KIVA ⇄ ALEXANDRE** を切り替えます（選択はブラウザに保存）。
+切り替わるのは表示する人物画像だけで、動作の時間軸（KIVA のセーパイ演武）・音声・譜面・判定は共通です。
+
+- KIVA: 既存のセーパイ演武 412 フレーム（`assets/seipai/frames.json`）。
+- ALEXANDRE: `assets/alexandre/frames.json` が置かれると読み込みます。**現在は未作成**のため、人物を描かず
+  「ALEXANDRE：未完成」と表示します（外観資料: 共有フォルダの `alexandre.mp4`・`KIVA_character_references_from_video.zip`）。
+- 追加キャラクターの frames.json は KIVA と同じ時間軸（5fps・412枚・各コマの時刻が一致）が必須です。
+  合わない場合は読み込まず、理由を表示します。形式は `assets/seipai/frames.json` と同じです。
+  定義は譜面の `characters`（`charts/seipai.chart.json`）。
+
 ## 構成
 
 | ファイル | 役割 |
@@ -57,6 +71,7 @@ URL パラメータ: `?mode=manual` / `?debug`（時刻・フレーム・描画�
 | `src/ui/controller-ui.js` / `src/ui/pad-panel.js` | ABXY ひし形ボタン／接続状態・割り当て・キャリブレーション |
 | `src/chart.js` / `src/timewarp.js` | 譜面の検証／音声時刻→元動画時刻（決め＝判定時刻） |
 | `src/frames.js` / `src/character.js` | 画像の取得・限定デコード／人物の共通カメラ・接地点 |
+| `src/characters.js` | キャラクター一覧・時間軸の検査・切替順と保存 |
 | `src/stage/` | 疑似3Dステージの空間計算・柱やゲート |
 | `src/vfx/` | 技成立演出（PERFECT/GOOD/MISS、技カテゴリー別）。時刻の解析式で計算 |
 | `src/gfx/` | WebGL2 / Canvas2D レンダラー、画質プリセット、シーン統合 |

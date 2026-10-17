@@ -4,6 +4,25 @@
   "annotation": "5fps骨格の動作速度ピーク後の静止区間を用いた暫定候補。技名・コマンド・決め時刻は未検証。練習効果測定の正解値には使わないこと。",
   "audio": "../assets/seipai/audio.m4a",
   "frames": "../assets/seipai/frames.json",
+  "characters": [
+    {
+      "id": "kiva",
+      "name": "KIVA",
+      "frames": "../assets/seipai/frames.json",
+      "note": "セーパイ演武 412フレーム（5fps）"
+    },
+    {
+      "id": "alexandre",
+      "name": "ALEXANDRE",
+      "frames": "../assets/alexandre/frames.json",
+      "status": "pending",
+      "note": "演武フレーム未作成。KIVA と同じ時間軸（412フレーム・5fps）で作成すること",
+      "references": [
+        "alexandre.mp4",
+        "KIVA_character_references_from_video.zip"
+      ]
+    }
+  ],
   "audioOffset": 0,
   "windows": {
     "perfect": 0.08,

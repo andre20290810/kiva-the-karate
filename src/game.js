@@ -12,13 +12,16 @@ import { Scene } from './gfx/scene.js';
 import { buildControlMap } from './controls.js';
 import { ControllerUI } from './ui/controller-ui.js';
 import { PadPanel } from './ui/pad-panel.js';
+import { characterList, validateCharacterFrames, CharacterSelector, STATUS } from './characters.js';
 
 const $ = (s) => document.querySelector(s);
 // 設定の保存（プライベートブラウズ等で localStorage が使えなくても動作を続ける）
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
+  raw() { try { return localStorage; } catch { return null; } },
 };
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
 class LoadError extends Error {
   constructor(stage, url, cause) {
@@ -137,7 +140,74 @@ export class Game {
     window.addEventListener('gamepadconnected', () => this.padPanel.update());
     window.addEventListener('gamepaddisconnected', () => this.padPanel.update());
     $('#rendererInfo').textContent = this.scene.rendererKind === 'webgl2' ? 'WebGL2' : 'Canvas2D（互換表示）';
+    this.setupCharacters();
     this.idleLoop();
+  }
+
+  // ---------- キャラクター切替（表示する人物画像だけを切り替える。動作・音声・譜面・判定は共通） ----------
+  setupCharacters() {
+    this.characters = characterList(this.rawChart);
+    this.charStores = new Map([[this.characters[0].id, this.frames]]);
+    this.charState = new Map(this.characters.map((c) => [c.id, c.base ? { status: STATUS.READY } : { status: c.status }]));
+    this.charSel = new CharacterSelector(this.characters, store.raw());
+    const btn = $('#charBtn');
+    btn.hidden = this.characters.length < 2;
+    btn.addEventListener('click', (e) => { e.preventDefault(); this.charSel.next(); this.applyCharacter(); });
+    this.applyCharacter();
+  }
+
+  async applyCharacter() {
+    const c = this.charSel.current;
+    const token = (this._charToken = (this._charToken || 0) + 1);
+    let st = this.charState.get(c.id);
+    if (st.status !== STATUS.READY || !this.charStores.has(c.id)) {
+      if (c.frames && st.status !== STATUS.UNAVAILABLE) {
+        this.showCharacter(c, { status: STATUS.LOADING, reason: '人物画像を読み込み中…' });
+        st = await this.loadCharacter(c);
+        this.charState.set(c.id, st);
+        if (token !== this._charToken) return; // 読み込み中に別のキャラクターへ切り替えられた
+      } else if (!c.frames) {
+        st = { status: STATUS.PENDING, reason: '演武フレームが未作成です' };
+        this.charState.set(c.id, st);
+      }
+    }
+    this.showCharacter(c, st);
+  }
+
+  async loadCharacter(c) {
+    const url = new URL(c.frames, this.chartUrl).href;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return { status: STATUS.PENDING, reason: res.status === 404 ? '演武フレームが未作成です' : `フレーム定義を読み込めません（HTTP ${res.status}）` };
+      const def = await res.json();
+      const v = validateCharacterFrames(this.frames.def, def);
+      if (!v.ok) return { status: STATUS.UNAVAILABLE, reason: `演武フレームが基準と一致しません: ${v.reason}` };
+      const fs = new FrameStore(def, url, { decodeHeight: this.frames.decodeHeight });
+      await fs.fetchAll();
+      this.charStores.set(c.id, fs);
+      return { status: STATUS.READY };
+    } catch (e) {
+      return { status: STATUS.UNAVAILABLE, reason: `人物画像を読み込めません: ${e.message.split('\n')[0]}` };
+    }
+  }
+
+  showCharacter(c, st) {
+    const btn = $('#charBtn');
+    btn.querySelector('.who').textContent = c.name;
+    btn.dataset.status = st.status;
+    btn.setAttribute('aria-label', `表示キャラクター: ${c.name}${st.status === STATUS.READY ? '' : '（未完成）'}。押すと切り替え`);
+    const ready = st.status === STATUS.READY && this.charStores.has(c.id);
+    this.scene.setCharacter(ready ? this.charStores.get(c.id) : null);
+    const notice = $('#charNotice');
+    notice.hidden = ready;
+    if (!ready) {
+      const refs = c.references?.length ? `<br>外観資料: ${c.references.map(escapeHtml).join(' / ')}` : '';
+      notice.innerHTML = st.status === STATUS.LOADING
+        ? `<b>${escapeHtml(c.name)}</b>：${escapeHtml(st.reason)}`
+        : `<b>${escapeHtml(c.name)}：未完成</b><br>${escapeHtml(st.reason || '演武フレームが未作成です')}。<br>音声・譜面・判定は共通のまま続行します。${refs}`;
+    }
+    window.__character = { id: c.id, name: c.name, status: st.status, drawn: ready };
+    if (this.state !== 'playing') this.render();
   }
 
   /** 再生していない間もゲームパッドの押下表示と待機中のステージを更新する（判定には不使用） */
