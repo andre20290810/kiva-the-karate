@@ -87,11 +87,13 @@ void main(){
     float ring = exp(-pow((d-r)/(0.35+P.z*1.2),2.0));
     // 波面は手前ほど太く見えるので、奥行きで幅を補正して細い光の帯に保つ
     float wv = (0.18 + P.z*0.5) * (0.6 + 0.4*clamp(z/6.0,0.0,1.0));
-    col += vec3(1.0,0.66,0.25)*exp(-pow((d-r)/wv,2.0))*P.w*life*0.85;
-    col += vec3(0.25,0.75,1.0)*exp(-pow((d-r*0.72)/(wv*0.7),2.0))*P.w*life*0.4;
-    float lit = step(d, r) * step(0.6, rnd) * exp(-P.z*3.5) * step(d, 9.0);
-    col += vec3(0.15,0.5,1.0)*lit*P.w*(0.35+0.4*rnd)*(1.0-seam);
-    col += vec3(1.0,0.8,0.55)*exp(-d*d*2.5)*exp(-P.z*12.0)*P.w*0.45;
+    vec3 add = vec3(1.0,0.66,0.25)*exp(-pow((d-r)/wv,2.0))*P.w*life*0.7;
+    add += vec3(0.25,0.75,1.0)*exp(-pow((d-r*0.72)/(wv*0.7),2.0))*P.w*life*0.3;
+    float lit = step(d, r) * step(0.62, rnd) * exp(-P.z*4.0) * step(d, 8.0);
+    add += vec3(0.12,0.42,0.9)*lit*P.w*(0.25+0.3*rnd)*(1.0-seam);
+    add += vec3(1.0,0.75,0.5)*exp(-d*d*4.0)*exp(-P.z*14.0)*P.w*0.16;
+    // 足元の衝撃で床が白く飽和しないよう、1つの衝撃の明るさに上限を設ける
+    col += min(add, vec3(0.55));
   }
   // 霧（遠方ほど地平線の色へ）
   float fog = 1.0 - exp(-z*uFog);
@@ -241,7 +243,7 @@ void main(){
   vec2 uv = vUv + uShake;
   if (uGlitch > 0.0) {
     float band = floor(uv.y*42.0) + floor(uTime*45.0)*7.0;
-    if (h1(band) < uGlitch*0.45) uv.x += (h1(band+3.1)-0.5)*0.07*uGlitch;
+    if (h1(band) < uGlitch*0.25) uv.x += (h1(band+3.1)-0.5)*0.022*uGlitch;
   }
   vec2 dir = uv-0.5;
   float ca = uChroma*0.009;
@@ -249,7 +251,7 @@ void main(){
   col += texture(uBloom, uv).rgb*uBloomAmt;
   float l = dot(col, vec3(0.299,0.587,0.114));
   col = mix(col, vec3(l*0.65,l*0.85,l*1.35), uCold*0.65);
-  if (uGlitch > 0.0) col += (h1(floor(gl_FragCoord.y*0.5)+uTime*13.0)-0.5)*0.12*uGlitch;
+  if (uGlitch > 0.0) col += (h1(floor(gl_FragCoord.y*0.5)+uTime*13.0)-0.5)*0.06*uGlitch;
   col += uFlash*vec3(1.0,0.94,0.82)*0.55;
   col *= mix(1.0, smoothstep(1.25, 0.3, length(dir*vec2(1.0,0.85))), uVig);
   o = vec4(col, 1.0);
@@ -518,7 +520,7 @@ export class GLRenderer {
     const bloom = q.bloom;
     if (bloom) {
       gl.disable(gl.BLEND);
-      this._fs(this.bright, this.fbos.b1, (u) => { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.fbos.scene.tex); gl.uniform1i(u.uTex, 0); gl.uniform1f(u.uThr, 0.5); });
+      this._fs(this.bright, this.fbos.b1, (u) => { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.fbos.scene.tex); gl.uniform1i(u.uTex, 0); gl.uniform1f(u.uThr, 0.62); });
       gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbos.scene.fb);
       gl.viewport(0, 0, this.fbos.scene.w, this.fbos.scene.h);
       gl.enable(gl.BLEND);

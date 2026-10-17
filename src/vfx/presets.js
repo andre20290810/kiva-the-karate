@@ -71,8 +71,9 @@ export function buildHit(grade, tech, { dir = -Math.PI / 2, seed = 1, scale = 1 
   const dx = Math.cos(dir), dy = Math.sin(dir);
 
   // ── 0–90ms: コアフラッシュ（鋭い十字の閃光）
-  ps.push(P({ kind: KIND.CORE, life: perfect ? 0.13 : 0.09, s0: 70 * S, s1: 190 * S, rot: dir, pal: PALETTE.hot, attack: 0.02, pow: 2.2, alpha: 1 }));
-  ps.push(P({ kind: KIND.GLOW, life: perfect ? 0.38 : 0.24, s0: 120 * S, s1: 330 * S, pal: main, alpha: perfect ? 0.85 : 0.55, attack: 0.03, pow: 1.8 }));
+  // 人物の体を隠さないよう、強い白色部分は小さく短く（外側の色光で広がりを出す）
+  ps.push(P({ kind: KIND.CORE, life: perfect ? 0.11 : 0.08, s0: 50 * S, s1: 135 * S, rot: dir, pal: PALETTE.hot, attack: 0.02, pow: 2.4, alpha: 0.95 }));
+  ps.push(P({ kind: KIND.GLOW, life: perfect ? 0.34 : 0.22, s0: 100 * S, s1: 280 * S, pal: main, alpha: perfect ? 0.6 : 0.4, attack: 0.03, pow: 1.9 }));
   // アナモルフィックな横長フレア
   ps.push(P({ kind: KIND.STREAK, life: perfect ? 0.2 : 0.12, s0: 380 * S, s1: 900 * S, aspect: 0.022, rot: 0, pal: PALETTE.cyan, alpha: perfect ? 0.9 : 0.5, attack: 0.02, pow: 2 }));
 

@@ -6,14 +6,15 @@ import { join } from 'node:path';
 import { chromium } from 'playwright-core';
 
 const localEdge = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-const executablePath = process.env.CHROME_PATH || (existsSync(localEdge) ? localEdge : undefined);
+const linuxChromium = '/opt/pw-browsers/chromium';
+const executablePath = process.env.CHROME_PATH || (existsSync(localEdge) ? localEdge : existsSync(linuxChromium) ? linuxChromium : undefined);
 const browser = await chromium.launch({
   ...(executablePath ? { executablePath } : {}),
   headless: true,
   args: ['--autoplay-policy=no-user-gesture-required'],
 });
-const base = process.env.BASE || 'http://localhost:8080/';
-const shots = 'source/rotation-shots';
+const base = (process.env.BASE || 'http://127.0.0.1:8177/') + (process.env.CHART ? `?chart=${encodeURIComponent(process.env.CHART)}` : '');
+const shots = process.env.SHOTS || 'source/rotation-shots';
 mkdirSync(shots, { recursive: true });
 const page = await browser.newPage({
   viewport: { width: 390, height: 844 },
@@ -33,6 +34,8 @@ const screens = [
   ['tablet-portrait', 768, 1024],
   ['tablet-landscape', 1024, 768],
   ['desktop', 1280, 800],
+  ['desktop-fullhd', 1920, 1080],
+  ['tiny-landscape', 480, 320],
 ];
 
 const rect = r => ({
@@ -52,7 +55,7 @@ async function measure(label, w, h) {
   await page.waitForTimeout(220);
   const m = await page.evaluate(() => {
     const selectors = ['#hud','#stageWrap','#stage','#side','#track','#pad','#controls',
-      '#btnStart','#btnPause','#btnRestart','#status', ...Array.from({length: 4}, (_,i)=>'#pad .padbtn:nth-child('+(i+1)+')')];
+      '#btnStart','#btnPause','#btnRestart','#status', ...Array.from({length: 4}, (_,i)=>'#pad .face:nth-child('+(i+1)+')')];
     const boxes = Object.fromEntries(selectors.map(s => {
       const r = document.querySelector(s).getBoundingClientRect();
       return [s, { x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height }];
@@ -84,7 +87,7 @@ async function measure(label, w, h) {
     requireVisible(label, key, m.boxes, w, h);
   }
   for (let i = 1; i <= 4; i++) {
-    const k = '#pad .padbtn:nth-child(' + i + ')';
+    const k = '#pad .face:nth-child(' + i + ')';
     requireVisible(label, k, m.boxes, w, h);
     assert.ok(m.boxes[k].width >= 40 && m.boxes[k].height >= 40, label + ' touch target ' + i);
   }

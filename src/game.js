@@ -145,7 +145,8 @@ export class Game {
     const tick = () => {
       if (this.state !== 'playing') {
         this.input.pollGamepads(performance.now());
-        this.render(undefined, { idle: true });
+        // 待機・終了画面だけステージを動かす。一時停止中は描き直さない（画面が静止する）
+        if (this.state === 'ready' || this.state === 'ended') this.render(undefined, { idle: true });
       }
       requestAnimationFrame(tick);
     };
@@ -192,6 +193,7 @@ export class Game {
     this.clock.pause();
     this.state = 'paused';
     this.updateButtons();
+    this.render(); // 停止位置で1回だけ描画（停止中は再描画しない＝静止）
     if (reason) this.status(`一時停止（${reason}）`);
   }
 
@@ -290,7 +292,7 @@ export class Game {
     }
   }
 
-  render(t = this.clock.now(), { idle = false } = {}) {
+  render(t = this.clock.position(), { idle = false } = {}) {
     if (!this.scene) return;
     const vt = this.chart.warp.map(t);
     // 待機中だけはステージの床を壁時計で流す（再生中・一時停止中は音声時刻のみ）

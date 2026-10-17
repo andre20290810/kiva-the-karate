@@ -2,16 +2,18 @@
 //   node tools/serve.mjs 8080 &
 //   node tests/e2e.mjs [chart=tests/fixtures/synthetic/chart.json] [shotsDir]
 // AUTO 全編 → 全ノーツ1回ずつ PERFECT、一時停止/再開/リスタートで重複なし、MANUAL で判定が変わることを確認する。
-const { chromium } = await import('playwright').catch(() => import('/opt/node-tools/node_modules/playwright/index.mjs'));
+import { existsSync } from 'node:fs';
+import { chromium } from 'playwright-core';
 
 const chart = process.argv[2] || 'tests/fixtures/synthetic/chart.json';
 const shots = process.argv[3] || '';
-const base = process.env.BASE || 'http://localhost:8080/';
+const base = process.env.BASE || 'http://127.0.0.1:8177/';
+const exe = process.env.CHROME_PATH || (existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
 const url = (q) => `${base}?chart=${encodeURIComponent(chart)}&debug${q}`;
 const fail = [];
 const check = (cond, msg) => { console.log(`${cond ? 'ok  ' : 'NG  '} ${msg}`); if (!cond) fail.push(msg); };
 
-const browser = await chromium.launch({ args: ['--autoplay-policy=user-gesture-required'] });
+const browser = await chromium.launch({ ...(exe ? { executablePath: exe } : {}), args: ['--autoplay-policy=user-gesture-required'] });
 
 async function open(q, viewport = { width: 1280, height: 800 }) {
   const page = await browser.newPage({ viewport });
@@ -93,38 +95,64 @@ const durationMs = async (page) => (await page.evaluate(() => window.__game.cloc
 }
 
 // --- MANUAL: 入力タイミングで判定が変わる ---
+// 判定の期待値は「キーイベントの実際の時刻（event.timeStamp → 曲時刻）」から求める。
+// テストがキーを送る時刻は描画負荷で遅れることがあるため、予定のずれではなく実測のずれで照合し、
+// 送信の遅れは別に表示する（判定処理の誤りと、テストの送信遅れを区別するため）。
 {
-  const page = await open('&mode=manual');
+  // 描画負荷を下げて送信遅れを小さくする（判定処理は描画方式に依存しない）
+  const page = await open(process.env.MANUAL_QUERY ?? '&mode=manual&canvas2d&quality=PERFORMANCE');
+  await page.evaluate(() => {
+    window.__keylog = [];
+    window.addEventListener('keydown', (e) => {
+      const g = window.__game;
+      window.__keylog.push({ code: e.code, repeat: e.repeat, ts: e.timeStamp, song: g.clock.songTimeAtPerf(e.timeStamp) - g.inputLatency });
+    }, true);
+  });
   await page.click('#btnStart');
-  // ノーツ時刻に対して ずれ 0ms / +120ms / 押さない / 違うキー を順に与える
   const notes = await page.evaluate(() => window.__game.chart.notes.map((n) => ({ t: n.t, lane: window.__game.chart.commands.findIndex((c) => c.id === n.cmd) })));
-  const keys = ['KeyD', 'KeyF', 'KeyJ', 'KeyK'];
-  const plan = notes.slice(0, 8).map((n, i) => ({ ...n, off: [0, 0.12, null, 0, 0.03, -0.11, 0, 0.4][i] }));
+  // レーン（譜面コマンド順）→ 既定のボタン A/B/X/Y → キー S/D/A/W（src/controls.js の一元表）
+  const keys = ['KeyS', 'KeyD', 'KeyA', 'KeyW'];
+  const plan = notes.slice(0, 8).map((n, i) => ({ ...n, i, off: [0, 0.12, null, 0, 0.03, -0.11, 0, 0.4][i] }));
   for (const p of plan) {
     if (p.off == null) continue;
     await page.waitForFunction((tt) => window.__game.clock.songTimeAtPerf(performance.now()) >= tt, p.t + p.off - 0.002, { timeout: 20000, polling: 1 });
     await page.keyboard.down(keys[p.lane]);
     await page.keyboard.up(keys[p.lane]);
   }
-  // キー押しっぱなし（オートリピート）が複数判定にならないこと
+  // キー押しっぱなし（オートリピート）が複数の判定入力にならないこと
   const hold = notes[8];
-  await page.waitForFunction((tt) => window.__game.clock.songTimeAtPerf(performance.now()) >= tt, hold.t - 0.01, { timeout: 20000, polling: 1 });
-  const strayBefore = await page.evaluate(() => window.__game.judge.strayInputs);
+  await page.waitForFunction((tt) => window.__game.clock.songTimeAtPerf(performance.now()) >= tt, hold.t - 0.02, { timeout: 20000, polling: 1 });
+  const inBefore = await page.evaluate(() => window.__game.judge.consumedInputIds.size);
   await page.keyboard.down(keys[hold.lane]);
   for (let i = 0; i < 5; i++) await page.keyboard.down(keys[hold.lane]); // repeat=true
   await page.keyboard.up(keys[hold.lane]);
   await page.waitForTimeout(400);
+  const inAfter = await page.evaluate(() => window.__game.judge.consumedInputIds.size);
   const res = await page.evaluate(() => window.__game.judge.notes.slice(0, 10).map((n) => ({ r: n.result, d: n.delta })));
+  const log = (await page.evaluate(() => window.__keylog)).filter((k) => !k.repeat);
+  const W = await page.evaluate(() => window.__game.judge.windows);
   console.log('     MANUAL 判定:', res.map((x) => `${x.r}${x.d != null ? `(${(x.d * 1000).toFixed(0)}ms)` : ''}`).join(' '));
+  let k = 0;
+  let consistent = true;
+  const lags = [];
+  for (const p of plan) {
+    if (p.off == null) continue;
+    const ev = log[k++];
+    const actual = ev.song - p.t;
+    lags.push(actual - p.off);
+    const expect = Math.abs(actual) <= W.perfect ? 'PERFECT' : Math.abs(actual) <= W.good ? 'GOOD' : 'MISS';
+    const got = res[p.i];
+    const deltaOk = expect === 'MISS' ? got.d == null : Math.abs(got.d - actual) < 0.001;
+    if (got.r !== expect || !deltaOk) consistent = false;
+    console.log(`     ノーツ${p.i}: 予定 ${(p.off * 1000).toFixed(0)}ms / 実際のキー時刻 ${(actual * 1000).toFixed(1)}ms → 期待 ${expect} / 判定 ${got.r}${got.d != null ? ` ${(got.d * 1000).toFixed(1)}ms` : ''}`);
+  }
+  check(consistent, '各入力の判定が、キーイベントの実時刻から求めた期待値と一致（delta 誤差 <1ms）');
+  console.log(`     テスト側のキー送信の遅れ: 平均 ${(lags.reduce((a, b) => a + b, 0) / lags.length * 1000).toFixed(1)}ms / 最大 ${(Math.max(...lags) * 1000).toFixed(1)}ms（判定処理の誤差ではない）`);
   check(res[2].r === 'MISS', '押さなかったノーツは MISS');
-  check(res[7].r === 'MISS', '大きく遅れた入力（+400ms）は MISS');
+  check(res[7].r === 'MISS', '大きく遅れた入力（予定 +400ms）は MISS');
   check(new Set(res.slice(0, 8).map((x) => x.r)).size >= 2, 'タイミングによって判定が変わる');
-  check(res[1].r === 'GOOD', '+120ms は GOOD');
-  const strayAfter = await page.evaluate(() => window.__game.judge.strayInputs);
-  check(res[8].r && res[8].r !== 'MISS' && strayAfter === strayBefore, `押しっぱなし／リピートは1回の入力として扱う（空振り増加 ${strayAfter - strayBefore}）`);
-  const combo = await page.evaluate(() => window.__game.judge.combo);
+  check(inAfter - inBefore === 1, `押しっぱなし／リピート5回でも判定への入力は1回（${inAfter - inBefore}回）`);
   if (shots) await page.screenshot({ path: `${shots}/manual.png` });
-  console.log(`     現在コンボ ${combo}`);
   await page.close();
 }
 

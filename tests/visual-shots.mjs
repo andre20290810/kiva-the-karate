@@ -25,9 +25,10 @@ const pauseAt = (page, tt) => page.waitForFunction((x) => {
   const g = window.__game;
   if (g.state === 'playing' && g.lastT >= x) {
     g.pause();
-    // ヘッドレス環境は描画が遅く1フレームで行き過ぎるため、表示時刻を目標へ戻して描き直す
-    // （演出は時刻の解析式なので、その時刻の正確な状態になる。判定は済んでいるので重複しない）
-    g.clock.offset = x; g.lastT = x; g.render(x);
+    // 撮影専用: 一時停止中は画面を描き直さないので、目標時刻 x の見た目を「描画だけ」行う。
+    // 時計（clock）・lastT・判定状態は一切変更しない。これは見た目の確認用であり、
+    // 同期の正しさの証拠ではない（同期は tests/sync-probe.mjs で時刻を変えずに検証する）。
+    g.render(Math.min(x, g.clock.position()));
     return true;
   }
   return false;
@@ -68,9 +69,11 @@ async function shoot(page, name) {
   const page = await open({ width: 1280, height: 800 }, 'manual');
   await page.click('#btnStart');
   const notes = await page.evaluate(() => window.__game.chart.notes.map((n) => ({ t: n.t, cmd: n.cmd })));
+  // 撮影用: ノーツ到達前に「ノーツ時刻+off に押した」入力を共通の判定処理へ渡す
+  // （ヘッドレスの遅い描画で期限を過ぎて MISS になるのを避けるため。時計は変更しない）
   const hitAt = (i, off) => page.waitForFunction(({ n, off }) => {
     const g = window.__game;
-    if (g.lastT >= n.t + off) { g.judge.input({ cmd: n.cmd, time: n.t + off, source: 'visual-test', id: `v${n.t}` }); return true; }
+    if (g.lastT >= n.t - 0.5) { g.judge.input({ cmd: n.cmd, time: n.t + off, source: 'visual-test', id: `v${n.t}` }); return true; }
     return false;
   }, { n: notes[i], off }, { polling: 'raf', timeout: 30000 });
   await hitAt(0, 0.11);

@@ -110,9 +110,10 @@ export class TrackRenderer {
     g.beginPath(); g.arc(hx, hy, R * 1.32, 0, Math.PI * 2); g.stroke();
 
     // 判定の光（成功はボタン色の輪、失敗は寒色のひび）
-    this.bursts = this.bursts.filter((b) => now - b.t < 0.35 && b.t <= now + 0.05);
+    this.bursts = this.bursts.filter((b) => now - b.t < 0.35 && b.t <= now + 1);
     for (const b of this.bursts) {
-      const k = Math.max(0, (now - b.t) / 0.35);
+      if (b.t > now) continue;
+      const k = (now - b.t) / 0.35;
       const e = this.map.byButton.get(b.button);
       if (!e) continue;
       g.save();
@@ -156,8 +157,8 @@ export class TrackRenderer {
     }
 
     // 判定文字はステージ上部の DOM（#judgeText）に表示（ノーツと重ねない）
-    this.flashes = this.flashes.filter((f) => now - f.t < 0.5 && f.t <= now + 0.05);
-    const f = this.flashes[this.flashes.length - 1];
+    this.flashes = this.flashes.filter((f) => now - f.t < 0.5 && f.t <= now + 1);
+    const f = [...this.flashes].reverse().find((x) => x.t <= now);
     if (this.judgeEl) {
       const txt = f && f.t <= now ? f.result : '';
       if (this.judgeEl.textContent !== txt) { this.judgeEl.textContent = txt; this.judgeEl.dataset.r = txt; }

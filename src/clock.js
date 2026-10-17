@@ -72,7 +72,12 @@ export class AudioClock {
 
   pause() {
     if (this.state !== 'playing') return;
+    // 音声は「予約済みの再生位置 now()」で止め、再開もそこから続ける（音の欠け・重複なし）。
+    // 一方、画面と判定が使う「聞こえている位置」は出力遅延の分だけ手前なので、それを別に保持する。
+    // （以前は停止中に now() を返していたため、停止した瞬間に表示が遅延分だけ先へ進んでいた）
+    const audible = this.songTimeAtPerf(performance.now());
     this.offset = this.now();
+    this.pausedAudible = Math.max(0, Math.min(audible, this.offset));
     this.state = 'paused';
     this._stopSource();
   }
@@ -84,6 +89,7 @@ export class AudioClock {
   restart() {
     this._stopSource();
     this.offset = 0;
+    this.pausedAudible = 0;
     this.state = 'idle';
   }
 
@@ -108,6 +114,7 @@ export class AudioClock {
    * 入力イベントの event.timeStamp を使い、描画フレームの遅れを判定に混ぜない。
    */
   songTimeAtPerf(perfMs) {
+    if (this.state === 'paused') return this.pausedAudible ?? this.offset;
     if (this.state !== 'playing') return this.offset;
     let ctxTime;
     const ts = this.ctx.getOutputTimestamp?.();
@@ -118,6 +125,9 @@ export class AudioClock {
     }
     return this.offset + (ctxTime - this.startCtxTime);
   }
+
+  /** 画面・判定・VFX が共通に使う「聞こえている」曲時刻（停止中は停止した位置で固定） */
+  position() { return this.songTimeAtPerf(performance.now()); }
 
   /** 出力遅延（スピーカーへ届くまで）。判定補正に使う。 */
   get outputLatency() {
