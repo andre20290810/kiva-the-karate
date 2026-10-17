@@ -1,4 +1,4 @@
-# KATA BEAT（空手の型 × 音ゲー 試作）
+# KIVA THE KARATE（空手の型 × 音ゲー 試作）
 
 空手の型「セーパイ」の演武動画を題材にした、音楽に合わせてコマンドを入力するWebプロトタイプです。
 ビルド不要の静的サイトです（ES Modules）。依存パッケージはありません。
@@ -7,19 +7,19 @@
 
 | 項目 | 状態 |
 |---|---|
-| 判定・AUTO・入力・時刻同期・描画・エフェクト・UI | 実装済み（自動テスト 19件） |
-| 素材（元動画・透過PNG ZIP） | **未取得**：実行環境から Google Drive に接続できないため |
-| 譜面 `charts/seipai.chart.json` | 素材を確認してから作成（現時点では存在しない） |
+| 判定・AUTO・入力・時刻同期・描画・エフェクト・UI | 実装済み（自動テスト 21件） |
+| 素材（元動画・透過PNG ZIP） | ローカルPCに取得・変換済み。公開リポジトリには未収録 |
+| 譜面 `charts/seipai.chart.json` | 23件の未校正の動作候補。正解データとして使用不可 |
 
-素材がない状態で起動すると、何が足りないのかを画面に表示します。
+実素材の準備・再生成手順と公開前の確認事項は `ASSET_SETUP.md` を参照してください。素材がない状態で起動すると不足ファイルを画面に表示します。
 
 ## 素材の配置
 
 ```
-karate-rhythm/
+kiva-the-karate/
   source/                       ← 元素材を置く（git には含めない）
     seipai.mp4                  元動画
-    セーパイ_透過PNG412枚_自動切り抜き.zip
+    seipai_frames.zip          412枚ZIP（展開後に変換）
   assets/seipai/                ← tools で生成する
     audio.m4a                   元動画から抽出した音声
     frames.json                 manifest.json から生成したフレーム定義
@@ -39,7 +39,7 @@ python3 -I tools/analyze_beats.py assets/seipai/audio.m4a assets/seipai/beats.js
 ## 起動
 
 ```sh
-cd karate-rhythm
+cd kiva-the-karate
 node tools/serve.mjs 8080      # http://localhost:8080/
 npm test                       # 判定・AUTO・時刻写像の自動テスト
 node tests/e2e.mjs [譜面]      # ブラウザ通し確認（Playwright。サーバー起動後に実行）
