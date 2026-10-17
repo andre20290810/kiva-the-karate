@@ -1,0 +1,97 @@
+:root {
+  --bg: #07080c;
+  --panel: #12141b;
+  --line: #262a36;
+  --text: #e8e6e1;
+  --dim: #8d93a3;
+  --accent: #ffcf5a;
+  --err: #ff7a7a;
+  --ok: #8fe3a5;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 14px/1.4 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+button { font: inherit; color: var(--text); background: #1d2130; border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 12px; min-height: 36px; touch-action: manipulation; }
+button:disabled { opacity: .4; }
+button:not(:disabled):active { background: #2a3045; }
+.small { font-size: 12px; color: var(--dim); }
+
+/* 縦画面（既定）: HUD / ステージ / 譜面 / ボタン / 操作 */
+#app {
+  height: 100dvh; width: 100vw; display: grid; overflow: hidden;
+  grid-template-columns: 100%;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "hud" "stage" "side";
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+#hud { grid-area: hud; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+#hud b { color: var(--accent); font-variant-numeric: tabular-nums; }
+#modeBadge { font-weight: 800; letter-spacing: .08em; padding: 2px 8px; border-radius: 4px;
+  background: #3a2c08; color: var(--accent); border: 1px solid var(--accent); }
+#modeBadge[data-mode=manual] { background: #0c2a35; color: #8fe0ff; border-color: #8fe0ff; }
+
+#stageWrap { grid-area: stage; position: relative; min-height: 0; }
+#stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#judgeText { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); pointer-events: none;
+  font: 800 clamp(16px, 4vmin, 28px)/1 system-ui, sans-serif; letter-spacing: .1em; color: #777; text-shadow: 0 0 8px rgba(0,0,0,.8); }
+#judgeText[data-r=PERFECT] { color: #ffe36b; }
+#judgeText[data-r=GOOD] { color: #8fe0ff; }
+#judgeText[data-r=MISS] { color: #ff6b6b; }
+#timebar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #1a1d27; }
+#timebar::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  width: calc(var(--p, 0) * 100%); background: var(--accent); }
+
+#side { grid-area: side; display: flex; flex-direction: column; gap: 6px; padding: 6px 10px 8px;
+  background: var(--panel); border-top: 1px solid var(--line); min-height: 0; }
+#track { width: 100%; height: 56px; display: block; }
+#pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.padbtn { --c: #fc6; height: 64px; border-radius: 12px; border: 2px solid var(--c);
+  background: color-mix(in srgb, var(--c) 18%, #111); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; user-select: none; -webkit-user-select: none; touch-action: none; }
+.padbtn .lbl { font-size: 22px; font-weight: 800; color: var(--c); }
+.padbtn .key { font-size: 11px; color: var(--dim); }
+.padbtn.pressed { background: color-mix(in srgb, var(--c) 55%, #111); }
+#app[data-mode=auto] .padbtn { opacity: .55; }
+
+#controls { display: flex; flex-direction: column; gap: 4px; }
+#controls .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+fieldset.mode { border: 1px solid var(--line); border-radius: 8px; margin: 0; padding: 4px 8px; display: flex; gap: 10px; }
+.vol input { width: 110px; vertical-align: middle; }
+.lat input { width: 56px; background: #0e1016; color: var(--text); border: 1px solid var(--line); border-radius: 6px; }
+progress { width: 100%; height: 4px; }
+#app:not([data-state=loading]) progress { display: none; }
+#status { font-size: 12px; white-space: pre-wrap; max-height: 5.5em; overflow: auto; }
+#status[data-kind=error] { color: var(--err); font-weight: 600; }
+#status[data-kind=ok] { color: var(--ok); }
+
+/* 横画面: 左にステージ、右に譜面・ボタン・操作 */
+@media (orientation: landscape) {
+  #app { grid-template-columns: minmax(0, 1fr) clamp(260px, 34vw, 380px);
+    grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "hud hud" "stage side"; }
+  #side { border-top: 0; border-left: 1px solid var(--line); overflow-y: auto; }
+  #pad { grid-template-columns: repeat(2, 1fr); }
+  .padbtn { height: clamp(48px, 13vh, 76px); }
+}
+/* 低い横画面（スマホ横持ち） */
+@media (orientation: landscape) and (max-height: 500px) {
+  #hud { padding: 2px 10px; gap: 8px; }
+  #track { height: 44px; }
+  #pad { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .padbtn { height: 52px; }
+  .padbtn .key { display: none; }
+  button { min-height: 32px; padding: 4px 8px; }
+  #padStatus { display: none; }
+}
+
+#result { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 10; padding: 16px; }
+#result[hidden] { display: none; }
+#result .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; max-width: 420px; width: 100%; }
+#result h2 { font-size: 16px; margin: 0 0 8px; }
+#result dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 0 0 8px; }
+#result dt { color: var(--dim); }
+#result dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+#result .note { font-size: 12px; color: var(--dim); }

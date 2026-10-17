@@ -1,0 +1,9 @@
+{
+  "name": "karate-rhythm",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "start": "node tools/serve.mjs"
+  }
+}

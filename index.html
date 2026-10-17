@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#07080c">
+<title>KATA BEAT（試作）</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" data-state="loading" data-mode="auto">
+  <header id="hud">
+    <span id="modeBadge" data-mode="auto">AUTO DEMO</span>
+    <span class="hudItem">SCORE <b id="score">0</b></span>
+    <span class="hudItem">COMBO <b id="combo">0</b></span>
+    <span class="hudItem small" id="counts">P 0 / G 0 / M 0</span>
+  </header>
+
+  <main id="stageWrap">
+    <canvas id="stage" aria-label="空手家の演武"></canvas>
+    <div id="judgeText" aria-live="off"></div>
+    <div id="timebar"></div>
+  </main>
+
+  <aside id="side">
+    <canvas id="track" aria-label="譜面"></canvas>
+    <div id="pad" aria-label="入力ボタン"></div>
+
+    <section id="controls">
+      <div class="row">
+        <fieldset class="mode">
+          <label><input type="radio" name="mode" value="auto" checked> AUTO</label>
+          <label><input type="radio" name="mode" value="manual"> MANUAL</label>
+        </fieldset>
+        <button id="btnStart" disabled>開始</button>
+        <button id="btnPause" disabled>一時停止</button>
+        <button id="btnRestart" disabled>最初から</button>
+      </div>
+      <div class="row">
+        <label class="vol">音量 <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8"></label>
+        <label class="lat" title="入力が遅れて判定される場合に、遅延分(ms)を差し引きます">入力補正 <input id="latency" type="number" min="-200" max="300" step="5" value="0">ms</label>
+      </div>
+      <progress id="progress" max="1" value="0"></progress>
+      <div id="status" data-kind="info" role="status" aria-live="polite">起動中…</div>
+      <div id="padStatus" class="small">ゲームパッド: 未接続</div>
+    </section>
+  </aside>
+
+  <div id="result" hidden>
+    <div class="card">
+      <h2 id="resultTitle">結果</h2>
+      <div id="resultBody"></div>
+      <button id="btnResultClose">閉じる</button>
+    </div>
+  </div>
+</div>
+<noscript>JavaScript を有効にしてください。</noscript>
+<script type="module" src="src/game.js"></script>
+</body>
+</html>

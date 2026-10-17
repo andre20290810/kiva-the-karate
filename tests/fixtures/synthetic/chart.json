@@ -1,0 +1,517 @@
+{
+ "title": "合成テスト譜面（E2E用・ゲーム素材ではない）",
+ "audio": ["audio.m4a", "audio.ogg"],
+ "frames": "frames.json",
+ "commands": [
+  {
+   "id": "A",
+   "label": "1",
+   "color": "#ffb14a",
+   "keyHint": "D"
+  },
+  {
+   "id": "B",
+   "label": "2",
+   "color": "#8fe0ff",
+   "keyHint": "F"
+  },
+  {
+   "id": "C",
+   "label": "3",
+   "color": "#a8f08c",
+   "keyHint": "J"
+  },
+  {
+   "id": "D",
+   "label": "4",
+   "color": "#ff8fb8",
+   "keyHint": "K"
+  }
+ ],
+ "moves": [
+  {
+   "id": "move01",
+   "name": "動作01",
+   "src": {
+    "start": 0.6,
+    "kime": 0.9,
+    "end": 1.1
+   },
+   "fx": [
+    {
+     "type": "impact",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  },
+  {
+   "id": "move02",
+   "name": "動作02",
+   "src": {
+    "start": 1.08,
+    "kime": 1.38,
+    "end": 1.58
+   },
+   "fx": [
+    {
+     "type": "arc",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  },
+  {
+   "id": "move03",
+   "name": "動作03",
+   "src": {
+    "start": 1.56,
+    "kime": 1.86,
+    "end": 2.06
+   },
+   "fx": [
+    {
+     "type": "ripple",
+     "at": {
+      "rel": [
+       0.5,
+       0.98
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "move04",
+   "name": "動作04",
+   "src": {
+    "start": 2.04,
+    "kime": 2.34,
+    "end": 2.54
+   },
+   "fx": [
+    {
+     "type": "impact",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  },
+  {
+   "id": "move05",
+   "name": "動作05",
+   "src": {
+    "start": 2.52,
+    "kime": 2.82,
+    "end": 3.02
+   },
+   "fx": [
+    {
+     "type": "impact",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  },
+  {
+   "id": "move06",
+   "name": "動作06",
+   "src": {
+    "start": 3.0,
+    "kime": 3.3,
+    "end": 3.5
+   },
+   "fx": [
+    {
+     "type": "arc",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  },
+  {
+   "id": "move07",
+   "name": "動作07",
+   "src": {
+    "start": 3.48,
+    "kime": 3.78,
+    "end": 3.98
+   },
+   "fx": [
+    {
+     "type": "ripple",
+     "at": {
+      "rel": [
+       0.5,
+       0.98
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "move08",
+   "name": "動作08",
+   "src": {
+    "start": 3.96,
+    "kime": 4.26,
+    "end": 4.46
+   },
+   "fx": [
+    {
+     "type": "impact",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  },
+  {
+   "id": "move09",
+   "name": "動作09",
+   "src": {
+    "start": 4.44,
+    "kime": 4.74,
+    "end": 4.94
+   },
+   "fx": [
+    {
+     "type": "impact",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  },
+  {
+   "id": "move10",
+   "name": "動作10",
+   "src": {
+    "start": 4.92,
+    "kime": 5.22,
+    "end": 5.42
+   },
+   "fx": [
+    {
+     "type": "arc",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  },
+  {
+   "id": "move11",
+   "name": "動作11",
+   "src": {
+    "start": 5.4,
+    "kime": 5.7,
+    "end": 5.9
+   },
+   "fx": [
+    {
+     "type": "ripple",
+     "at": {
+      "rel": [
+       0.5,
+       0.98
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "move12",
+   "name": "動作12",
+   "src": {
+    "start": 5.88,
+    "kime": 6.18,
+    "end": 6.38
+   },
+   "fx": [
+    {
+     "type": "impact",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  },
+  {
+   "id": "move13",
+   "name": "動作13",
+   "src": {
+    "start": 6.36,
+    "kime": 6.66,
+    "end": 6.86
+   },
+   "fx": [
+    {
+     "type": "impact",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  },
+  {
+   "id": "move14",
+   "name": "動作14",
+   "src": {
+    "start": 6.84,
+    "kime": 7.14,
+    "end": 7.34
+   },
+   "fx": [
+    {
+     "type": "arc",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  },
+  {
+   "id": "move15",
+   "name": "動作15",
+   "src": {
+    "start": 7.32,
+    "kime": 7.62,
+    "end": 7.82
+   },
+   "fx": [
+    {
+     "type": "ripple",
+     "at": {
+      "rel": [
+       0.5,
+       0.98
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "move16",
+   "name": "動作16",
+   "src": {
+    "start": 7.8,
+    "kime": 8.1,
+    "end": 8.3
+   },
+   "fx": [
+    {
+     "type": "impact",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  },
+  {
+   "id": "move17",
+   "name": "動作17",
+   "src": {
+    "start": 8.28,
+    "kime": 8.58,
+    "end": 8.78
+   },
+   "fx": [
+    {
+     "type": "impact",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  },
+  {
+   "id": "move18",
+   "name": "動作18",
+   "src": {
+    "start": 8.76,
+    "kime": 9.06,
+    "end": 9.26
+   },
+   "fx": [
+    {
+     "type": "arc",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  },
+  {
+   "id": "move19",
+   "name": "動作19",
+   "src": {
+    "start": 9.24,
+    "kime": 9.54,
+    "end": 9.74
+   },
+   "fx": [
+    {
+     "type": "ripple",
+     "at": {
+      "rel": [
+       0.5,
+       0.98
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "move20",
+   "name": "動作20",
+   "src": {
+    "start": 9.72,
+    "kime": 10.02,
+    "end": 10.22
+   },
+   "fx": [
+    {
+     "type": "impact",
+     "at": {
+      "joint": "right_wrist"
+     }
+    }
+   ]
+  }
+ ],
+ "notes": [
+  {
+   "id": "n001",
+   "t": 1.0,
+   "cmd": "A",
+   "move": "move01"
+  },
+  {
+   "id": "n002",
+   "t": 1.5,
+   "cmd": "B",
+   "move": "move02"
+  },
+  {
+   "id": "n003",
+   "t": 2.0,
+   "cmd": "C",
+   "move": "move03"
+  },
+  {
+   "id": "n004",
+   "t": 2.5,
+   "cmd": "D",
+   "move": "move04"
+  },
+  {
+   "id": "n005",
+   "t": 3.0,
+   "cmd": "A",
+   "move": "move05"
+  },
+  {
+   "id": "n006",
+   "t": 3.5,
+   "cmd": "B",
+   "move": "move06"
+  },
+  {
+   "id": "n007",
+   "t": 4.0,
+   "cmd": "C",
+   "move": "move07"
+  },
+  {
+   "id": "n008",
+   "t": 4.5,
+   "cmd": "D",
+   "move": "move08"
+  },
+  {
+   "id": "n009",
+   "t": 5.0,
+   "cmd": "A",
+   "move": "move09"
+  },
+  {
+   "id": "n010",
+   "t": 5.5,
+   "cmd": "B",
+   "move": "move10"
+  },
+  {
+   "id": "n011",
+   "t": 6.0,
+   "cmd": "C",
+   "move": "move11"
+  },
+  {
+   "id": "n012",
+   "t": 6.5,
+   "cmd": "D",
+   "move": "move12"
+  },
+  {
+   "id": "n013",
+   "t": 7.0,
+   "cmd": "A",
+   "move": "move13"
+  },
+  {
+   "id": "n014",
+   "t": 7.5,
+   "cmd": "B",
+   "move": "move14"
+  },
+  {
+   "id": "n015",
+   "t": 8.0,
+   "cmd": "C",
+   "move": "move15"
+  },
+  {
+   "id": "n016",
+   "t": 8.5,
+   "cmd": "D",
+   "move": "move16"
+  },
+  {
+   "id": "n017",
+   "t": 9.0,
+   "cmd": "A",
+   "move": "move17"
+  },
+  {
+   "id": "n018",
+   "t": 9.5,
+   "cmd": "B",
+   "move": "move18"
+  },
+  {
+   "id": "n019",
+   "t": 10.0,
+   "cmd": "C",
+   "move": "move19"
+  },
+  {
+   "id": "n020",
+   "t": 10.5,
+   "cmd": "D",
+   "move": "move20"
+  }
+ ],
+ "frameFixes": [
+  {
+   "frame": 7,
+   "use": 6,
+   "reason": "置換テスト"
+  }
+ ]
+}
