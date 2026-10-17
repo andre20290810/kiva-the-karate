@@ -1,0 +1,970 @@
+{
+  "title": "KIVA THE KARATE — セーパイ／動作タイミング候補（未校正）",
+  "draft": true,
+  "annotation": "5fps骨格の動作速度ピーク後の静止区間を用いた暫定候補。技名・コマンド・決め時刻は未検証。練習効果測定の正解値には使わないこと。",
+  "audio": "../assets/seipai/audio.m4a",
+  "frames": "../assets/seipai/frames.json",
+  "audioOffset": 0,
+  "windows": {
+    "perfect": 0.08,
+    "good": 0.15
+  },
+  "warp": {
+    "maxHoldRatio": 0.6,
+    "minRate": 0.5,
+    "maxRate": 1.8
+  },
+  "commands": [
+    {
+      "id": "A",
+      "label": "K1",
+      "name": "未分類動作1",
+      "color": "#ec9743"
+    },
+    {
+      "id": "B",
+      "label": "K2",
+      "name": "未分類動作2",
+      "color": "#47cbb5"
+    },
+    {
+      "id": "C",
+      "label": "K3",
+      "name": "未分類動作3",
+      "color": "#8c9cff"
+    },
+    {
+      "id": "D",
+      "label": "K4",
+      "name": "未分類動作4",
+      "color": "#df6f94"
+    }
+  ],
+  "camera": {
+    "margin": 0.06
+  },
+  "moves": [
+    {
+      "id": "candidate-001",
+      "name": "動作タイミング候補 01",
+      "src": {
+        "start": 15.55,
+        "kime": 16.4,
+        "end": 16.75
+      },
+      "frames": [
+        77,
+        84
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-002",
+      "name": "動作タイミング候補 02",
+      "src": {
+        "start": 21.95,
+        "kime": 22.8,
+        "end": 23.15
+      },
+      "frames": [
+        109,
+        116
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-003",
+      "name": "動作タイミング候補 03",
+      "src": {
+        "start": 25.15,
+        "kime": 26,
+        "end": 26.35
+      },
+      "frames": [
+        125,
+        132
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-004",
+      "name": "動作タイミング候補 04",
+      "src": {
+        "start": 28.15,
+        "kime": 29,
+        "end": 29.35
+      },
+      "frames": [
+        140,
+        147
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-005",
+      "name": "動作タイミング候補 05",
+      "src": {
+        "start": 32.55,
+        "kime": 33.4,
+        "end": 33.75
+      },
+      "frames": [
+        162,
+        169
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-006",
+      "name": "動作タイミング候補 06",
+      "src": {
+        "start": 34.55,
+        "kime": 35.4,
+        "end": 35.75
+      },
+      "frames": [
+        172,
+        179
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-007",
+      "name": "動作タイミング候補 07",
+      "src": {
+        "start": 37.15,
+        "kime": 38,
+        "end": 38.35
+      },
+      "frames": [
+        185,
+        192
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-008",
+      "name": "動作タイミング候補 08",
+      "src": {
+        "start": 39.15,
+        "kime": 40,
+        "end": 40.35
+      },
+      "frames": [
+        195,
+        202
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-009",
+      "name": "動作タイミング候補 09",
+      "src": {
+        "start": 40.95,
+        "kime": 41.8,
+        "end": 42.15
+      },
+      "frames": [
+        204,
+        211
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-010",
+      "name": "動作タイミング候補 10",
+      "src": {
+        "start": 42.95,
+        "kime": 43.8,
+        "end": 44.15
+      },
+      "frames": [
+        214,
+        221
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-011",
+      "name": "動作タイミング候補 11",
+      "src": {
+        "start": 45.55,
+        "kime": 46.4,
+        "end": 46.75
+      },
+      "frames": [
+        227,
+        234
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-012",
+      "name": "動作タイミング候補 12",
+      "src": {
+        "start": 47.75,
+        "kime": 48.6,
+        "end": 48.95
+      },
+      "frames": [
+        238,
+        245
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-013",
+      "name": "動作タイミング候補 13",
+      "src": {
+        "start": 49.35,
+        "kime": 50.2,
+        "end": 50.55
+      },
+      "frames": [
+        246,
+        253
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-014",
+      "name": "動作タイミング候補 14",
+      "src": {
+        "start": 50.75,
+        "kime": 51.6,
+        "end": 51.95
+      },
+      "frames": [
+        253,
+        260
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-015",
+      "name": "動作タイミング候補 15",
+      "src": {
+        "start": 52.35,
+        "kime": 53.2,
+        "end": 53.55
+      },
+      "frames": [
+        261,
+        268
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-016",
+      "name": "動作タイミング候補 16",
+      "src": {
+        "start": 54.95,
+        "kime": 55.8,
+        "end": 56.15
+      },
+      "frames": [
+        274,
+        281
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-017",
+      "name": "動作タイミング候補 17",
+      "src": {
+        "start": 57.35,
+        "kime": 58.2,
+        "end": 58.55
+      },
+      "frames": [
+        286,
+        293
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-018",
+      "name": "動作タイミング候補 18",
+      "src": {
+        "start": 59.75,
+        "kime": 60.6,
+        "end": 60.95
+      },
+      "frames": [
+        298,
+        305
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-019",
+      "name": "動作タイミング候補 19",
+      "src": {
+        "start": 62.15,
+        "kime": 63,
+        "end": 63.35
+      },
+      "frames": [
+        310,
+        317
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-020",
+      "name": "動作タイミング候補 20",
+      "src": {
+        "start": 64.35,
+        "kime": 65.2,
+        "end": 65.55
+      },
+      "frames": [
+        321,
+        328
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-021",
+      "name": "動作タイミング候補 21",
+      "src": {
+        "start": 66.75,
+        "kime": 67.6,
+        "end": 67.95
+      },
+      "frames": [
+        333,
+        340
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-022",
+      "name": "動作タイミング候補 22",
+      "src": {
+        "start": 69.35,
+        "kime": 70.2,
+        "end": 70.55
+      },
+      "frames": [
+        346,
+        353
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-023",
+      "name": "動作タイミング候補 23",
+      "src": {
+        "start": 72.15,
+        "kime": 73,
+        "end": 73.35
+      },
+      "frames": [
+        360,
+        367
+      ],
+      "hold": 0,
+      "fx": [
+        {
+          "type": "impact",
+          "at": {
+            "rel": [
+              0.5,
+              0.47
+            ]
+          }
+        },
+        {
+          "type": "ripple",
+          "at": {
+            "rel": [
+              0.5,
+              0.97
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "id": "n001",
+      "t": 16.4,
+      "cmd": "A",
+      "move": "candidate-001"
+    },
+    {
+      "id": "n002",
+      "t": 22.8,
+      "cmd": "B",
+      "move": "candidate-002"
+    },
+    {
+      "id": "n003",
+      "t": 26,
+      "cmd": "C",
+      "move": "candidate-003"
+    },
+    {
+      "id": "n004",
+      "t": 29,
+      "cmd": "D",
+      "move": "candidate-004"
+    },
+    {
+      "id": "n005",
+      "t": 33.4,
+      "cmd": "A",
+      "move": "candidate-005"
+    },
+    {
+      "id": "n006",
+      "t": 35.4,
+      "cmd": "B",
+      "move": "candidate-006"
+    },
+    {
+      "id": "n007",
+      "t": 38,
+      "cmd": "C",
+      "move": "candidate-007"
+    },
+    {
+      "id": "n008",
+      "t": 40,
+      "cmd": "D",
+      "move": "candidate-008"
+    },
+    {
+      "id": "n009",
+      "t": 41.8,
+      "cmd": "A",
+      "move": "candidate-009"
+    },
+    {
+      "id": "n010",
+      "t": 43.8,
+      "cmd": "B",
+      "move": "candidate-010"
+    },
+    {
+      "id": "n011",
+      "t": 46.4,
+      "cmd": "C",
+      "move": "candidate-011"
+    },
+    {
+      "id": "n012",
+      "t": 48.6,
+      "cmd": "D",
+      "move": "candidate-012"
+    },
+    {
+      "id": "n013",
+      "t": 50.2,
+      "cmd": "A",
+      "move": "candidate-013"
+    },
+    {
+      "id": "n014",
+      "t": 51.6,
+      "cmd": "B",
+      "move": "candidate-014"
+    },
+    {
+      "id": "n015",
+      "t": 53.2,
+      "cmd": "C",
+      "move": "candidate-015"
+    },
+    {
+      "id": "n016",
+      "t": 55.8,
+      "cmd": "D",
+      "move": "candidate-016"
+    },
+    {
+      "id": "n017",
+      "t": 58.2,
+      "cmd": "A",
+      "move": "candidate-017"
+    },
+    {
+      "id": "n018",
+      "t": 60.6,
+      "cmd": "B",
+      "move": "candidate-018"
+    },
+    {
+      "id": "n019",
+      "t": 63,
+      "cmd": "C",
+      "move": "candidate-019"
+    },
+    {
+      "id": "n020",
+      "t": 65.2,
+      "cmd": "D",
+      "move": "candidate-020"
+    },
+    {
+      "id": "n021",
+      "t": 67.6,
+      "cmd": "A",
+      "move": "candidate-021"
+    },
+    {
+      "id": "n022",
+      "t": 70.2,
+      "cmd": "B",
+      "move": "candidate-022"
+    },
+    {
+      "id": "n023",
+      "t": 73,
+      "cmd": "C",
+      "move": "candidate-023"
+    }
+  ]
+}
