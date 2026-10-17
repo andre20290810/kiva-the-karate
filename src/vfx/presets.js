@@ -72,17 +72,17 @@ export function buildHit(grade, tech, { dir = -Math.PI / 2, seed = 1, scale = 1 
 
   // ── 0–90ms: コアフラッシュ（鋭い十字の閃光）
   // 人物の体を隠さないよう、強い白色部分は小さく短く（外側の色光で広がりを出す）
-  ps.push(P({ kind: KIND.CORE, life: perfect ? 0.11 : 0.08, s0: 50 * S, s1: 135 * S, rot: dir, pal: PALETTE.hot, attack: 0.02, pow: 2.4, alpha: 0.95 }));
-  ps.push(P({ kind: KIND.GLOW, life: perfect ? 0.34 : 0.22, s0: 100 * S, s1: 280 * S, pal: main, alpha: perfect ? 0.6 : 0.4, attack: 0.03, pow: 1.9 }));
+  ps.push(P({ kind: KIND.CORE, life: perfect ? 0.075 : 0.06, s0: 24 * S, s1: 60 * S, rot: dir, pal: PALETTE.hot, attack: 0.016, pow: 2.4, alpha: 0.65 }));
+  ps.push(P({ kind: KIND.GLOW, life: perfect ? 0.27 : 0.20, s0: 55 * S, s1: 145 * S, pal: main, alpha: perfect ? 0.28 : 0.2, attack: 0.03, pow: 1.9 }));
   // アナモルフィックな横長フレア
   ps.push(P({ kind: KIND.STREAK, life: perfect ? 0.2 : 0.12, s0: 380 * S, s1: 900 * S, aspect: 0.022, rot: 0, pal: PALETTE.cyan, alpha: perfect ? 0.9 : 0.5, attack: 0.02, pow: 2 }));
 
   // ── 20–420ms: 立体的な衝撃波（傾いた楕円リング + 正面リング）
   const tilt = tech === 'fumikomi' ? 0.22 : 0.42;
   ps.push(P({ kind: KIND.RING, t0: 0.015, life: perfect ? 0.42 : 0.3, s0: 50 * S, s1: 520 * S, aspect: tilt, rot: dir + Math.PI / 2,
-    p1: 0.16, p2: 0.015, pal: main, alpha: perfect ? 1 : 0.7, attack: 0.04, pow: 1.4 }));
+    p1: 0.08, p2: 0.008, pal: main, alpha: perfect ? 0.45 : 0.3, attack: 0.04, pow: 1.4 }));
   if (perfect) {
-    ps.push(P({ kind: KIND.RING, t0: 0.05, life: 0.33, s0: 30, s1: 330, aspect: 1, p1: 0.07, p2: 0.01, pal: PALETTE.cyan, alpha: 0.8, attack: 0.05, pow: 1.3 }));
+    ps.push(P({ kind: KIND.RING, t0: 0.05, life: 0.33, s0: 30, s1: 330, aspect: 1, p1: 0.04, p2: 0.006, pal: PALETTE.cyan, alpha: 0.35, attack: 0.05, pow: 1.3 }));
     ps.push(P({ kind: KIND.RING, t0: 0.11, life: 0.4, s0: 40, s1: 640, aspect: tilt * 0.8, rot: dir + Math.PI / 2, p1: 0.05, p2: 0.005, pal: PALETTE.steel, alpha: 0.45, attack: 0.05 }));
   }
 
