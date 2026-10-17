@@ -6,7 +6,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "kiva-the-karate",
-  "main": "worker/index.js",
+  "main": "worker/public.js",
   "compatibility_date": "2025-09-01",
   "assets": {
     "directory": "./dist",
