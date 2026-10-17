@@ -11,7 +11,7 @@ All three views share AudioClock, score, chart timewarp, judgment, AUTO/MANUAL, 
 - Monocular source landmarks are **2D observations**, with no measured depth. Limbs, body turning, foot placement, occlusion and physics must be reviewed and corrected against source footage. This is not validated motion capture.
 - Current 3D avatars are **debug geometry**, not quality-approved finished human likenesses. Alexandre appearance proxy is visibly crude and must NOT be sent to KIVA as a final game.
 - The rhythm chart has 23 candidate (unverified) note timings; human review/calibration required.
-- The current video and 3D overlays cover the existing scene's VFX canvas. The hit text works, but character-relative VFX need a dedicated correctly aligned overlay layer.
+- Video and 3D views use a separate translucent hit-ring overlay aligned to the source 2D pose projection. This is a restrained provisional cue; the original large background-scene VFX remain visually behind the foreground media. Joint alignment and visual polish still need review.
 - The 3D stage is fixed in world coordinates (no conveyor scroll). It is intentionally distinct from the original moving-stage shader.
 - Public URL has **not** been redeployed. The previously deployed version remains unchanged.
 

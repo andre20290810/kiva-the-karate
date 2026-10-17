@@ -4,6 +4,7 @@
 import { AudioClock } from './clock.js';
 import { OriginalVideoMode } from './original-video.js';
 import { ThreeStage } from './three-stage.js';
+import { FeedbackOverlay } from './feedback-overlay.js';
 import { DISPLAY_MODES, findDisplayMode } from './display-modes.js';
 import { compileChart } from './chart.js';
 import { Judge, DEFAULT_WINDOWS } from './judge.js';
@@ -153,6 +154,7 @@ export class Game {
     const el = document.querySelector('#displayMode');
     this.originalVideo = new OriginalVideoMode(document.querySelector('#stageWrap'), 'assets/seipai/original.mp4');
     this.threeStage = new ThreeStage(document.querySelector('#stageWrap'));
+    this.feedback = new FeedbackOverlay(document.querySelector('#stageWrap'),this.frames.def.width,this.frames.def.height,this.threeStage);
     this.displayMode = 'kiva-video';
     el.replaceChildren(...DISPLAY_MODES.map(m => {
       const o = document.createElement('option');
@@ -277,6 +279,7 @@ export class Game {
     this.auto = this.mode === 'auto' ? new AutoPlayer(this.judge, { generation: this.generation }) : null;
     this.judge.on((e) => (e.type === 'judged' ? this.onJudged(e) : this.onStray(e)));
     this.scene.reset();
+    this.feedback?.reset();
     this.track.flashes = [];
     this.track.bursts = [];
     this.lastT = 0;
@@ -408,6 +411,11 @@ export class Game {
       key: `${this.generation}:${n.id}`, grade: e.result, tech: n.move.vfx || 'generic', t: at,
       kimeVideoTime: this.chart.warp.map(e.result === 'MISS' ? now : n.t), fx: n.fx, combo: e.combo,
     });
+    if(e.result !== 'MISS') {
+      const vi=this.frames.indexAt(this.chart.warp.map(n.t));
+      const impact=n.fx?.find(f=>f.type==='impact'||f.type==='arc'||f.type==='flash')||n.fx?.[0];
+      this.feedback?.hit({t:at,grade:e.result,anchor:this.scene.rig.anchor(impact,vi)});
+    }
     if (e.result === 'MISS') {
       const app = $('#app');
       app.classList.remove('combo-break'); void app.offsetWidth; app.classList.add('combo-break');
@@ -422,6 +430,7 @@ export class Game {
     const { shownIdx } = this.scene.render(t, vt, { frameMs: this._frameMs || 16.7, stageT });
     this.originalVideo?.sync(vt,this.state === 'playing',this.chart.warp.rateAt(t));
     this.threeStage?.sync(vt);
+    this.feedback?.render(t,this.displayMode || 'kiva-video');
     this.track.draw(t, this.judge ? this.judge.notes : this.chart.notes);
     const p = this.clock.duration ? t / this.clock.duration : 0;
     $('#timebar').style.setProperty('--p', p);
