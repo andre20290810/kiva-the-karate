@@ -27,8 +27,9 @@
     <div id="pad" aria-label="入力ボタン"></div>
 
     <section id="controls">
-      <div class="row">
+      <div class="row actions" aria-label="プレイ操作">
         <fieldset class="mode">
+          <legend class="sr-only">プレイモード</legend>
           <label><input type="radio" name="mode" value="auto" checked> AUTO</label>
           <label><input type="radio" name="mode" value="manual"> MANUAL</label>
         </fieldset>
@@ -36,12 +37,15 @@
         <button id="btnPause" disabled>一時停止</button>
         <button id="btnRestart" disabled>最初から</button>
       </div>
-      <div class="row">
-        <label class="vol">音量 <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8"></label>
-        <label class="lat" title="入力が遅れて判定される場合に、遅延分(ms)を差し引きます">入力補正 <input id="latency" type="number" min="-200" max="300" step="5" value="0">ms</label>
-      </div>
       <progress id="progress" max="1" value="0"></progress>
       <div id="status" data-kind="info" role="status" aria-live="polite">起動中…</div>
+      <details id="settings">
+        <summary>音量・入力補正</summary>
+        <div class="row settings">
+          <label class="vol">音量 <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8"></label>
+          <label class="lat" title="入力が遅れて判定される場合に、遅延分(ms)を差し引きます">入力補正 <input id="latency" type="number" min="-200" max="300" step="5" value="0">ms</label>
+        </div>
+      </details>
       <div id="padStatus" class="small">ゲームパッド: 未接続</div>
     </section>
   </aside>

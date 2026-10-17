@@ -4,6 +4,12 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "start": "node tools/serve.mjs"
+    "start": "node tools/serve.mjs",
+    "test:layout": "node tests/layout-rotation.mjs"
+  },
+  "devDependencies": {
+    "@ffmpeg-installer/ffmpeg": "1.1.0",
+    "playwright-core": "1.64.1",
+    "sharp": "0.35.5"
   }
 }
