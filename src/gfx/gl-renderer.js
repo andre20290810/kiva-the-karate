@@ -75,7 +75,9 @@ void main(){
   vec3 neonB = vec3(1.0,0.32,0.75);
   float fadeNear = smoothstep(0.0, 2.0, z);
   float neonFar = 1.0 - smoothstep(30.0, 55.0, z);
-  col += neonA*(latLine*1.6 + latGlow*0.35)*neonFar*fadeNear*(0.8+0.4*uEnergy);
+  // 手前のラインは太く見えるため発光を抑え、技成立時の増光も控えめに（足元が白く飽和しない）
+  float nearDim = mix(0.55, 1.0, smoothstep(2.0, 9.0, z));
+  col += neonA*(latLine*1.15 + latGlow*0.2)*neonFar*fadeNear*nearDim*(0.85+0.2*uEnergy);
   col += neonB*(lon1*1.4 + lonG*0.3)*neonFar;
   // 技成立時の床面への衝撃伝播（リング + パネル点灯）
   for (int i=0;i<8;i++){
@@ -87,13 +89,14 @@ void main(){
     float ring = exp(-pow((d-r)/(0.35+P.z*1.2),2.0));
     // 波面は手前ほど太く見えるので、奥行きで幅を補正して細い光の帯に保つ
     float wv = (0.18 + P.z*0.5) * (0.6 + 0.4*clamp(z/6.0,0.0,1.0));
-    vec3 add = vec3(1.0,0.66,0.25)*exp(-pow((d-r)/wv,2.0))*P.w*life*0.7;
-    add += vec3(0.25,0.75,1.0)*exp(-pow((d-r*0.72)/(wv*0.7),2.0))*P.w*life*0.3;
+    // 足元（r≈0）では光らせず、輪が広がってから見せる（足元の白い塊を防ぐ）
+    float grow = smoothstep(0.35, 1.2, r);
+    vec3 add = vec3(1.0,0.66,0.25)*exp(-pow((d-r)/wv,2.0))*P.w*life*0.6*grow;
+    add += vec3(0.25,0.75,1.0)*exp(-pow((d-r*0.72)/(wv*0.7),2.0))*P.w*life*0.25*grow;
     float lit = step(d, r) * step(0.62, rnd) * exp(-P.z*4.0) * step(d, 8.0);
     add += vec3(0.12,0.42,0.9)*lit*P.w*(0.25+0.3*rnd)*(1.0-seam);
-    add += vec3(1.0,0.75,0.5)*exp(-d*d*4.0)*exp(-P.z*14.0)*P.w*0.16;
-    // 足元の衝撃で床が白く飽和しないよう、1つの衝撃の明るさに上限を設ける
-    col += min(add, vec3(0.55));
+    // 足元の衝撃で床が白く飽和しないよう、1つの衝撃の明るさに上限を設ける（中心の白い光は置かない）
+    col += min(add, vec3(0.24));
   }
   // 霧（遠方ほど地平線の色へ）
   float fog = 1.0 - exp(-z*uFog);

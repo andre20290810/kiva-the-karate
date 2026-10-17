@@ -20,27 +20,33 @@ async function open(vp, mode, extra = '') {
   await page.waitForFunction(() => ['ready', 'error'].includes(window.__game?.state), null, { timeout: 120000 });
   return page;
 }
-/** 音声時刻 tt に達したフレームで一時停止 */
-const pauseAt = (page, tt) => page.waitForFunction((x) => {
-  const g = window.__game;
-  if (g.state === 'playing' && g.lastT >= x) {
-    g.pause();
-    // 撮影専用: 一時停止中は画面を描き直さないので、目標時刻 x の見た目を「描画だけ」行う。
-    // 時計（clock）・lastT・判定状態は一切変更しない。これは見た目の確認用であり、
-    // 同期の正しさの証拠ではない（同期は tests/sync-probe.mjs で時刻を変えずに検証する）。
-    g.render(Math.min(x, g.clock.position()));
-    return true;
-  }
-  return false;
-}, tt, { timeout: 60000, polling: 'raf' });
+/** 音声時刻 tt に達したフレームで一時停止（撮影時刻は shoot で指定） */
+const pauseAt = async (page, tt) => {
+  await page.waitForFunction((x) => {
+    const g = window.__game;
+    if (g.state === 'playing' && g.lastT >= x) { g.pause(); return true; }
+    return false;
+  }, tt, { timeout: 60000, polling: 'raf' });
+  page.__shotT = tt;
+};
 const resume = async (page) => {
   await page.click('#btnPause');
   await page.waitForFunction(() => window.__game.state === 'playing');
 };
 async function shoot(page, name) {
-  await page.waitForTimeout(80);
+  // 一時停止でボタン表示が変わりレイアウトが動くため、落ち着いてから撮影時刻を描く。
+  // 撮影専用: 時計（clock）・lastT・判定状態は変更せず「描画だけ」行う。これは見た目の確認用で、
+  // 同期の正しさの証拠ではない（同期は tests/sync-probe.mjs で時刻を変えずに検証する）。
+  await page.waitForTimeout(150);
+  const t = page.__shotT;
+  const drawn = await page.evaluate((x) => {
+    const g = window.__game;
+    if (x != null && g.state === 'paused') g.render(Math.min(x, g.displayTime()));
+    return window.__debug?.t;
+  }, t ?? null);
   await page.screenshot({ path: `${out}/${name}.png` });
-  console.log('saved', name);
+  console.log('saved', name, drawn != null ? `t=${drawn.toFixed(3)}` : '');
+  page.__shotT = null;
 }
 
 // 1) AUTO: 待機・通常表示・PERFECT の時間経過

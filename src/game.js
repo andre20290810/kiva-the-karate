@@ -259,6 +259,12 @@ export class Game {
     this.render(t);
   }
 
+  /** 表示用の時刻。再生中・停止中は直前に表示した時刻より戻さない（再開直後の出力遅延による一瞬の逆行を防ぐ） */
+  displayTime() {
+    const p = this.clock.position();
+    return this.state === 'playing' || this.state === 'paused' ? Math.max(p, this.lastT) : p;
+  }
+
   onCommand(ev) {
     if (this.state !== 'playing') return;
     if (this.mode === 'auto') return; // AUTO DEMO 中の人の入力は成績に混ぜない
@@ -292,7 +298,7 @@ export class Game {
     }
   }
 
-  render(t = this.clock.position(), { idle = false } = {}) {
+  render(t = this.displayTime(), { idle = false } = {}) {
     if (!this.scene) return;
     const vt = this.chart.warp.map(t);
     // 待機中だけはステージの床を壁時計で流す（再生中・一時停止中は音声時刻のみ）

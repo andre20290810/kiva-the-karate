@@ -68,16 +68,22 @@ const result = await page.evaluate(async (TOL) => {
     await sleep(400); const p1 = snap('paused-400ms');
     await sleep(800 + k * 400); const p2 = snap('paused-end');
     const tResumeCall = performance.now();
+    const ctxResumeCall = c.ctx.currentTime;
     await g.resume();                       // 非同期処理（AudioContext.resume）の完了を待つ
     const r0 = snap('resumed-0');
     await sleep(500); const r1 = snap('resumed-500ms');
-    cycles.push({ k, a, b, before, p0, p1, p2, tResumeCall, r0, r1, pausedWallMs: r0.perf - p0.perf });
+    cycles.push({ k, a, b, before, p0, p1, p2, tResumeCall, ctxResumeCall, r0, r1, pausedWallMs: r0.perf - p0.perf });
   }
   sampling = false;
+  // ctx.currentTime の更新単位（同期ループで測定）
+  const q = []; let lv = c.ctx.currentTime; const qs = performance.now();
+  while (performance.now() - qs < 300) { const v = c.ctx.currentTime; if (v !== lv) { q.push((v - lv) * 1000); lv = v; } }
+  q.sort((x, y) => x - y);
+  cycles.quantum = { median: q[q.length >> 1], max: q[q.length - 1] };
   raf.sort((x, y) => x - y);
   cycles.raf = { n: raf.length, median: raf[raf.length >> 1], p95: raf[Math.floor(raf.length * 0.95)], max: raf[raf.length - 1] };
-  return { cycles, raf: cycles.raf };
-}, TOL).then((r) => { r.cycles.raf = r.raf; return r.cycles; });
+  return { cycles, raf: cycles.raf, quantum: cycles.quantum };
+}, TOL).then((r) => { r.cycles.raf = r.raf; r.cycles.quantum = r.quantum; return r.cycles; });
 
 for (const cy of result) {
   const { a, b, p0, p1, p2, r0, r1 } = cy;
@@ -91,12 +97,16 @@ for (const cy of result) {
   check(r0.clockState === 'playing' && r0.gameState === 'playing', `#${cy.k} 再開完了後の状態 clock=${r0.clockState} game=${r0.gameState}`);
   const jump = r0.now - p0.offset;
   check(jump >= -0.001 && jump <= TOL.resumeJump, `#${cy.k} 再開直後の曲時刻 − 停止位置 = ${(jump * 1000).toFixed(1)}ms（停止 ${(cy.pausedWallMs / 1000).toFixed(2)}s が加算されていない。期待 0〜${TOL.resumeJump * 1000}ms）`);
-  // 再開後 500ms: 曲時刻の進み ≈ 壁時計の進み − 再開予約(30ms)
+  // 再開後 500ms: 音源の再生位置(now)の進み ≈ 音声時計の経過 − 再開予約(30ms)
+  // （ctx.currentTime は 128 サンプル単位でしか更新されないため、壁時計ではなく同じ音声時計で比べる）
   const adv = r1.now - p0.offset;
+  const expectCtx = (r1.ctxTime - cy.ctxResumeCall) - TOL.resumeLead;
+  check(Math.abs(adv - expectCtx) <= TOL.advance, `#${cy.k} 再開後の再生位置の進み ${(adv * 1000).toFixed(1)}ms / 期待 音声時計の経過−30ms ${(expectCtx * 1000).toFixed(1)}ms（差 ≤${TOL.advance * 1000}ms）`);
+  // 画面・判定が使う position() は出力タイムスタンプ＋performance.now() で補間するので壁時計と比べる
   const expect = (r1.perf - cy.tResumeCall) / 1000 - TOL.resumeLead;
-  check(Math.abs(adv - expect) <= TOL.advance, `#${cy.k} 再開後の進み ${(adv * 1000).toFixed(1)}ms / 期待 壁時計−30ms ${(expect * 1000).toFixed(1)}ms（差 ≤${TOL.advance * 1000}ms）`);
+  console.log(`     参考: 再生位置の進み − (壁時計−30ms) = ${((adv - expect) * 1000).toFixed(1)}ms（currentTime の更新単位による測定誤差を含む）`);
   const contAdv = r1.position - p0.position;
-  check(Math.abs(contAdv - expect) <= TOL.advance, `#${cy.k} 表示時刻（position）の進み ${(contAdv * 1000).toFixed(1)}ms も同じ（停止時間は含まない）`);
+  check(Math.abs(contAdv - expect) <= TOL.advance, `#${cy.k} 表示・判定時刻（position）の進み ${(contAdv * 1000).toFixed(1)}ms / 期待 壁時計−30ms ${(expect * 1000).toFixed(1)}ms（差 ≤${TOL.advance * 1000}ms・停止時間は含まない）`);
 }
 
 // 最後まで再生して、AUTO の二重判定・取りこぼしがないこと
@@ -124,6 +134,7 @@ const rs2 = await page.evaluate(() => ({ judged: window.__game.judge.notes.filte
 check(rs2.judged === rs2.due && rs2.fired === rs2.due && rs2.perfect === rs2.due, `リスタート後 1.6s までのノーツ ${rs2.due}件が1回ずつ判定（判定 ${rs2.judged}・AUTO ${rs2.fired}）`);
 
 console.log(`\n描画間隔（rAF）: ${result.raf.n} 回 中央値 ${result.raf.median.toFixed(1)}ms / 95% ${result.raf.p95.toFixed(1)}ms / 最大 ${result.raf.max.toFixed(1)}ms`);
+console.log(`AudioContext.currentTime の更新単位: 中央値 ${result.quantum.median.toFixed(2)}ms / 最大 ${result.quantum.max.toFixed(2)}ms`);
 console.log('  → 描画が遅くても、上の「曲時刻の進み/壁時計」は音声時計から直接測っているため、描画間隔の影響を受けない');
 console.log('\n記録（1回目のサイクル）:');
 for (const k of ['before', 'p0', 'p1', 'p2', 'r0', 'r1']) {
