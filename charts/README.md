@@ -12,7 +12,7 @@
   "windows": { "perfect": 0.08, "good": 0.15 }, // 省略時は既定値
   "warp": { "maxHoldRatio": 0.6, "minRate": 0.5, "maxRate": 1.8 },
   "commands": [                                  // 必ず4種。順番がレーン番号（キー／ボタン対応）
-    { "id": "A", "label": "突", "name": "手技", "color": "#ffb14a", "keyHint": "D / ←" }
+    { "id": "A", "label": "K1", "name": "未分類動作1", "button": "A" }   // button: A/B/X/Y（省略時は順に A,B,X,Y）
   ],
   "camera": {                                    // 省略時: 全フレームの人物領域の和集合に合わせる
     "margin": 0.06,
@@ -24,6 +24,7 @@
       "src": { "start": 3.2, "kime": 3.8, "end": 4.4 },   // 元動画の開始／決め／終了
       "frames": [16, 22],                        // 使用する画像範囲（記録用）
       "hold": 0.25,                              // 決めポーズの保持（省略時は自動）
+      "vfx": "generic",                          // 技カテゴリー別演出 generic|tsuki|uke|keri|fumikomi|kime（未確認は generic）
       "fx": [
         { "type": "impact", "at": { "joint": "right_wrist" } },     // 関節推定位置
         { "type": "ripple", "at": { "rel": [0.5, 0.98] } },         // 人物領域内の相対位置

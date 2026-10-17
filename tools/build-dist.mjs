@@ -1,0 +1,32 @@
+// 公開用の dist/ を作る。許可した加工済みファイルだけをコピーし、source/（元動画・ZIP）は含めない。
+//   node tools/build-dist.mjs            … 実素材（assets/seipai）が揃っていないと失敗
+//   node tools/build-dist.mjs --allow-missing-assets … 素材なしでコードだけ（動作確認用）
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+const root = resolve(import.meta.dirname, '..');
+const out = join(root, 'dist');
+const allowMissing = process.argv.includes('--allow-missing-assets');
+rmSync(out, { recursive: true, force: true });
+mkdirSync(out, { recursive: true });
+const copy = (rel) => cpSync(join(root, rel), join(out, rel), { recursive: true });
+for (const rel of ['index.html', 'style.css', 'src']) copy(rel);
+mkdirSync(join(out, 'charts'), { recursive: true });
+for (const f of readdirSync(join(root, 'charts')).filter((f) => f.endsWith('.json'))) copy(join('charts', f));
+
+const assets = join(root, 'assets', 'seipai');
+const required = ['frames.json', 'audio.m4a', 'frames'];
+const missing = required.filter((f) => !existsSync(join(assets, f)));
+if (missing.length) {
+  if (!allowMissing) { console.error(`実素材が不足しています: assets/seipai/${missing.join(', ')}`); process.exit(1); }
+  console.warn('注意: 実素材なしで dist を作成しました（公開不可）');
+} else {
+  mkdirSync(join(out, 'assets', 'seipai', 'frames'), { recursive: true });
+  for (const f of ['frames.json', 'audio.m4a', 'audio.ogg']) if (existsSync(join(assets, f))) copy(join('assets', 'seipai', f));
+  for (const f of readdirSync(join(assets, 'frames')).filter((f) => /\.webp$/i.test(f))) copy(join('assets', 'seipai', 'frames', f));
+}
+let n = 0, bytes = 0;
+const walk = (d) => { for (const f of readdirSync(d)) { const p = join(d, f); const s = statSync(p); if (s.isDirectory()) walk(p); else { n++; bytes += s.size; } } };
+walk(out);
+if (existsSync(join(out, 'source'))) { console.error('source/ が混入しました'); process.exit(1); }
+console.log(`dist/: ${n} ファイル, ${(bytes / 1048576).toFixed(1)} MB`);
