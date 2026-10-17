@@ -17,5 +17,8 @@
     "@ffmpeg-installer/ffmpeg": "1.1.0",
     "playwright-core": "1.64.1",
     "sharp": "0.35.5"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
   }
 }

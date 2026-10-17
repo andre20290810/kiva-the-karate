@@ -2,6 +2,9 @@
 // 音声・画像・譜面・入力・判定・描画・エフェクトはそれぞれ別モジュール。
 
 import { AudioClock } from './clock.js';
+import { OriginalVideoMode } from './original-video.js';
+import { ThreeStage } from './three-stage.js';
+import { DISPLAY_MODES, findDisplayMode } from './display-modes.js';
 import { compileChart } from './chart.js';
 import { Judge, DEFAULT_WINDOWS } from './judge.js';
 import { AutoPlayer } from './auto.js';
@@ -141,10 +144,53 @@ export class Game {
     window.addEventListener('gamepaddisconnected', () => this.padPanel.update());
     $('#rendererInfo').textContent = this.scene.rendererKind === 'webgl2' ? 'WebGL2' : 'Canvas2D（互換表示）';
     this.setupCharacters();
+    this.setupDisplayModes();
     this.idleLoop();
   }
 
   // ---------- キャラクター切替（表示する人物画像だけを切り替える。動作・音声・譜面・判定は共通） ----------
+  setupDisplayModes() {
+    const el = document.querySelector('#displayMode');
+    this.originalVideo = new OriginalVideoMode(document.querySelector('#stageWrap'), 'assets/seipai/original.mp4');
+    this.threeStage = new ThreeStage(document.querySelector('#stageWrap'));
+    this.displayMode = 'kiva-video';
+    el.replaceChildren(...DISPLAY_MODES.map(m => {
+      const o = document.createElement('option');
+      o.value = m.id; o.textContent = m.label + (m.available ? '' : ' — 制作中');
+      o.disabled = !m.available;
+      return o;
+    }));
+    el.value = this.displayMode;
+    el.addEventListener('change', () => this.setDisplayMode(el.value));
+    this.setDisplayMode(el.value);
+  }
+  async setDisplayMode(id) {
+    const mode = findDisplayMode(id);
+    if (!mode.available) return;
+    const token = this._modeToken = (this._modeToken || 0) + 1;
+    if(mode.kind === '3d') {
+      try { await this.threeStage.init(); await this.threeStage.setVariant(mode.id); }
+      catch(e) {
+        console.error('3D scene:',e);
+        this.status('3D preview could not load: '+e.message,'error');
+        document.querySelector('#displayMode').value=this.displayMode;
+        return;
+      }
+    }
+    if(token !== this._modeToken) return;
+    this.displayMode=mode.id;
+    this.originalVideo.setEnabled(mode.kind === 'video');
+    this.threeStage.setEnabled(mode.kind === '3d');
+    this.scene.setCharacter(null);
+    const oldBtn=document.querySelector('#charBtn');
+    if(oldBtn)oldBtn.hidden=true;
+    const oldNotice=document.querySelector('#charNotice');
+    if(oldNotice)oldNotice.hidden=true;
+    if(mode.kind === '3d')this.status(mode.id === 'alexandre-3d' ? 'ALEXANDRE 3D TECH PREVIEW: low-poly appearance proxy; not final' : 'KIVA 3D TECH PREVIEW: depth and footwork not yet validated');
+    else if(this.state === 'ready')this.status('KIVA original-video mode: using uncut source footage');
+    if(this.state !== 'playing')this.render();
+  }
+
   setupCharacters() {
     this.characters = characterList(this.rawChart);
     this.charStores = new Map([[this.characters[0].id, this.frames]]);
@@ -374,6 +420,8 @@ export class Game {
     // 待機中だけはステージの床を壁時計で流す（再生中・一時停止中は音声時刻のみ）
     const stageT = idle && (this.state === 'ready' || this.state === 'ended') ? performance.now() / 1000 % 600 : t;
     const { shownIdx } = this.scene.render(t, vt, { frameMs: this._frameMs || 16.7, stageT });
+    this.originalVideo?.sync(vt,this.state === 'playing',this.chart.warp.rateAt(t));
+    this.threeStage?.sync(vt);
     this.track.draw(t, this.judge ? this.judge.notes : this.chart.notes);
     const p = this.clock.duration ? t / this.clock.duration : 0;
     $('#timebar').style.setProperty('--p', p);

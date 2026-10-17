@@ -4,3 +4,5 @@ node_modules/
 dist/
 .wrangler/
 .dev.vars
+prototypes/
+tools/character-retargeting/patch-*.mjs

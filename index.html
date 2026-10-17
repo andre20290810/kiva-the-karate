@@ -19,6 +19,7 @@
   </header>
 
   <main id="stageWrap">
+    <label id="displayModeWrap">VIEW <select id="displayMode" aria-label="ゲーム表示モード"></select></label>
     <canvas id="stage" aria-label="空手家の演武ステージ"></canvas>
     <button id="charBtn" type="button" hidden aria-live="polite" title="表示するキャラクターを切り替え（動作・音声・譜面・判定は共通）"><span class="who">KIVA</span><span class="swap">⇄</span></button>
     <div id="charNotice" hidden role="status"></div>
@@ -74,6 +75,7 @@
   </div>
 </div>
 <noscript>JavaScript を有効にしてください。</noscript>
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.js","three/addons/":"/vendor/three/addons/"}}</script>
 <script type="module" src="src/game.js"></script>
 </body>
 </html>
