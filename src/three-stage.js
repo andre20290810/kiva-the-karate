@@ -1,5 +1,6 @@
 // Technical 3D motion preview. Depth in the source motion is unmeasured.
 // Stage is deliberately stationary; scoring/audio/gamepad live in Game.
+import { smoothFootCorrections, correctionAt } from './foot-stability.js';
 export class ThreeStage {
  constructor(host){this.host=host;this.active=false;this.loaded=false;this.loading=null;}
  async init(){
@@ -69,7 +70,24 @@ export class ThreeStage {
   this.model.position.y += -0.145 - bb.min.y;
   this.model.updateMatrixWorld(true);
   this.floorCalibration={baselineFoot:bb.min.y,footParts:feet.length,applied:this.model.position.y};
+  this.baseModelY=this.model.position.y;
   this.duration=gltf.animations[0].duration;
+  // Sample foot clearance at the source's 5 Hz motion rate. Compensate only
+  // moderate floating, never infer horizontal contact or unobserved depth.
+  const elevations=[];
+  if(feet.length){
+    for(let i=0;i<=Math.floor(this.duration*5);i++){
+      this.mixer.setTime(Math.min(this.duration,i/5));
+      this.model.updateMatrixWorld(true);
+      const bounds=new this.THREE.Box3();
+      for(const foot of feet)bounds.expandByObject(foot);
+      elevations.push(bounds.min.y);
+    }
+  }
+  this.footCorrections=smoothFootCorrections(elevations);
+  this.mixer.setTime(0);
+  this.model.position.y=this.baseModelY;
+  this.model.updateMatrixWorld(true);
   this.variant=id;
  }
  setEnabled(active){
@@ -91,7 +109,9 @@ export class ThreeStage {
  sync(vt){
   if(!this.active||!this.loaded)return;
   this.resizeIfNeeded();
-  this.mixer.setTime(Math.max(0,Math.min(vt,this.duration)));
+  const time=Math.max(0,Math.min(vt,this.duration));
+  this.mixer.setTime(time);
+  this.model.position.y=this.baseModelY+correctionAt(this.footCorrections||[],time);
   this.renderer.render(this.scene,this.camera);
  }
  resizeIfNeeded(){
