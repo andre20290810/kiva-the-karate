@@ -52,11 +52,23 @@ export class ThreeStage {
   if(!gltf.animations.length)throw new Error('3D animation missing: '+id);
   if(this.model)this.scene.remove(this.model);
   this.model=gltf.scene;
-  this.model.position.y=-.55;
+  // Visual baseline calibration only; 2D data cannot prove foot contact.
+  this.model.position.y=0;
   this.scene.add(this.model);
   this.mixer=new this.THREE.AnimationMixer(this.model);
   this.action=this.mixer.clipAction(gltf.animations[0]);
   this.action.play();
+  this.mixer.setTime(0);
+  this.model.updateMatrixWorld(true);
+  // Use tracked FOOT meshes, not the lower edge of Alexandre's long coat.
+  const feet=[];
+  this.model.traverse(o=>{if(o.isMesh && /LEFT_FOOT|RIGHT_FOOT/i.test(o.name))feet.push(o);});
+  const bb=new this.THREE.Box3();
+  if(feet.length){for(const o of feet)bb.expandByObject(o);}
+  else bb.setFromObject(this.model);
+  this.model.position.y += -0.145 - bb.min.y;
+  this.model.updateMatrixWorld(true);
+  this.floorCalibration={baselineFoot:bb.min.y,footParts:feet.length,applied:this.model.position.y};
   this.duration=gltf.animations[0].duration;
   this.variant=id;
  }
@@ -68,7 +80,13 @@ export class ThreeStage {
   if(!this.loaded)return;
   const r=this.host.getBoundingClientRect();
   const w=Math.max(1,r.width),h=Math.max(1,r.height);
-  this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.renderer.setSize(w,h,false);
+  this.camera.aspect=w/h;
+  // Keep both arms in frame on narrow portrait screens.
+  const hfov=2*Math.atan(Math.tan(this.camera.fov*Math.PI/360)*(w/h));
+  const distance=Math.max(5.9,1.75/Math.tan(hfov/2));
+  this.camera.position.set(0,2.1,distance);
+  this.camera.lookAt(0,1.0,0);
+  this.camera.updateProjectionMatrix();this.renderer.setSize(w,h,false);
  }
  sync(vt){
   if(!this.active||!this.loaded)return;
