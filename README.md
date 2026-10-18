@@ -44,7 +44,7 @@ node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の
 （`--rebuild-chart` のときだけ初期譜面を作り直す）。コマ単位の補正がある場合は見直し対象として一覧に出します。
 - 時刻は `timestamps.csv` を優先。`--model`（MediaPipe Pose、無料・ローカル）があれば胴体の中心と手足の位置を関節から測り、
   無ければアルファから推定します（その場合、エフェクトの打撃点の自動設定は使えません）。
-- 提供素材（Google ドライブのフォルダ、412 枚 + timestamps.csv）を取り込み済み（2026-10-18）。欠落・重複なし、時刻は 0.0〜82.2 秒の 0.2 秒間隔。
+- **正式素材**: 提供素材（412 枚 + timestamps.csv）に下の切り抜き修正（9 コマ）を加えたもの（2026-10-18 確定）。欠落・重複なし、時刻は 0.0〜82.2 秒の 0.2 秒間隔。
   素材の識別: 共有フォルダ 1D4-ek3n0y0Dje3rjIaVyYmvnbTzNgDmY（PNG 412 枚 frame_0000〜0411 + README.txt + timestamps.csv = 414 ファイル、
   2026-10-18T16:08:53Z 更新）。元動画は「セーパイ_20261010.mp4」（ID 1Rq2eWS914bnmzWwPZXsYQ8rCor5Xe5eY、82.266667 秒・30fps、6 フレームごと）で、
   412 枚すべてが元動画の source_frame_index のフレームと画素一致（平均差 0.0）。取り込んだ ZIP・PNG の SHA-256 は `source/ingest_report/material.json`。
@@ -182,3 +182,10 @@ node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の
 | `tools/build-dist.mjs` | 公開用 `dist/`（2D 版のファイルだけ。代用素材では作らない） |
 | `tools/handoff/integrate_bundle.bat` | クラウドで作った git bundle を PC で安全に取り込み、通常 push（確認のみ→ push の 2 段階） |
 | `worker/` | 限定公開の認証ゲート（DEPLOY.md） |
+
+## 残件（2026-10-18 時点）
+
+- GitHub への反映: クラウド環境からの push は 403（権限なし）。PC で引き継ぎの bundle を `tools/handoff/integrate_bundle.bat` で取り込んで push する
+- 公開: GitHub 反映後に `node tools/build-dist.mjs` で `dist/` を作り、DEPLOY.md の手順で公開（素材は公開リポジトリに入れない）
+- AAC 音声の確認: 試験用の Chromium は AAC をデコードできず Opus 側で同期を確認済み。AAC 対応のブラウザ（Chrome・Safari）と
+  iPhone Safari 実機で、音が出ること・再生／一時停止／シーク／速度変更で音と人物・判定がずれないことの確認が未実施
