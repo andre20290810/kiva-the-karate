@@ -41,6 +41,11 @@ def bake(arm, Js, fps, frame_start=0, times=None):
     arm.animation_data.action = act
     for t, J in enumerate(Js):
         posing.pose_from_joints(arm, to_vec(J))
+        # Rigid bones must never acquire shear/scale during IK matrix decomposition.
+        # Degenerate foot targets previously yielded scale thousands of times larger.
+        for pb in arm.pose.bones:
+            pb.scale = (1.0, 1.0, 1.0)
+        bpy.context.view_layer.update()
         f = frames[t]
         for pb in arm.pose.bones:
             pb.keyframe_insert('rotation_quaternion', frame=f)
