@@ -164,16 +164,20 @@ export function drawSequence(ctx, bg, L, t, judge, sequences) {
   const seqNotes = judge.notes.filter((n) => n.sequenceId === ref.sequenceId);
   const label = sequences.find((s) => s.id === ref.sequenceId)?.label || ref.sequenceId;
   const y = L.y + L.h + Math.max(6, bg.h * 0.012);
-  const chip = Math.max(18, Math.min(30, bg.h * 0.04));
+  let chip = Math.max(18, Math.min(30, bg.h * 0.04));
   ctx.save();
   ctx.font = `700 ${Math.round(chip * 0.52)}px system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif`;
-  const tw = ctx.measureText(label).width;
-  const total = tw + 16 + seqNotes.length * (chip + 4) + 8;
+  let tw = ctx.measureText(label).width;
+  let total = tw + 16 + seqNotes.length * (chip + 4) + 8;
+  // 狭い画面: まとまりの名前を省き、それでも入らなければチップを小さくする
+  let showLabel = true;
+  if (total > bg.w - 16) { showLabel = false; tw = -16; total = seqNotes.length * (chip + 4) + 8; }
+  if (total > bg.w - 16) { chip = Math.max(12, (bg.w - 24) / seqNotes.length - 4); total = seqNotes.length * (chip + 4) + 8; }
   let x = bg.x + (bg.w - total) / 2;
   rr(ctx, x - 6, y - 4, total + 12, chip + 8, 8);
   ctx.fillStyle = 'rgba(10,6,4,0.55)'; ctx.fill();
   ctx.fillStyle = '#ffe9c4'; ctx.textBaseline = 'middle';
-  ctx.fillText(label, x, y + chip / 2);
+  if (showLabel) ctx.fillText(label, x, y + chip / 2);
   x += tw + 16;
   for (const n of seqNotes) {
     const st = LANE_STYLE[n.button];

@@ -180,7 +180,10 @@ test('初期譜面ファイルが検証を通る', () => {
   const r = validateChart(c, { frameCount: 412 });
   assert.deepEqual(r.errors, []);
   assert.ok(c.notes.length >= 10);
-  // 冒頭: Y 長押し → X → A
-  const head = normalizeChart(c).notes.slice(0, 3).map((n) => n.button).join('');
-  assert.equal(head, 'YXA'); // 2 回目の A は映像に見当たらないため置いていない（譜面の memo 参照）
+  // 冒頭: 映像の動作どおり Y 長押し → X → A → X → B → X → A を 1 つの連続コマンドに
+  const n = normalizeChart(c).notes;
+  const opening = n.filter((x) => x.sequenceId === 'opening').map((x) => x.button).join('');
+  assert.equal(opening, 'YXAXBXA');
+  assert.equal(n.slice(0, 7).map((x) => x.sequenceId).every((id) => id === 'opening'), true);
+  assert.equal(n.find((x) => x.button === 'Y').input, 'hold');
 });

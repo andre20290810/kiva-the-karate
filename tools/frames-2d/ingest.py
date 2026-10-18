@@ -55,26 +55,50 @@ def download(file_id, dest):
     return dest
 
 
-def check_frames(src):
+def check_frames(src, count=412, interval=0.2):
+    """欠落・重複（同じ画素の画像）・寸法・アルファ・timestamps.csv の時刻を検査する。"""
+    import hashlib
     files = sorted(f for f in os.listdir(src) if f.startswith('frame_') and f.endswith('.png'))
     problems = []
-    if len(files) != 412:
-        problems.append(f'PNG の枚数が {len(files)} 枚（412 枚のはず）')
-    for k, f in enumerate(files):
-        if f != f'frame_{k:04d}.png':
-            problems.append(f'連番が途切れています: {f}')
-            break
-    bad = []
+    want = [f'frame_{k:04d}.png' for k in range(count)]
+    missing = sorted(set(want) - set(files))
+    extra = sorted(set(files) - set(want))
+    if missing:
+        problems.append(f'欠落 {len(missing)} 枚: {missing[:5]}')
+    if extra:
+        problems.append(f'想定外のファイル {len(extra)} 個: {extra[:5]}')
+    bad, seen, dups = [], {}, []
     for f in files:
         im = cv2.imread(os.path.join(src, f), cv2.IMREAD_UNCHANGED)
-        if im is None or im.shape[:2] != (1024, 576) or im.shape[2] != 4:
+        if im is None or im.shape[:2] != (1024, 576) or im.ndim != 3 or im.shape[2] != 4:
             bad.append(f)
+            continue
+        h = hashlib.sha1(im.tobytes()).hexdigest()
+        if h in seen:
+            dups.append(f'{seen[h]} = {f}')
+        seen[h] = f
     if bad:
         problems.append(f'576×1024 RGBA でない画像 {len(bad)} 枚: {bad[:5]}')
+    if dups:
+        problems.append(f'同じ画素の画像（重複）{len(dups)} 組: {dups[:5]}')
     ts = os.path.join(src, 'timestamps.csv')
+    times = {}
     if not os.path.exists(ts):
         problems.append('timestamps.csv がありません')
-    return files, problems
+    else:
+        sys.path.insert(0, HERE)
+        from prepare_frames import read_timestamps
+        times = read_timestamps(src)
+        if sorted(times) != want:
+            problems.append(f'timestamps.csv のファイル名が画像と一致しません（{len(times)} 行）')
+        else:
+            t = [times[f] for f in want]
+            off = [f'{f}={times[f]}' for k, f in enumerate(want) if abs(times[f] - k * interval) > 0.011]
+            if any(b <= a for a, b in zip(t, t[1:])):
+                problems.append('timestamps.csv の時刻が増加していません（重複・逆順）')
+            if off:
+                problems.append(f'0.2 秒間隔から 0.01 秒以上ずれた時刻 {len(off)} 個: {off[:5]}（時刻は timestamps.csv を優先して使う）')
+    return files, problems, times
 
 
 def main():
@@ -98,10 +122,16 @@ def main():
     src = next((os.path.join(d, '') for d, _, fs in os.walk(dest) if 'frame_0000.png' in fs), None)
     if not src:
         raise SystemExit('ZIP の中に frame_0000.png が見つかりません')
-    files, problems = check_frames(src)
+    files, problems, _ = check_frames(src)
     print('検査:', '問題なし' if not problems else '\n  '.join(problems))
-    if problems:
+    # 時刻のずれは警告（timestamps.csv の値で動く）。それ以外は止める
+    if [p for p in problems if '0.2 秒間隔から' not in p]:
         raise SystemExit(1)
+    os.makedirs(a.report, exist_ok=True)
+    before = os.path.join(a.out, 'manifest.json')
+    if os.path.exists(before):
+        import shutil
+        shutil.copyfile(before, os.path.join(a.report, 'manifest_before.json'))
     cmd = [sys.executable, os.path.join(HERE, 'prepare_frames.py'), '--src', src, '--out', a.out]
     if a.model:
         cmd += ['--model', a.model]
@@ -177,6 +207,35 @@ def main():
             cells.append(np.zeros_like(cells[0]))
         cv2.imwrite(os.path.join(a.report, 'anchors.jpg'), np.vstack([np.hstack(cells[i:i + 6]) for i in range(0, len(cells), 6)]))
     far = [r for r in rows if r[-1] is not None and r[-1] > 25]
+    # 作り直し前の manifest（代用素材など）との差: 人物の中心（直立身長比）と倍率
+    diff_lines = []
+    mb = os.path.join(a.report, 'manifest_before.json')
+    if os.path.exists(mb):
+        B = json.load(open(mb))
+        if len(B['frames']) == len(F):
+            with open(os.path.join(a.report, 'manifest_diff.csv'), 'w', newline='') as fh:
+                w = csv.writer(fh)
+                w.writerow(['frame', 'anchor_shift_standing_heights', 'scale_ratio_new_over_old'])
+                sh, sr = [], []
+                for f0, f1 in zip(B['frames'], F):
+                    d_ = float(np.hypot(f1['anchor'][0] - f0['anchor'][0], f1['anchor'][1] - f0['anchor'][1]) * f1['k'])
+                    r_ = f1['k'] / f0['k']
+                    sh.append(d_); sr.append(r_)
+                    w.writerow([f1['i'], round(d_, 4), round(r_, 4)])
+            diff_lines.append(f'- 作り直し前（{B.get("source", "?")}）との差: 人物の中心のずれ 中央値 {np.median(sh):.3f}・最大 {max(sh):.3f}（直立身長比）、'
+                              f'倍率の比 {min(sr):.3f}〜{max(sr):.3f}（manifest_diff.csv）')
+    # 譜面は書き換えず、打撃点を新しい関節で置き換えた案を別ファイルに出す
+    prop = json.loads(json.dumps(chart))
+    for n in prop['notes']:
+        if n['button'] == 'A':
+            fi = min(len(F) - 1, int(round(n['time'] / M['frameIntervalSeconds'])))
+            e = bic.effect_for(F[fi], n['action'], n['time'])
+            if e.get('anchor'):
+                n['effect'] = {**n.get('effect', {}), 'anchor': e['anchor'], 'direction': e['direction']}
+    json.dump(prop, open(os.path.join(a.report, 'proposed_chart.json'), 'w'), ensure_ascii=False, indent=2)
+    ov = chart.get('display', {}).get('frameOverrides', {})
+    if ov:
+        diff_lines.append(f'- 譜面にコマ単位の補正が {len(ov)} コマあります（{", ".join(list(ov)[:10])}）。素材が変わったので、編集モードで見直してください（自動では変更しません）')
     lines = ['# 提供 ZIP の取り込み結果', '',
              f'- 画像: {len(files)} 枚、時刻 {t[0]:.3f}〜{t[-1]:.3f} 秒、間隔 {dt.min():.3f}〜{dt.max():.3f} 秒（{M["timesFrom"]}）',
              f'- 人物の中心: 関節から {sum(f["anchorFrom"] == "joints" for f in F)} 枚 / アルファから {sum(f["anchorFrom"] == "alpha" for f in F)} 枚',
@@ -184,6 +243,9 @@ def main():
              f'- 倍率の隣のコマとの差: 最大 {jump.max() * 100:.1f}%（5% 未満が目安）',
              f'- 収める範囲（直立身長比）: {M["fitExtents"]}',
              f'- A の打撃点: {len(rows)} 個中、新しい関節と 25px 以上ずれているもの {len(far)} 個 → {", ".join(r[0] for r in far) or "なし"}',
+             *diff_lines,
+             '- 譜面（charts/seipai.json）とブラウザに自動保存された編集内容は変更していません。打撃点を新しい関節で置き換えた案: proposed_chart.json'
+             '（編集モードの「JSON を読み込む」で確認・採用できます）',
              '', '確認画像: centered.jpg（中央配置と大きさ）、anchors.jpg（赤 = 譜面の現在値、緑 = 新しい関節）']
     open(os.path.join(a.report, 'report.md'), 'w').write('\n'.join(lines) + '\n')
     print('\n'.join(lines))

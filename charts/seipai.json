@@ -31,15 +31,7 @@
   "sequences": [
     {
       "id": "opening",
-      "label": "呼吸・構え・打ち上げ"
-    },
-    {
-      "id": "cross-01",
-      "label": "交差の構え"
-    },
-    {
-      "id": "turn-01",
-      "label": "旋回から構え・打ち"
+      "label": "冒頭（呼吸から旋回・打撃）"
     },
     {
       "id": "kick-01",
@@ -51,11 +43,11 @@
     },
     {
       "id": "turn-03",
-      "label": "旋回から打ち"
+      "label": "旋回から打撃"
     },
     {
       "id": "turn-04",
-      "label": "旋回から打ち"
+      "label": "旋回から打撃"
     },
     {
       "id": "turn-05",
@@ -63,7 +55,7 @@
     },
     {
       "id": "turn-06",
-      "label": "正面へ旋回・構え・下段打ち"
+      "label": "正面へ旋回・構え・打撃"
     },
     {
       "id": "turn-07",
@@ -71,7 +63,7 @@
     },
     {
       "id": "turn-08",
-      "label": "旋回・構え・膝蹴り"
+      "label": "旋回・構え・膝を上げる打撃"
     },
     {
       "id": "turn-09",
@@ -79,11 +71,11 @@
     },
     {
       "id": "turn-10",
-      "label": "旋回・構え・蹴り"
+      "label": "旋回・構え・膝を上げる打撃"
     },
     {
       "id": "turn-11",
-      "label": "旋回・打ち・構え直し"
+      "label": "旋回・打撃・構え直し"
     },
     {
       "id": "turn-12",
@@ -91,7 +83,7 @@
     },
     {
       "id": "kick-02",
-      "label": "横蹴りから打ち"
+      "label": "横蹴りから打撃"
     },
     {
       "id": "turn-13",
@@ -103,11 +95,11 @@
     },
     {
       "id": "kick-03",
-      "label": "蹴りから構え"
+      "label": "膝を上げる打撃から構え"
     },
     {
       "id": "turn-15",
-      "label": "正面へ旋回・構え・双手打ち"
+      "label": "正面へ旋回・構え・打撃"
     },
     {
       "id": "closing",
@@ -148,7 +140,7 @@
       "button": "A",
       "action": "strike",
       "input": "tap",
-      "label": "打ち上げ",
+      "label": "打撃",
       "sequenceId": "opening",
       "effect": {
         "preset": "strike",
@@ -170,7 +162,7 @@
       "action": "stance",
       "input": "tap",
       "label": "構え直し",
-      "sequenceId": "cross-01",
+      "sequenceId": "opening",
       "effect": {
         "preset": "stance",
         "intensity": 1
@@ -183,7 +175,7 @@
       "action": "turn",
       "input": "tap",
       "label": "旋回",
-      "sequenceId": "turn-01",
+      "sequenceId": "opening",
       "effect": {
         "preset": "turn",
         "intensity": 1
@@ -196,7 +188,7 @@
       "action": "stance",
       "input": "tap",
       "label": "構え",
-      "sequenceId": "turn-01",
+      "sequenceId": "opening",
       "effect": {
         "preset": "stance",
         "intensity": 1
@@ -208,8 +200,8 @@
       "button": "A",
       "action": "strike",
       "input": "tap",
-      "label": "打ち",
-      "sequenceId": "turn-01",
+      "label": "打撃",
+      "sequenceId": "opening",
       "effect": {
         "preset": "strike",
         "anchor": {
@@ -289,7 +281,7 @@
       "button": "A",
       "action": "strike",
       "input": "tap",
-      "label": "打ち",
+      "label": "打撃",
       "sequenceId": "turn-03",
       "effect": {
         "preset": "strike",
@@ -323,7 +315,7 @@
       "button": "A",
       "action": "strike",
       "input": "tap",
-      "label": "打ち",
+      "label": "打撃",
       "sequenceId": "turn-04",
       "effect": {
         "preset": "strike",
@@ -396,7 +388,7 @@
       "button": "A",
       "action": "strike",
       "input": "tap",
-      "label": "下段打ち",
+      "label": "打撃",
       "sequenceId": "turn-06",
       "effect": {
         "preset": "strike",
@@ -469,7 +461,7 @@
       "button": "A",
       "action": "kick",
       "input": "tap",
-      "label": "膝蹴り",
+      "label": "打撃",
       "sequenceId": "turn-08",
       "effect": {
         "preset": "strike",
@@ -542,7 +534,7 @@
       "button": "A",
       "action": "kick",
       "input": "tap",
-      "label": "膝蹴り",
+      "label": "打撃",
       "sequenceId": "turn-10",
       "effect": {
         "preset": "strike",
@@ -576,7 +568,7 @@
       "button": "A",
       "action": "strike",
       "input": "tap",
-      "label": "打ち",
+      "label": "打撃",
       "sequenceId": "turn-11",
       "effect": {
         "preset": "strike",
@@ -657,7 +649,7 @@
       "button": "A",
       "action": "strike",
       "input": "tap",
-      "label": "打ち",
+      "label": "打撃",
       "sequenceId": "kick-02",
       "effect": {
         "preset": "strike",
@@ -730,7 +722,7 @@
       "button": "A",
       "action": "kick",
       "input": "tap",
-      "label": "膝蹴り",
+      "label": "打撃",
       "sequenceId": "kick-03",
       "effect": {
         "preset": "strike",
@@ -790,7 +782,7 @@
       "button": "A",
       "action": "strike",
       "input": "tap",
-      "label": "双手打ち",
+      "label": "打撃",
       "sequenceId": "turn-15",
       "effect": {
         "preset": "strike",
@@ -822,10 +814,10 @@
   ],
   "memo": [
     "時刻は 0.2 秒間隔の画像で動作が止まったコマを目視で選んだもの。ミリ秒単位の精度はないので、編集モードで遊びながら合わせてください。",
-    "A の打撃点と方向は各コマの関節（MediaPipe の推定）から自動で入れ、膝を上げる 49.4・53.8・66.4 秒は膝を打撃点にしました。ずれている場合は編集の「画面で指定」で直してください。",
-    "【未解決】希望の冒頭「Y 長押し → X → A → A」のうち 2 回目の A: 14.6〜24.2 秒を 30fps で確認したが、15.4 秒の打ち上げの後に続く 2 回目の打撃は無い。15.4〜17.6 秒は打ち上げの姿勢の保持、17.8 秒は腕を下ろして正面へ向く移り（打撃ではない）、18.0〜18.4 秒は踏み出しながら両腕を交差（構え直し＝X）、20.8 秒は旋回（B）、21.6 秒は構え（X）。次の実際の打撃は 22.2 秒（片腕を顔の高さで前へ出す打ち、現在の A）。映像にない突きを作らないため、冒頭は Y（5.8 秒〜2.6 秒間）→ X（12.2 秒）→ A（15.4 秒）の3 つのまま。2 回目の A を冒頭に入れる場合は、22.2 秒の A を冒頭の連続コマンドに含めるか（間に X・B・X が入る）、別の演武映像を使うかの判断が必要です。",
+    "A の打撃点と方向は各コマの関節（MediaPipe の推定）から自動で入れています。ずれている場合は編集の「画面で指定」で直してください。",
+    "冒頭は映像の動作に合わせて「Y 呼吸（5.8 秒〜2.6 秒間）→ X 構え（12.2）→ A 打撃（15.4、片腕の突き上げ）→ X 構え直し（18.4、両腕の交差）→ B 旋回（20.8）→ X 構え（21.6）→ A 打撃（22.2、片腕を顔の高さで前へ）」の 1 つの連続コマンド（opening）。希望の例「Y → X → A → A」の 2 回目の A は、映像では間に構え直し・旋回・構えが入るため、その動作もコマンドにしています。15.4〜17.6 秒は打撃の姿勢の保持、17.8 秒は腕を下ろす移り（打撃ではない）なのでノーツなし。",
+    "技名を確定できない打撃は「打撃」と表記（編集モードの表示名で変更できます）。はっきり蹴りと分かる 24.2・59.2 秒だけ「蹴り」。49.4・53.8・66.4 秒は膝を上げる動作で、打撃点は膝にしています。",
     "Y の呼吸は、礼の後の静止（5.8〜8.4 秒）と、最後に両手を交差させて胸元へ上げる動作（73.4〜75.2 秒）の 2 か所。その他の静止区間には置いていません。",
-    "技名は映像から推定した仮の名前です（打ち上げ・打ち・下段打ち・双手打ち・蹴り）。正確な名称は確認していません。",
     "44.4〜46.8 秒は後ろ向きで足を運ぶ区間ですが、決めの瞬間が読み取れないためノーツを置いていません。",
     "12.4〜14.2 秒、28.0〜31.6 秒、77〜82 秒（礼）は静止・礼のためノーツなし。",
     "動画はカメラの寄り引きがあり、人物の大きさは manifest の体格補正で揃えています。"

@@ -33,9 +33,15 @@ python tools\frames-2d\ingest.py --zip source\seipai_transparent_412frames.zip -
 npm start
 node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の確認動画と描画時間（ffmpeg が必要）
 ```
+会話に添付できない大きさの ZIP は、PC で `powershell -ExecutionPolicy Bypass -File tools\frames-2d\split_zip.ps1 -Zip <ZIP>` で 20 MB ずつに
+分けて部分と `.sha256.txt` を渡し、受け取り側で `python tools/frames-2d/join_parts.py --list <...>.sha256.txt --out source/seipai_transparent_412frames.zip`
+（SHA-256 と ZIP の整合を確認してから結合）→ `ingest.py --zip` で取り込みます。
+
 `ingest.py` は 412 枚・576×1024・アルファ・timestamps.csv を検査してから `prepare_frames.py` を実行し、
 `source/ingest_report/` に中央配置の一覧（centered.jpg）、倍率の表（scale.csv）、譜面の A の打撃点と新しい関節の比較
-（anchors.jpg・anchors.csv）を出します。譜面は自動では書き換えません（`--rebuild-chart` のときだけ初期譜面を作り直す）。
+（anchors.jpg・anchors.csv）、作り直し前の素材との差（manifest_diff.csv）、打撃点を新しい関節で置き換えた譜面の案（proposed_chart.json）を
+出します。欠落・重複（同じ画素の画像）・時刻の不連続があれば止まります。譜面とブラウザに自動保存された編集内容は書き換えません
+（`--rebuild-chart` のときだけ初期譜面を作り直す）。コマ単位の補正がある場合は見直し対象として一覧に出します。
 - 時刻は `timestamps.csv` を優先。`--model`（MediaPipe Pose、無料・ローカル）があれば胴体の中心と手足の位置を関節から測り、
   無ければアルファから推定します（その場合、エフェクトの打撃点の自動設定は使えません）。
 - 開発環境では提供 ZIP を取得できなかったため、元動画から人物を切り抜いた **代用素材**（`tools/frames-2d/standin_from_video.py`）で
@@ -118,11 +124,11 @@ node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の
     "referenceHeightRatio": 0.55,               // 直立時の全高 ÷ 背景の高さ
     "frameOverrides": { "123": { "dx": 0.01, "dy": -0.02, "scale": 1.05 } }
   },
-  "sequences": [ { "id": "opening", "label": "呼吸・構え・打ち上げ" } ],
+  "sequences": [ { "id": "opening", "label": "呼吸・構え・打撃" } ],
   "notes": [
     { "id": "n001", "time": 5.8, "button": "Y", "action": "breathe", "input": "hold", "duration": 2.6, "label": "呼吸", "sequenceId": "opening",
       "effect": { "preset": "breath", "intensity": 1 } },
-    { "id": "n003", "time": 15.4, "button": "A", "action": "strike", "input": "tap", "label": "打ち上げ", "sequenceId": "opening",
+    { "id": "n003", "time": 15.4, "button": "A", "action": "strike", "input": "tap", "label": "打撃", "sequenceId": "opening",
       "effect": { "preset": "strike", "anchor": { "x": 0.53, "y": 0.29 }, "direction": { "x": 0.1, "y": -1 }, "intensity": 1 } }
   ],
   "memo": [ "初期譜面の要調整箇所など" ]
@@ -149,11 +155,9 @@ node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の
 （`tools/chart/build_initial_chart.py` に時刻の一覧と根拠のメモ）。0.2 秒間隔の画像から読んだ時刻なので、ミリ秒の精度はありません。
 要調整箇所は譜面の `memo`（編集モードの「編集メモ」）にあります。主なもの:
 
-- **【未解決】冒頭「Y 長押し → X → A → A」の 2 回目の A**: 14.6〜24.2 秒を 30fps で確認しても、15.4 秒の打ち上げに続く 2 回目の打撃は
-  映像にありません（17.8 秒 = 腕を下ろして正面へ向く移り、18.0〜18.4 秒 = 両腕の交差（X）、20.8 秒 = 旋回（B）、21.6 秒 = 構え（X）、
-  次の打撃は 22.2 秒）。そのため冒頭は Y（5.8 秒〜2.6 秒間）→ X（12.2 秒）→ A（15.4 秒）のまま。22.2 秒の A を冒頭のまとまりに入れるか
-  （間に X・B・X が入る）、別の映像を使うかの判断が必要です
-- 技名は映像からの推定（打ち上げ・打ち・下段打ち・双手打ち・蹴り・膝蹴り）
+- 冒頭は映像の動作に合わせた 1 つの連続コマンド: Y 呼吸（5.8 秒〜2.6 秒間）→ X 構え（12.2）→ A 打撃（15.4、片腕の突き上げ）→
+  X 構え直し（18.4、両腕の交差）→ B 旋回（20.8）→ X 構え（21.6）→ A 打撃（22.2）。映像にない突きは加えていません
+- 技名を確定できない打撃は「打撃」と表記（編集モードで変更可）。はっきり蹴りと分かる 24.2・59.2 秒だけ「蹴り」
 - 44.4〜46.8 秒（後ろ向きで足を運ぶ区間）は決めの瞬間が読めないためノーツなし。静止・礼の区間にもなし
 
 ## 構成
@@ -169,5 +173,6 @@ node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の
 | `app/lanes.js` / `app/editor.js` / `app/chart.js` | レーン描画 ／ 編集モード ／ 譜面 JSON の検証・書き出し |
 | `tools/frames-2d/` | 素材準備（`prepare_frames.py`、代用素材 `standin_from_video.py`、`landmarks_mp.py`） |
 | `tools/chart/` | 初期譜面の作成 |
-| `tools/build-dist.mjs` | 公開用 `dist/`（2D 版のファイルだけ） |
+| `tools/build-dist.mjs` | 公開用 `dist/`（2D 版のファイルだけ。代用素材では作らない） |
+| `tools/handoff/integrate_bundle.bat` | クラウドで作った git bundle を PC で安全に取り込み、通常 push（確認のみ→ push の 2 段階） |
 | `worker/` | 限定公開の認証ゲート（DEPLOY.md） |
