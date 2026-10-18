@@ -190,7 +190,22 @@ export class Game {
     if(oldBtn)oldBtn.hidden=true;
     const oldNotice=document.querySelector('#charNotice');
     if(oldNotice)oldNotice.hidden=true;
-    if(mode.kind === '3d') {
+    if(mode.kind === 'frames') {
+      // 連番画像（パラパラ漫画方式）。時間軸・音声・譜面・判定は KIVA と共通で、描く画像の列だけを差し替える
+      const c = this.characters.find((x) => x.id === mode.character);
+      if (!c) { this.status(`キャラクター ${mode.character} が譜面に定義されていません`, 'error'); return; }
+      let st = this.charState.get(c.id);
+      if (st.status !== STATUS.READY || !this.charStores.has(c.id)) {
+        this.showCharacter(c, { status: STATUS.LOADING, reason: '人物画像を読み込み中…' });
+        st = c.frames ? await this.loadCharacter(c) : { status: STATUS.PENDING, reason: '演武フレームが未作成です' };
+        this.charState.set(c.id, st);
+      }
+      if (token !== this._modeToken) return;
+      this.showCharacter(c, st);
+      this.status(c.id === 'kiva' ? 'KIVA frame animation: 412 frames (5fps)'
+        : 'ALEXANDRE 2D FRAME ANIMATION (PREVIEW): KIVA の 412 コマの姿勢に合わせて回転画像を 2D 変形した試作（大きな姿勢では崩れあり）');
+    }
+    else if(mode.kind === '3d') {
       const kind = this.asset3d?.kind;
       const who = mode.id === 'alexandre-3d' ? 'ALEXANDRE 3D' : 'KIVA 3D';
       this.status(kind === 'legacy' ? `${who} TECH PREVIEW: 人体モデル未配置のため旧プロトタイプ表示（完成モデルではありません）`

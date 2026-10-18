@@ -15,8 +15,7 @@
       "id": "alexandre",
       "name": "ALEXANDRE",
       "frames": "../assets/alexandre/frames.json",
-      "status": "pending",
-      "note": "演武フレーム未作成。KIVA と同じ時間軸（412フレーム・5fps）で作成すること",
+      "note": "KIVA の 412 フレーム（5fps）と同じ時間軸。回転動画の画像を各コマの姿勢へ 2D 変形した試作（tools/character-2d）",
       "references": [
         "alexandre.mp4",
         "KIVA_character_references_from_video.zip"

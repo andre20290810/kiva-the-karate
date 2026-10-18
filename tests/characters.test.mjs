@@ -13,12 +13,12 @@ test('譜面に characters が無ければ KIVA（譜面の frames）だけ', ()
   assert.equal(l[0].base, true);
 });
 
-test('本番譜面: KIVA ⇄ ALEXANDRE。ALEXANDRE は未完成（pending）として定義', () => {
+test('本番譜面: KIVA と ALEXANDRE の 2 人。ALEXANDRE は KIVA と同じ時間軸のフレーム定義を参照する', () => {
   const chart = JSON.parse(readFileSync(new URL('../charts/seipai.chart.json', import.meta.url)));
   const l = characterList(chart);
   assert.deepEqual(l.map((c) => c.name), ['KIVA', 'ALEXANDRE']);
   assert.equal(l[0].frames, chart.frames, 'KIVA は既存のセーパイ演武フレーム');
-  assert.equal(l[1].status, STATUS.PENDING);
+  assert.equal(l[1].frames, '../assets/alexandre/frames.json');
   assert.ok(l[1].references.includes('alexandre.mp4'));
 });
 

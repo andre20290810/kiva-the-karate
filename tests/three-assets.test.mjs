@@ -18,7 +18,7 @@ test('3D: スキン付き人体モデルを優先し、旧プロトタイプは�
 
 test('3D: 未完成のモードは TECH PREVIEW と表示する', () => {
   for (const m of DISPLAY_MODES.filter((m) => m.kind === '3d')) assert.match(m.label, /TECH PREVIEW/);
-  assert.equal(DISPLAY_MODES.length, 3);
+  assert.match(DISPLAY_MODES.find((m) => m.id === 'alexandre-frames').label, /PREVIEW/);
 });
 
 test('VFX: 手足のボーン名は glTF 書き出しで "." が落ちても見つかる', () => {
