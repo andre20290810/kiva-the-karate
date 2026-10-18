@@ -15,6 +15,7 @@ export class Editor {
     this.app = app;
     this.root = root;
     this.selected = new Set();
+    this.frameDraft = null; // 補正欄の未適用の入力 {frame, dx, dy, scale}
     this.undoStack = [];
     this.redoStack = [];
     this.snap = false;
@@ -596,44 +597,91 @@ export class Editor {
     }));
   }
 
+  /**
+   * 人物の位置・倍率の補正欄。
+   * 入力を始めた時点で「下書き」（対象のコマ番号と入力中の値）を作り、再生を一時停止する。
+   * 下書きがある間は、コマが変わっても欄を作り直さず、値も対象のコマも変えない（適用か取り消しで終わる）。
+   */
   renderFrameBox() {
     const box = this.root.querySelector('#edFrameBody');
-    const fi = this.app.store.indexAt(Math.max(0, this.app.t));
+    const cur = this.app.store.indexAt(Math.max(0, this.app.t));
+    const draft = this.frameDraft;
+    const fi = draft ? draft.frame : cur;
     const d = this.chart.display;
     const ov = d.frameOverrides[fi] || d.frameOverrides[String(fi)] || {};
-    this._frameShown = fi;
+    const val = (k, def) => (draft ? draft[k] : String(ov[k] ?? def));
+    this._frameShown = cur;
     box.innerHTML = `
-      <p>コマ <b>${fi}</b>（${this.app.store.frames[fi].t.toFixed(1)} 秒）${Object.keys(ov).length ? '：<b>補正あり</b>' : ''}　補正のあるコマ: ${Object.keys(d.frameOverrides).length}</p>
+      <p>補正の対象: コマ <b>${fi}</b>（${this.app.store.frames[fi].t.toFixed(1)} 秒）${Object.keys(ov).length ? '：<b>補正あり</b>' : ''}　補正のあるコマ: ${Object.keys(d.frameOverrides).length}</p>
+      <p class="ed-pick ed-draft" id="fDraft" style="visibility:${draft ? 'visible' : 'hidden'}">未適用の補正があります（コマ ${fi}）。「このコマに適用」か「取り消し」を押してください。<span id="fShown"></span></p>
       <div class="ed-grid">
-        <label for="fDx">左右（背景の高さ比）</label><span><input id="fDx" type="number" step="0.005" value="${ov.dx ?? 0}"></span>
-        <label for="fDy">上下（背景の高さ比）</label><span><input id="fDy" type="number" step="0.005" value="${ov.dy ?? 0}"></span>
-        <label for="fSc">倍率</label><span><input id="fSc" type="number" step="0.01" min="0.3" max="3" value="${ov.scale ?? 1}"></span>
+        <label for="fDx">左右（背景の高さ比）</label><span><input id="fDx" data-k="dx" type="number" step="0.005" value="${esc(val('dx', 0))}"></span>
+        <label for="fDy">上下（背景の高さ比）</label><span><input id="fDy" data-k="dy" type="number" step="0.005" value="${esc(val('dy', 0))}"></span>
+        <label for="fSc">倍率</label><span><input id="fSc" data-k="scale" type="number" step="0.01" min="0.3" max="3" value="${esc(val('scale', 1))}"></span>
       </div>
-      <div class="ed-row"><button data-f="apply">このコマに適用</button><button data-f="copyPrev">前のコマの補正をコピー</button><button data-f="clear">このコマの補正を消す</button></div>
+      <div class="ed-row"><button data-f="apply">このコマに適用</button><button data-f="cancel" ${draft ? '' : 'disabled'}>取り消し</button>
+        <button data-f="goto" ${draft ? '' : 'disabled'}>対象のコマを表示</button>
+        <button data-f="copyPrev">前のコマの補正をコピー</button><button data-f="clear">このコマの補正を消す</button></div>
       <hr>
       <div class="ed-grid">
         <label for="dRef">直立時の高さ（背景の高さ比）</label><span><input id="dRef" type="number" step="0.01" min="0.2" max="1" value="${d.referenceHeightRatio}"></span>
         <label for="dAx">人物の中心 x / y</label><span><input id="dAx" type="number" step="0.01" min="0" max="1" value="${d.subjectAnchor.x}"> <input id="dAy" type="number" step="0.01" min="0" max="1" value="${d.subjectAnchor.y}"></span>
       </div>`;
+    this.updateFrameShown();
     const q = (s) => box.querySelector(s);
+    const startDraft = () => {
+      if (this.frameDraft) return;
+      this.app.pause(); // 編集を始めたら背景の再生を止める
+      const now = this.app.store.indexAt(Math.max(0, this.app.t));
+      this.frameDraft = { frame: now, dx: q('#fDx').value, dy: q('#fDy').value, scale: q('#fSc').value };
+      q('#fDraft').style.visibility = 'visible'; // 場所は最初から確保（入力欄の位置がずれないように）
+      q('[data-f=cancel]').disabled = false;
+      q('[data-f=goto]').disabled = false;
+    };
+    for (const inp of box.querySelectorAll('input[data-k]')) {
+      inp.addEventListener('focus', startDraft);
+      inp.addEventListener('input', () => { startDraft(); this.frameDraft[inp.dataset.k] = inp.value; });
+    }
     box.querySelectorAll('button[data-f]').forEach((b) => b.addEventListener('click', () => {
       const k = b.dataset.f;
+      const target = this.frameDraft ? this.frameDraft.frame : this.app.store.indexAt(Math.max(0, this.app.t));
       if (k === 'apply') {
         const v = { dx: Number(q('#fDx').value) || 0, dy: Number(q('#fDy').value) || 0, scale: Number(q('#fSc').value) || 1 };
+        this.frameDraft = null;
         this.apply((c) => {
-          if (!v.dx && !v.dy && v.scale === 1) delete c.display.frameOverrides[fi];
-          else c.display.frameOverrides[fi] = v;
-        }, `コマ ${fi} の位置・倍率を補正`);
+          delete c.display.frameOverrides[String(target)];
+          if (v.dx || v.dy || v.scale !== 1) c.display.frameOverrides[target] = v;
+        }, `コマ ${target} の位置・倍率を補正`);
+        this.renderFrameBox();
+      } else if (k === 'cancel') {
+        this.frameDraft = null;
+        this.renderFrameBox();
+        this.message(`コマ ${target} の未適用の補正を取り消しました`);
+      } else if (k === 'goto') {
+        this.app.pause();
+        this.app.seek(this.app.store.frames[target].t);
       } else if (k === 'copyPrev') {
-        const pv = d.frameOverrides[fi - 1];
+        const pv = d.frameOverrides[target - 1];
         if (!pv) { this.message('前のコマに補正がありません', 'error'); return; }
-        this.apply((c) => { c.display.frameOverrides[fi] = { ...pv }; }, `コマ ${fi - 1} の補正をコピー`);
-      } else if (k === 'clear') this.apply((c) => { delete c.display.frameOverrides[fi]; delete c.display.frameOverrides[String(fi)]; }, `コマ ${fi} の補正を消す`);
+        this.frameDraft = null;
+        this.apply((c) => { c.display.frameOverrides[target] = { ...pv }; }, `コマ ${target - 1} の補正をコピー`);
+      } else if (k === 'clear') {
+        this.frameDraft = null;
+        this.apply((c) => { delete c.display.frameOverrides[target]; delete c.display.frameOverrides[String(target)]; }, `コマ ${target} の補正を消す`);
+      }
     }));
     q('#dRef').addEventListener('change', (e) => this.apply((c) => { c.display.referenceHeightRatio = Math.max(0.2, Math.min(1, Number(e.target.value) || 0.55)); }, '人物の大きさを変更'));
     for (const id of ['#dAx', '#dAy']) q(id).addEventListener('change', () => this.apply((c) => {
       c.display.subjectAnchor = { x: Math.max(0, Math.min(1, Number(q('#dAx').value))), y: Math.max(0, Math.min(1, Number(q('#dAy').value))) };
     }, '人物の中心を変更'));
+  }
+
+  /** 下書き中に表示しているコマが対象と違うときの案内（欄は作り直さない） */
+  updateFrameShown() {
+    const el = this.root.querySelector('#fShown');
+    if (!el) return;
+    const cur = this.app.store.indexAt(Math.max(0, this.app.t));
+    el.textContent = this.frameDraft && cur !== this.frameDraft.frame ? ` 現在表示しているのはコマ ${cur} です。` : '';
   }
 
   // ---------- 画面で位置を指定 ----------
@@ -699,7 +747,11 @@ export class Editor {
     this.root.querySelector('#edTime').textContent = `${Math.max(0, t).toFixed(2)} 秒 / コマ ${fi}`;
     const seek = this.root.querySelector('#edSeek');
     if (document.activeElement !== seek) seek.value = String(Math.max(0, t));
-    if (fi !== this._frameShown && !this.root.querySelector('#edFrameBody').contains(document.activeElement)) this.renderFrameBox();
+    if (fi !== this._frameShown) {
+      // 下書き中・入力中は作り直さない（入力した値と対象のコマを保つ）
+      if (this.frameDraft || this.root.querySelector('#edFrameBody').contains(document.activeElement)) { this._frameShown = fi; this.updateFrameShown(); }
+      else this.renderFrameBox();
+    }
     this.drawTimeline();
   }
 

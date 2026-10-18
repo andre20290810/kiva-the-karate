@@ -293,6 +293,44 @@ for (const [name, vp] of Object.entries(VIEWS)) {
   await ctx.close();
 }
 
+// ---------- 6b. 補正の入力中にコマが変わっても値が消えない（通常の操作: クリックとキー入力だけ） ----------
+{
+  const { ctx, p } = await open(VIEWS['1366x768']);
+  await p.click('#btnEdit');
+  await p.evaluate(() => window.__app.seek(40.0));
+  await p.waitForFunction(() => /コマ 200/.test(document.querySelector('#edFrameBody').textContent));
+  // 編集パネルの ▶ で再生してから、補正欄をクリックして入力する
+  await p.click('#edPlay');
+  await p.waitForTimeout(300);
+  await p.click('#fDx', { clickCount: 3 });
+  await p.keyboard.type('0.03');
+  const target = await p.evaluate(() => window.__app.store.indexAt(window.__app.t));
+  const st1 = await p.evaluate(() => window.__app.state);
+  // 他の場所を操作してコマを進める（入力欄からフォーカスが外れる）
+  await p.click('#editor [data-act=nextF]');
+  await p.click('#editor [data-act=nextF]');
+  await p.click('#edPlay');           // 再生（背景でコマが変わり続ける）
+  await p.waitForTimeout(1200);
+  await p.click('#edPlay');           // 停止
+  const shown = await p.evaluate(() => window.__app.store.indexAt(window.__app.t));
+  const kept = await p.inputValue('#fDx');
+  check(st1 === 'paused', `補正欄の編集を始めると再生が一時停止する（${st1}）`);
+  check(kept === '0.03' && shown !== target, `入力中の値がコマの移動・再生で消えない（表示コマ ${shown}、入力値 ${kept}）`);
+  await p.click('#fSc', { clickCount: 3 });
+  await p.keyboard.type('1.08');
+  await p.click('#edFrameBody [data-f=apply]');
+  const ov = await p.evaluate(() => window.__app.chart.display.frameOverrides);
+  check(ov[target]?.dx === 0.03 && ov[target]?.scale === 1.08 && !ov[shown], `適用は入力を始めたコマ ${target} に入る（${JSON.stringify(ov)}）`);
+  // 取り消し
+  await p.click('#fDy', { clickCount: 3 });
+  await p.keyboard.type('0.02');
+  await p.click('#edFrameBody [data-f=cancel]');
+  const after = await p.evaluate(() => ({ n: Object.keys(window.__app.chart.display.frameOverrides).length, dy: document.querySelector('#fDy').value }));
+  check(after.n === 1 && Number(after.dy) === 0, `未適用の補正を取り消せる（${JSON.stringify(after)}）`);
+  await p.evaluate(() => localStorage.clear());
+  await ctx.close();
+}
+
 // ---------- 7. リトライを繰り返してもメモリ（デコード済み画像・エフェクト）が増え続けない ----------
 {
   const { ctx, p } = await open(VIEWS['390x844']);

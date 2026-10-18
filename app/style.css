@@ -116,5 +116,6 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
 .ed-msg { margin: 0; font-size: 12px; color: #bfe9c3; min-height: 1.2em; }
 .ed-msg[data-kind=error] { color: #ff9a9a; }
 .ed-pick { color: #ffcf6a; margin: 6px 0 0; }
+.ed-draft { min-height: 2.9em; margin: 0 0 4px; }
 [data-edit=true] #panel { max-height: 58vh; max-height: 58dvh; }
 [data-edit=true][data-orient=landscape] #panel { max-height: 64vh; max-height: 64dvh; }

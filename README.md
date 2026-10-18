@@ -26,10 +26,16 @@ npm run test:browser   :: 実素材でのブラウザ確認（npm start を別�
 | 音声（任意） | `assets/seipai/audio.m4a` | `sh tools/extract_audio.sh source/seipai.mp4 assets/seipai`。無ければ効果音だけで進行 |
 
 ```bat
-:: seipai_transparent_412frames.zip を source\ に展開（source\seipai_transparent\frame_0000.png … と timestamps.csv）
 pip install opencv-python numpy mediapipe
-python tools\frames-2d\prepare_frames.py --src source\seipai_transparent --out assets\seipai --model pose_landmarker_heavy.task
+:: ZIP の検査・展開・素材の作り直し・確認画像（source\ingest_report\）までまとめて行う
+python tools\frames-2d\ingest.py --zip source\seipai_transparent_412frames.zip --model pose_landmarker_heavy.task
+:: （drive.google.com に接続できる環境なら --zip の代わりに --download 1Mt_DYiGNyEWi5bpO2JASFXAEe5r0LSWZ）
+npm start
+node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の確認動画と描画時間（ffmpeg が必要）
 ```
+`ingest.py` は 412 枚・576×1024・アルファ・timestamps.csv を検査してから `prepare_frames.py` を実行し、
+`source/ingest_report/` に中央配置の一覧（centered.jpg）、倍率の表（scale.csv）、譜面の A の打撃点と新しい関節の比較
+（anchors.jpg・anchors.csv）を出します。譜面は自動では書き換えません（`--rebuild-chart` のときだけ初期譜面を作り直す）。
 - 時刻は `timestamps.csv` を優先。`--model`（MediaPipe Pose、無料・ローカル）があれば胴体の中心と手足の位置を関節から測り、
   無ければアルファから推定します（その場合、エフェクトの打撃点の自動設定は使えません）。
 - 開発環境では提供 ZIP を取得できなかったため、元動画から人物を切り抜いた **代用素材**（`tools/frames-2d/standin_from_video.py`）で
@@ -84,7 +90,8 @@ python tools\frames-2d\prepare_frames.py --src source\seipai_transparent --out a
 - 連続コマンド: 選択したノーツを新しいまとまりにする／外す、名前の変更、一覧の並べ替え、まとまり内のコマンドの順番の入れ替え
   （「◀ 順番」「順番 ▶」: 時刻の並びはそのままで、隣のノーツとコマンドの中身を入れ替える）
 - A–B ループ（ゲームの A・B ボタンとは別の「ループ開始」「ループ終了」）、区間内のノーツを選択
-- 人物の位置・倍率のコマ単位の補正（下の `frameOverrides`）、直立時の高さ、人物の中心
+- 人物の位置・倍率のコマ単位の補正（下の `frameOverrides`）、直立時の高さ、人物の中心。補正欄に入力を始めると再生が止まり、
+  入力を始めたコマが対象として固定されます（コマ送り・再生で値も対象も変わらない）。「このコマに適用」か「取り消し」で終わります
 - 元に戻す／やり直す（Ctrl+Z／Ctrl+Y）、ブラウザ内への自動保存、初期譜面に戻す、JSON の書き出し・読み込み、編集メモ
 
 シーク・ループ・リトライ・譜面の変更のたびに、その時刻以降のノーツの判定を初期化します（同じノーツを二重に加点しない、
@@ -142,8 +149,10 @@ python tools\frames-2d\prepare_frames.py --src source\seipai_transparent --out a
 （`tools/chart/build_initial_chart.py` に時刻の一覧と根拠のメモ）。0.2 秒間隔の画像から読んだ時刻なので、ミリ秒の精度はありません。
 要調整箇所は譜面の `memo`（編集モードの「編集メモ」）にあります。主なもの:
 
-- 指定の冒頭「Y → X → A → A（正拳突き 2 回）」に当たる 2 連続の突きが映像に見当たらないため、冒頭は Y（5.8 秒〜2.6 秒間）→ X（12.2 秒）→
-  A 打ち上げ（15.4 秒）の 3 つ。2 回目の A を置く場合の候補もメモに記載
+- **【未解決】冒頭「Y 長押し → X → A → A」の 2 回目の A**: 14.6〜24.2 秒を 30fps で確認しても、15.4 秒の打ち上げに続く 2 回目の打撃は
+  映像にありません（17.8 秒 = 腕を下ろして正面へ向く移り、18.0〜18.4 秒 = 両腕の交差（X）、20.8 秒 = 旋回（B）、21.6 秒 = 構え（X）、
+  次の打撃は 22.2 秒）。そのため冒頭は Y（5.8 秒〜2.6 秒間）→ X（12.2 秒）→ A（15.4 秒）のまま。22.2 秒の A を冒頭のまとまりに入れるか
+  （間に X・B・X が入る）、別の映像を使うかの判断が必要です
 - 技名は映像からの推定（打ち上げ・打ち・下段打ち・双手打ち・蹴り・膝蹴り）
 - 44.4〜46.8 秒（後ろ向きで足を運ぶ区間）は決めの瞬間が読めないためノーツなし。静止・礼の区間にもなし
 
