@@ -133,17 +133,22 @@ export class App {
     }
   }
 
+  /** 音源の候補を順に試し、このブラウザでデコードできた最初のものを使う（AAC → Opus など） */
   async loadAudio() {
     const src = this.chart.audio?.src;
-    if (!src) return '音源なし（効果音のみ）';
-    try {
-      const r = await fetch(new URL(src, location.href).href);
-      if (!r.ok) return `音源なし（${src} が HTTP ${r.status}。効果音のみで進行します）`;
-      await this.clock.loadAudio(await r.arrayBuffer(), this.chart.audio.startAtTimelineSeconds || 0);
-      return `音源: ${src}`;
-    } catch (e) {
-      return `音源を使えません（${e.message.split('\n')[0]}）。効果音のみで進行します`;
+    const list = Array.isArray(src) ? src : src ? [src] : [];
+    if (!list.length) return '音源なし（効果音のみ）';
+    const errs = [];
+    for (const one of list) {
+      try {
+        const r = await fetch(new URL(one, location.href).href);
+        if (!r.ok) { errs.push(`${one}: HTTP ${r.status}`); continue; }
+        await this.clock.loadAudio(await r.arrayBuffer(), this.chart.audio.startAtTimelineSeconds || 0);
+        this.audioSrc = one;
+        return `音源: ${one}`;
+      } catch (e) { errs.push(`${one}: ${e.message.split('\n')[0]}`); }
     }
+    return `音源を使えません（${errs.join(' ／ ')}）。効果音のみで進行します`;
   }
 
   setup() {

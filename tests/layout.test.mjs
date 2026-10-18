@@ -19,9 +19,11 @@ test('背景は縦横比を保って全体を収める', () => {
   assert.ok(r.w <= 390 + 1e-9 && r.h <= 654 + 1e-9);
 });
 
-test('全 412 コマ: 胴体の中心が背景の中央、レーンと重ならず背景に収まる、倍率が脈打たない', { skip: !hasManifest && 'assets/seipai/manifest.json がありません' }, () => {
+test('全コマ（manifest の枚数）: 胴体の中心が背景の中央、レーンと重ならず背景に収まる、倍率が脈打たない', { skip: !hasManifest && 'assets/seipai/manifest.json がありません' }, () => {
   const m = JSON.parse(readFileSync(manifestPath));
-  assert.equal(m.frames.length, 412);
+  assert.equal(m.frames.length, m.frameCount);
+  for (let k = 1; k < m.frames.length; k++) assert.ok(m.frames[k].t > m.frames[k - 1].t, `コマ ${k} の時刻が増えていない`);
+  assert.ok(m.durationSeconds >= m.frames.at(-1).t, '全体の長さが最後のコマより短い');
   for (const [name, [w, h]] of Object.entries(VIEWS)) {
     const bgDef = BACKGROUNDS[orientationOf(w, h + (name === '390x844' ? 190 : 0))];
     const bg = containRect(w, h, bgDef.w, bgDef.h);

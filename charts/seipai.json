@@ -8,7 +8,10 @@
     "durationSeconds": 82.266667
   },
   "audio": {
-    "src": "assets/seipai/audio.m4a",
+    "src": [
+      "assets/seipai/audio.m4a",
+      "assets/seipai/audio_opus.m4a"
+    ],
     "startAtTimelineSeconds": 0
   },
   "settings": {

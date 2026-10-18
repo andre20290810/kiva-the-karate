@@ -1,4 +1,4 @@
-"""背景透過 PNG 412 枚（seipai_transparent/）から、ゲーム用の派生画像と配置情報（manifest.json）を作る。
+"""背景透過 PNG（seipai_transparent/、枚数は timestamps.csv のとおり）から、ゲーム用の派生画像と配置情報（manifest.json）を作る。
 
   python tools/frames-2d/prepare_frames.py --src <展開した seipai_transparent フォルダ> --out assets/seipai \
       [--model pose_landmarker_heavy.task] [--stand-in]
@@ -125,8 +125,9 @@ def main():
     ap.add_argument('--src', required=True)
     ap.add_argument('--out', required=True)
     ap.add_argument('--model', help='MediaPipe pose_landmarker の .task（関節を測る。無ければアルファから推定）')
-    ap.add_argument('--interval', type=float, default=0.2)
-    ap.add_argument('--duration', type=float, default=82.266667)
+    ap.add_argument('--interval', type=float, help='timestamps.csv が無いときだけ使う間隔（秒）')
+    ap.add_argument('--video', help='元動画（全体の長さを ffprobe で測る）')
+    ap.add_argument('--duration', type=float, help='全体の長さ（秒）。--video が無いときに必須')
     ap.add_argument('--quality', type=int, default=88)
     ap.add_argument('--stand-in', action='store_true', help='ローカル試験用の代用素材として印を付ける')
     a = ap.parse_args()
@@ -163,6 +164,8 @@ def main():
         joints = detect_joints(det, clean) if det else None
         c, L, how = torso(joints, mask)
         t = ts.get(f) if ts else None
+        if t is None and a.interval is None:
+            raise SystemExit('timestamps.csv が無いので --interval を指定してください（時刻を推測しません）')
         recs.append({'i': idx, 't': round(t if t is not None else idx * a.interval, 4), 'file': 'cut/' + name,
                      'crop': [int(x0), int(y0), int(x1 - x0), int(y1 - y0)],
                      'bbox': [int(xs.min()), int(ys.min()), int(xs.max() - xs.min() + 1), int(ys.max() - ys.min() + 1)],
@@ -170,6 +173,20 @@ def main():
                      **({'joints': joints} if joints else {})})
         if idx % 50 == 0:
             print(idx, f, how, flush=True)
+    # 全体の長さ: 元動画を測る（推測しない）
+    if a.video:
+        import subprocess
+        out = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', a.video],
+                             capture_output=True, text=True, check=True).stdout.strip()
+        duration, dur_from = float(out), f'ffprobe {os.path.basename(a.video)}'
+    elif a.duration:
+        duration, dur_from = a.duration, '--duration'
+    else:
+        raise SystemExit('全体の長さを決めるため --video か --duration を指定してください')
+    if duration < recs[-1]['t']:
+        raise SystemExit(f'全体の長さ {duration} 秒が最後のコマの時刻 {recs[-1]["t"]} 秒より短い（素材と動画が合っていない可能性）')
+    tt = np.array([r['t'] for r in recs])
+    interval = float(np.median(np.diff(tt))) if len(tt) > 1 else (a.interval or 0.2)
     # 体格補正（撮影距離による変化だけを滑らかに）
     Ls = smooth([r['torso'] for r in recs])
     # 直立時の全高 / 胴の長さ（冒頭の直立 5 コマの中央値）
@@ -193,8 +210,8 @@ def main():
     manifest = {
         'schemaVersion': 1, 'kind': 'seipai-frames', 'standIn': bool(a.stand_in),
         'source': os.path.basename(os.path.normpath(a.src)) + ('（ローカル試験用の代用素材）' if a.stand_in else ''),
-        'width': W, 'height': H, 'frameCount': len(recs), 'frameIntervalSeconds': a.interval,
-        'durationSeconds': a.duration, 'timesFrom': 'timestamps.csv' if ts else 'index × interval',
+        'width': W, 'height': H, 'frameCount': len(recs), 'frameIntervalSeconds': round(interval, 6),
+        'durationSeconds': round(duration, 6), 'durationFrom': dur_from, 'timesFrom': 'timestamps.csv' if ts else 'index × interval',
         'scale': {'unit': 'standing height', 'standRatio': round(standRatio, 4), 'smoothing': 'median 11 + gaussian σ4 frames of torso length'},
         'extents': {k: round(v, 4) for k, v in ext.items()},
         # 画面に収める倍率の計算に使う値（ゴミ・床の反射が残ったコマに引きずられないよう 99.5 パーセンタイル）

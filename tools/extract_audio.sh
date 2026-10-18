@@ -9,9 +9,15 @@ ffprobe -v error -show_entries stream=index,codec_type,codec_name,sample_rate,ch
 if ! ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "$src" | grep -q .; then
   echo "エラー: 元動画に音声トラックがありません" >&2; exit 1
 fi
-# iOS Safari でもデコードできる AAC(m4a) で出力
-ffmpeg -v error -y -i "$src" -map 0:a:0 -vn -c:a aac -b:a 160k "$out/audio.m4a"
-# AAC 非対応のブラウザ（コーデック無しの Chromium 等）向けに Opus も用意
-ffmpeg -v error -y -i "$src" -map 0:a:0 -vn -c:a libopus -b:a 128k "$out/audio.ogg"
-ffprobe -v error -show_entries format=duration -of csv=p=0 "$out/audio.m4a" | sed 's/^/音声の長さ(秒): /'
-echo "→ $out/audio.m4a, $out/audio.ogg"
+# iOS Safari・Chrome 用の AAC(m4a)。元が AAC なら再エンコードせずそのまま取り出す（時刻のずれ・劣化なし）
+if [ "$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 "$src")" = aac ]; then
+  ffmpeg -v error -y -i "$src" -map 0:a:0 -vn -c:a copy "$out/audio.m4a"
+else
+  ffmpeg -v error -y -i "$src" -map 0:a:0 -vn -c:a aac -b:a 160k "$out/audio.m4a"
+fi
+# AAC をデコードできないブラウザ（コーデック無しの Chromium 等）向けの予備（譜面の audio.src で 2 番目に試す）
+ffmpeg -v error -y -i "$src" -map 0:a:0 -vn -c:a libopus -b:a 128k "$out/audio_opus.m4a"
+for f in "$out/audio.m4a" "$out/audio_opus.m4a"; do
+  echo "$f: $(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,profile,sample_rate,channels -of csv=p=0 "$f")" \
+    "$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f") 秒"
+done

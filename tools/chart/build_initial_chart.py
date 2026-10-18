@@ -140,7 +140,7 @@ def main():
         'schemaVersion': 1, 'title': 'セーパイ',
         'source': {'frameManifest': 'assets/seipai/manifest.json', 'frameCount': M['frameCount'],
                    'frameIntervalSeconds': M['frameIntervalSeconds'], 'durationSeconds': M['durationSeconds']},
-        'audio': {'src': 'assets/seipai/audio.m4a', 'startAtTimelineSeconds': 0},
+        'audio': {'src': ['assets/seipai/audio.m4a', 'assets/seipai/audio_opus.m4a'], 'startAtTimelineSeconds': 0},
         'settings': {'inputOffsetMs': 0, 'perfectWindowMs': 60, 'goodWindowMs': 120, 'missWindowMs': 180,
                      'holdReleaseWindowMs': 150, 'leadInSeconds': 2, 'laneLeadSeconds': 2.4},
         'display': {'subjectAnchor': {'x': 0.5, 'y': 0.5}, 'referenceHeightRatio': 0.55, 'frameOverrides': {}},

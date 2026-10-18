@@ -29,8 +29,9 @@ if (missing.length) {
     process.exit(1);
   }
   for (const f of need) copy(f);
-  if (existsSync(join(root, 'assets/seipai/audio.m4a'))) copy('assets/seipai/audio.m4a');
-  else console.warn('注意: assets/seipai/audio.m4a がありません（効果音のみで動作します）');
+  // 音声: AAC（Safari・Chrome 用、公開の主）と Opus（AAC を再生できないブラウザ用の予備）
+  for (const f of ['assets/seipai/audio.m4a', 'assets/seipai/audio_opus.m4a']) if (existsSync(join(root, f))) copy(f);
+  if (!existsSync(join(root, 'assets/seipai/audio.m4a'))) console.warn('注意: assets/seipai/audio.m4a（AAC）がありません');
 }
 // 旧 3D の素材やライブラリが紛れ込んでいないことを確認
 let n = 0, bytes = 0;

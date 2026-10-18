@@ -1,14 +1,14 @@
-"""提供 ZIP（seipai_transparent_412frames.zip）を取り込み、ゲーム用素材を作り直して確認用の画像を出す。
+"""提供 ZIP（背景透過の連続画像 PNG と timestamps.csv）を取り込み、ゲーム用素材を作り直して確認用の画像を出す。
 
-  python tools/frames-2d/ingest.py --zip source/seipai_transparent_412frames.zip --model pose_landmarker_heavy.task
+  python tools/frames-2d/ingest.py --zip source/<素材>.zip --video source/<元動画>.mp4 --model pose_landmarker_heavy.task
   python tools/frames-2d/ingest.py --download 1Mt_DYiGNyEWi5bpO2JASFXAEe5r0LSWZ --model ...   （drive.google.com に接続できる環境のみ）
 
 手順:
  1. ZIP を source/seipai_transparent_zip/ に展開（元の ZIP は変更しない）
- 2. 検査: frame_0000〜0411.png が 412 枚、576×1024、アルファあり、timestamps.csv の時刻（0.2 秒間隔・0.0〜82.2 秒）
+ 2. 検査: timestamps.csv の行と PNG の一致（欠落・重複・連番）、寸法・アルファ、時刻の単調増加と間隔（枚数・間隔は決め打ちしない）
  3. prepare_frames.py で assets/seipai/（manifest.json・cut/*.webp）を作り直す（代用素材の値は使わない）
  4. 確認用の出力（--report、既定 source/ingest_report/）:
-    - centered.jpg   … 412 枚を胴体の中心・補正済みの倍率で並べた一覧（中央からの流れ・脈打ちの確認）
+    - centered.jpg   … 全コマを胴体の中心・補正済みの倍率で並べた一覧（中央からの流れ・脈打ちの確認）
     - scale.csv      … コマごとの倍率と隣のコマとの差
     - anchors.jpg    … 譜面の A ノーツの打撃点（現在の値）と、新しい関節から求めた位置の比較
     - anchors.csv    … 同上の数値（ずれが大きいものは要修正）
@@ -28,6 +28,15 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
+
+
+def sha256_file(p):
+    import hashlib
+    h = hashlib.sha256()
+    with open(p, 'rb') as f:
+        for b in iter(lambda: f.read(1 << 20), b''):
+            h.update(b)
+    return h.hexdigest()
 
 
 def download(file_id, dest):
@@ -55,50 +64,73 @@ def download(file_id, dest):
     return dest
 
 
-def check_frames(src, count=412, interval=0.2):
-    """欠落・重複（同じ画素の画像）・寸法・アルファ・timestamps.csv の時刻を検査する。"""
+def read_rows(src):
+    """timestamps.csv を行ごとに読む（同じファイル名の重複も検出するため辞書にしない）。"""
+    import csv as _csv
+    with open(os.path.join(src, 'timestamps.csv'), newline='', encoding='utf-8-sig') as f:
+        rows = [r for r in _csv.reader(f) if r]
+    head = [h.strip().lower() for h in rows[0]]
+    fcol = next((i for i, h in enumerate(head) if 'file' in h or 'name' in h), None)
+    tcol = next((i for i, h in enumerate(head) if 'time' in h), None)
+    scol = next((i for i, h in enumerate(head) if 'source' in h), None)
+    if fcol is None or tcol is None:
+        raise SystemExit(f'timestamps.csv にファイル名・時刻の列がありません: {rows[0]}')
+    return [(os.path.basename(r[fcol].strip()), float(r[tcol]), int(r[scol]) if scol is not None and r[scol].strip() else None) for r in rows[1:]]
+
+
+def check_frames(src):
+    """枚数は決め打ちしない。timestamps.csv の行と PNG を突き合わせ、欠落・重複・連番・寸法・時刻を検査する。
+    戻り値の info に、実際の枚数・時刻の範囲・間隔（中央値・最小・最大）を入れる。矛盾は推測で埋めずに problems へ。"""
     import hashlib
-    files = sorted(f for f in os.listdir(src) if f.startswith('frame_') and f.endswith('.png'))
-    problems = []
-    want = [f'frame_{k:04d}.png' for k in range(count)]
-    missing = sorted(set(want) - set(files))
-    extra = sorted(set(files) - set(want))
-    if missing:
-        problems.append(f'欠落 {len(missing)} 枚: {missing[:5]}')
-    if extra:
-        problems.append(f'想定外のファイル {len(extra)} 個: {extra[:5]}')
-    bad, seen, dups = [], {}, []
+    files = sorted(f for f in os.listdir(src) if f.lower().endswith('.png'))
+    problems, info = [], {}
+    if not os.path.exists(os.path.join(src, 'timestamps.csv')):
+        return files, ['timestamps.csv がありません（時刻を推測しないため止めます）'], info
+    rows = read_rows(src)
+    names = [r[0] for r in rows]
+    dupn = sorted({n for n in names if names.count(n) > 1})
+    if dupn:
+        problems.append(f'timestamps.csv に同じファイル名の行が重複 {len(dupn)} 個: {dupn[:5]}')
+    if set(names) != set(files):
+        problems.append(f'timestamps.csv（{len(names)} 行）と PNG（{len(files)} 枚）が一致しません: '
+                        f'CSV だけ {sorted(set(names) - set(files))[:5]}、PNG だけ {sorted(set(files) - set(names))[:5]}')
+    want = [f'frame_{k:04d}.png' for k in range(len(rows))]
+    if names != want:
+        problems.append(f'ファイル名が frame_0000 からの連番・順番になっていません（例: {[n for n, w in zip(names, want) if n != w][:3]}）')
+    t = [r[1] for r in rows]
+    if any(b <= a for a, b in zip(t, t[1:])):
+        problems.append('timestamps.csv の時刻が単調に増えていません（重複・逆順）')
+    sf = [r[2] for r in rows]
+    if all(v is not None for v in sf) and any(b <= a for a, b in zip(sf, sf[1:])):
+        problems.append('source_frame_index が単調に増えていません')
+    d = np.diff(t) if len(t) > 1 else np.array([0.0])
+    info = {'count': len(rows), 't_first': t[0], 't_last': t[-1], 'interval_median': float(np.median(d)),
+            'interval_min': float(d.min()), 'interval_max': float(d.max()),
+            'source_frames': [sf[0], sf[-1]] if sf[0] is not None else None}
+    irregular = [f'{names[k + 1]}（{d[k]:.3f} 秒）' for k in range(len(d)) if abs(d[k] - info['interval_median']) > 0.011]
+    if irregular:
+        problems.append(f'間隔が中央値 {info["interval_median"]:.3f} 秒から外れる箇所 {len(irregular)} 個: {irregular[:5]}（timestamps.csv の値で動きます）')
+    bad, seen, dups, digests = [], {}, [], {}
     for f in files:
-        im = cv2.imread(os.path.join(src, f), cv2.IMREAD_UNCHANGED)
-        if im is None or im.shape[:2] != (1024, 576) or im.ndim != 3 or im.shape[2] != 4:
+        raw = open(os.path.join(src, f), 'rb').read()
+        digests[f] = hashlib.sha256(raw).hexdigest()
+        im = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_UNCHANGED)
+        if im is None or im.ndim != 3 or im.shape[2] != 4:
             bad.append(f)
             continue
+        info.setdefault('size', [im.shape[1], im.shape[0]])
+        if [im.shape[1], im.shape[0]] != info['size']:
+            bad.append(f)
         h = hashlib.sha1(im.tobytes()).hexdigest()
         if h in seen:
             dups.append(f'{seen[h]} = {f}')
         seen[h] = f
     if bad:
-        problems.append(f'576×1024 RGBA でない画像 {len(bad)} 枚: {bad[:5]}')
+        problems.append(f'アルファ付きで寸法がそろっていない画像 {len(bad)} 枚: {bad[:5]}')
     if dups:
         problems.append(f'同じ画素の画像（重複）{len(dups)} 組: {dups[:5]}')
-    ts = os.path.join(src, 'timestamps.csv')
-    times = {}
-    if not os.path.exists(ts):
-        problems.append('timestamps.csv がありません')
-    else:
-        sys.path.insert(0, HERE)
-        from prepare_frames import read_timestamps
-        times = read_timestamps(src)
-        if sorted(times) != want:
-            problems.append(f'timestamps.csv のファイル名が画像と一致しません（{len(times)} 行）')
-        else:
-            t = [times[f] for f in want]
-            off = [f'{f}={times[f]}' for k, f in enumerate(want) if abs(times[f] - k * interval) > 0.011]
-            if any(b <= a for a, b in zip(t, t[1:])):
-                problems.append('timestamps.csv の時刻が増加していません（重複・逆順）')
-            if off:
-                problems.append(f'0.2 秒間隔から 0.01 秒以上ずれた時刻 {len(off)} 個: {off[:5]}（時刻は timestamps.csv を優先して使う）')
-    return files, problems, times
+    info['sha256'] = digests
+    return files, problems, info
 
 
 def main():
@@ -109,30 +141,51 @@ def main():
     ap.add_argument('--model', help='pose_landmarker_heavy.task（関節の測定。打撃点の比較に必要）')
     ap.add_argument('--out', default=os.path.join(ROOT, 'assets', 'seipai'))
     ap.add_argument('--report', default=os.path.join(ROOT, 'source', 'ingest_report'))
+    ap.add_argument('--video', help='素材の元動画（全体の長さを測る。素材と同じ動画であること）')
+    ap.add_argument('--duration', type=float, help='全体の長さ（秒）。--video が無いときに必須')
     ap.add_argument('--rebuild-chart', action='store_true')
     a = ap.parse_args()
     os.makedirs(os.path.join(ROOT, 'source'), exist_ok=True)
     zp = a.zip or download(a.download, os.path.join(ROOT, 'source', 'seipai_transparent_412frames.zip'))
-    dest = os.path.join(ROOT, 'source', 'seipai_transparent_zip')
+    # ZIP ごとに新しいフォルダへ展開する（前回の展開物を拾わない）
+    zsha = sha256_file(zp)
+    dest = os.path.join(ROOT, 'source', 'ingest_extract_' + zsha[:12])
+    if os.path.exists(dest):
+        import shutil
+        shutil.rmtree(dest)
     with zipfile.ZipFile(zp) as z:
         bad = z.testzip()
         if bad:
             raise SystemExit(f'ZIP が壊れています: {bad}')
         z.extractall(dest)
-    src = next((os.path.join(d, '') for d, _, fs in os.walk(dest) if 'frame_0000.png' in fs), None)
-    if not src:
-        raise SystemExit('ZIP の中に frame_0000.png が見つかりません')
-    files, problems, _ = check_frames(src)
+    cands = [d for d, _, fs in os.walk(dest) if 'frame_0000.png' in fs]
+    if len(cands) != 1:
+        raise SystemExit(f'ZIP の中の連続画像のフォルダが {len(cands)} 個あります（1 個のはず）: {cands[:3]}')
+    src = os.path.join(cands[0], '')
+    print('展開先:', src)
+    files, problems, info = check_frames(src)
+    print(f'素材: PNG {len(files)} 枚、timestamps.csv {info.get("count")} 行、時刻 {info.get("t_first")}〜{info.get("t_last")} 秒、'
+          f'間隔 中央値 {info.get("interval_median", 0):.3f}（{info.get("interval_min", 0):.3f}〜{info.get("interval_max", 0):.3f}）、寸法 {info.get("size")}')
     print('検査:', '問題なし' if not problems else '\n  '.join(problems))
-    # 時刻のずれは警告（timestamps.csv の値で動く）。それ以外は止める
-    if [p for p in problems if '0.2 秒間隔から' not in p]:
+    # 間隔のばらつきは警告（timestamps.csv の値で動く）。それ以外の矛盾は推測で埋めずに止める
+    if [p for p in problems if '間隔が中央値' not in p]:
         raise SystemExit(1)
+    if not (a.video or a.duration):
+        raise SystemExit('全体の長さを決めるため --video（元動画）か --duration を指定してください（推測しません）')
+    os.makedirs(a.report, exist_ok=True)
+    # 素材の識別情報（別の環境で同じ公開用ビルドを再現するため）
+    json.dump({'zip': os.path.basename(zp), 'zip_sha256': sha256_file(zp), 'frames': info['count'],
+               'time_range': [info['t_first'], info['t_last']], 'interval_median': info['interval_median'],
+               'png_sha256': info['sha256'], 'video': a.video and os.path.basename(a.video),
+               'video_sha256': a.video and sha256_file(a.video)},
+              open(os.path.join(a.report, 'material.json'), 'w'), ensure_ascii=False, indent=1)
     os.makedirs(a.report, exist_ok=True)
     before = os.path.join(a.out, 'manifest.json')
     if os.path.exists(before):
         import shutil
         shutil.copyfile(before, os.path.join(a.report, 'manifest_before.json'))
     cmd = [sys.executable, os.path.join(HERE, 'prepare_frames.py'), '--src', src, '--out', a.out]
+    cmd += ['--video', a.video] if a.video else ['--duration', str(a.duration)]
     if a.model:
         cmd += ['--model', a.model]
     subprocess.run(cmd, check=True)

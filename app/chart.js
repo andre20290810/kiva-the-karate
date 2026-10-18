@@ -60,6 +60,10 @@ export function validateChart(chart, { frameCount, durationSeconds } = {}) {
     if (seqIds.has(s.id)) err(`連続コマンド ID「${s.id}」が重複しています`);
     seqIds.add(s.id);
   }
+  const asrc = chart.audio?.src;
+  if (asrc != null && !(typeof asrc === 'string' || (Array.isArray(asrc) && asrc.length && asrc.every((x) => typeof x === 'string' && x)))) {
+    err('audio.src は音声ファイルのパス（文字列）か、その配列（先頭から順に試す）です');
+  }
   const st = { ...DEFAULT_SETTINGS, ...(chart.settings || {}) };
   for (const k of Object.keys(DEFAULT_SETTINGS)) if (!isNum(st[k])) err(`settings.${k} が数値ではありません`);
   if (!(st.perfectWindowMs > 0 && st.perfectWindowMs <= st.goodWindowMs && st.goodWindowMs <= st.missWindowMs)) {

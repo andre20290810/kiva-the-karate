@@ -23,12 +23,12 @@ npm run test:browser   :: 実素材でのブラウザ確認（npm start を別�
 | 人物 | `assets/seipai/manifest.json`、`assets/seipai/cut/frame_0000.webp`〜`0411.webp` | 提供 ZIP から下のコマンドで作る |
 | 横向きの背景 | `assets/stage/IMG_7441.JPG`（1792×1008） | 提供画像をそのまま置く |
 | 縦向きの背景 | `assets/stage/IMG_7439.JPG`（784×1168） | 提供画像をそのまま置く |
-| 音声（任意） | `assets/seipai/audio.m4a` | `sh tools/extract_audio.sh source/seipai.mp4 assets/seipai`。無ければ効果音だけで進行 |
+| 音声（任意） | `assets/seipai/audio.m4a`（AAC-LC）、`audio_opus.m4a`（予備の Opus） | `sh tools/extract_audio.sh source/seipai.mp4 assets/seipai`（元動画の AAC をそのまま取り出す）。譜面の `audio.src` の順に試し、最初にデコードできたものを使う。無ければ効果音だけで進行 |
 
 ```bat
 pip install opencv-python numpy mediapipe
 :: ZIP の検査・展開・素材の作り直し・確認画像（source\ingest_report\）までまとめて行う
-python tools\frames-2d\ingest.py --zip source\seipai_transparent_412frames.zip --model pose_landmarker_heavy.task
+python tools\frames-2d\ingest.py --zip source\seipai_transparent_412frames.zip --video source\seipai.mp4 --model pose_landmarker_heavy.task
 :: （drive.google.com に接続できる環境なら --zip の代わりに --download 1Mt_DYiGNyEWi5bpO2JASFXAEe5r0LSWZ）
 npm start
 node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の確認動画と描画時間（ffmpeg が必要）
@@ -37,7 +37,7 @@ node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の
 分けて部分と `.sha256.txt` を渡し、受け取り側で `python tools/frames-2d/join_parts.py --list <...>.sha256.txt --out source/seipai_transparent_412frames.zip`
 （SHA-256 と ZIP の整合を確認してから結合）→ `ingest.py --zip` で取り込みます。
 
-`ingest.py` は 412 枚・576×1024・アルファ・timestamps.csv を検査してから `prepare_frames.py` を実行し、
+`ingest.py` は枚数を決め打ちせず、timestamps.csv の行と PNG の対応・連番・時刻の単調増加・サイズ・アルファを検査してから `prepare_frames.py` を実行し、
 `source/ingest_report/` に中央配置の一覧（centered.jpg）、倍率の表（scale.csv）、譜面の A の打撃点と新しい関節の比較
 （anchors.jpg・anchors.csv）、作り直し前の素材との差（manifest_diff.csv）、打撃点を新しい関節で置き換えた譜面の案（proposed_chart.json）を
 出します。欠落・重複（同じ画素の画像）・時刻の不連続があれば止まります。譜面とブラウザに自動保存された編集内容は書き換えません
@@ -45,8 +45,13 @@ node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の
 - 時刻は `timestamps.csv` を優先。`--model`（MediaPipe Pose、無料・ローカル）があれば胴体の中心と手足の位置を関節から測り、
   無ければアルファから推定します（その場合、エフェクトの打撃点の自動設定は使えません）。
 - 提供素材（Google ドライブのフォルダ、412 枚 + timestamps.csv）を取り込み済み（2026-10-18）。欠落・重複なし、時刻は 0.0〜82.2 秒の 0.2 秒間隔。
-  提供素材のうち frame_0116・0117・0126（上半身が欠けている）と frame_0340（脚の間に床が残る）はマスクの不具合で、差し替え待ち
-  （ゲームは生成・補完せずそのまま表示）
+  素材の識別: 共有フォルダ 1D4-ek3n0y0Dje3rjIaVyYmvnbTzNgDmY（PNG 412 枚 frame_0000〜0411 + README.txt + timestamps.csv = 414 ファイル、
+  2026-10-18T16:08:53Z 更新）。元動画は「セーパイ_20261010.mp4」（ID 1Rq2eWS914bnmzWwPZXsYQ8rCor5Xe5eY、82.266667 秒・30fps、6 フレームごと）で、
+  412 枚すべてが元動画の source_frame_index のフレームと画素一致（平均差 0.0）。取り込んだ ZIP・PNG の SHA-256 は `source/ingest_report/material.json`。
+- 切り抜きの修正: `python tools/frames-2d/repair_frames.py --src <PNG フォルダ> --video <元動画> --model pose_landmarker_heavy.task --out <修正版>`
+  で全コマを検査し、元動画から背景除去をやり直しました（人物の生成・補完はせず、色は PNG／元動画の元の画素のまま）。
+  修正したコマ: 102・110・340・315・343（脚の間・足元の床）、116・117・126（上半身の欠け）、332（手・頭の欠け）。
+  理由と数値は修正版フォルダの `repair_log.json`、前後の比較は `repair_sheet.jpg`。元動画と画素が合わないコマがあると止まります（別の動画では直さない）。
 - 初期譜面の A の打撃点は提供素材の関節から作り直しました（時刻は変更なし）。素材を差し替えた場合は、
   `python tools\chart\build_initial_chart.py --manifest assets\seipai\manifest.json --out charts\seipai.json` で作り直せます
   （編集済みの譜面がある場合は、作り直さずに編集モードで確認してください）。
@@ -113,7 +118,7 @@ node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の
   "schemaVersion": 1,
   "title": "セーパイ",
   "source": { "frameManifest": "assets/seipai/manifest.json", "frameCount": 412, "frameIntervalSeconds": 0.2, "durationSeconds": 82.266667 },
-  "audio": { "src": "assets/seipai/audio.m4a", "startAtTimelineSeconds": 0 },   // 音声の 0 秒を置く時間軸の位置。src: null で音源なし
+  "audio": { "src": ["assets/seipai/audio.m4a", "assets/seipai/audio_opus.m4a"], "startAtTimelineSeconds": 0 },   // src は文字列か配列（先頭から順に試す）。null で音源なし
   "settings": {
     "inputOffsetMs": 0, "perfectWindowMs": 60, "goodWindowMs": 120, "missWindowMs": 180,
     "holdReleaseWindowMs": 150,   // 長押しの終了より この分 早く離しても成功

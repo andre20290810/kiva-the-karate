@@ -81,7 +81,7 @@ for (const [name, vp] of Object.entries(VIEWS)) {
   await ctx.close();
 }
 
-// ---------- 3. 412 枚の通し再生（AUTO、等速）: 全コマを順番どおり表示・取りこぼし／二重判定なし ----------
+// ---------- 3. 全コマの通し再生（AUTO、等速）: 全コマを順番どおり表示・取りこぼし／二重判定なし ----------
 {
   const { ctx, p, errors } = await open(VIEWS['1366x768']);
   // 描画ごとに表示したコマを記録（ページ内で数える）
@@ -100,8 +100,9 @@ for (const [name, vp] of Object.entries(VIEWS)) {
   const uniq = new Set(shown);
   let back = 0;
   for (let k = 1; k < shown.length; k++) if (shown[k] < shown[k - 1]) back++;
-  const missing = [...Array(412).keys()].filter((i) => !uniq.has(i));
-  check(uniq.size === 412 && back === 0, `412 枚すべてを順番どおりに表示（${uniq.size} 種、逆行 ${back} 回${missing.length ? `、未表示 ${missing.slice(0, 5)}` : ''}）`);
+  const nFrames = await p.evaluate(() => window.__app.store.count);
+  const missing = [...Array(nFrames).keys()].filter((i) => !uniq.has(i));
+  check(uniq.size === nFrames && back === 0, `${nFrames} 枚すべてを順番どおりに表示（${uniq.size} 種、逆行 ${back} 回${missing.length ? `、未表示 ${missing.slice(0, 5)}` : ''}）`);
   await p.screenshot({ path: `${out}/auto_end.png` });
   check(errors.length === 0, `AUTO 通し: ページエラーなし ${errors.slice(0, 2).join(' | ')}`);
   // フレーム落ち: 描画を 250ms ずつ止めながら AUTO で 20〜45 秒を再生しても取りこぼさない
