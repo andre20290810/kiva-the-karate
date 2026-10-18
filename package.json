@@ -3,23 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test tests/game2d.test.mjs tests/layout.test.mjs tests/auth-worker.test.mjs tests/server-security.test.mjs",
     "start": "node tools/serve.mjs 8177",
-    "test:layout": "node tests/layout-rotation.mjs",
-    "test:sync": "node tests/sync-probe.mjs",
-    "test:e2e": "node tests/e2e.mjs",
-    "test:fallback": "node tests/fallback-quality.mjs",
-    "shots": "node tests/visual-shots.mjs",
-    "build:dist": "node tools/build-dist.mjs",
-    "test:characters": "node tests/character-switch.mjs",
-    "test:audio": "node tests/audio-path.mjs"
+    "test:browser": "node tests/game2d-browser.mjs",
+    "build:dist": "node tools/build-dist.mjs"
   },
   "devDependencies": {
-    "@ffmpeg-installer/ffmpeg": "1.1.0",
-    "playwright-core": "1.64.1",
-    "sharp": "0.35.5"
+    "playwright-core": "1.64.1"
   },
-  "dependencies": {
-    "three": "^0.180.0"
-  }
+  "dependencies": {}
 }

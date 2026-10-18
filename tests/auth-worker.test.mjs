@@ -52,7 +52,7 @@ test('未認証: HTML はログインへ転送、JS・画像・音声は 401。�
   const r1 = await worker.fetch(get('/'), env);
   assert.equal(r1.status, 302);
   assert.match(r1.headers.get('location'), /^\/__auth\/login\?next=%2F$/);
-  for (const p of ['/index.html', '/src/game.js', '/style.css', '/assets/seipai/audio.m4a', '/assets/seipai/frames/f0001.webp', '/assets/seipai/frames.json', '/charts/seipai.chart.json']) {
+  for (const p of ['/index.html', '/app/main.js', '/app/style.css', '/assets/seipai/audio.m4a', '/assets/seipai/cut/frame_0001.webp', '/assets/seipai/manifest.json', '/charts/seipai.json']) {
     const r = await worker.fetch(get(p, { accept: '*/*' }), env);
     assert.equal(r.status, 401, p);
   }

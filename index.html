@@ -3,79 +3,71 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#05060b">
+<meta name="theme-color" content="#1c130d">
 <meta name="robots" content="noindex, nofollow">
-<title>KIVA THE KARATE</title>
-<link rel="stylesheet" href="style.css">
+<title>KIVA THE KARATE — セーパイ</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="app/style.css">
 </head>
 <body>
-<div id="app" data-state="loading" data-mode="auto">
-  <header id="hud">
-    <span id="brand">KIVA<b>THE KARATE</b></span>
-    <span id="modeBadge" data-mode="auto">AUTO DEMO</span>
-    <span class="hudItem">SCORE <b id="score">0</b></span>
-    <span class="hudItem">COMBO <b id="combo">0</b></span>
-    <span class="hudItem small" id="counts">P 0 / G 0 / M 0</span>
-  </header>
-
+<div id="app">
   <main id="stageWrap">
-    <label id="displayModeWrap">VIEW <select id="displayMode" aria-label="ゲーム表示モード"></select></label>
-    <canvas id="stage" aria-label="空手家の演武ステージ"></canvas>
-    <button id="charBtn" type="button" hidden aria-live="polite" title="表示するキャラクターを切り替え（動作・音声・譜面・判定は共通）"><span class="who">KIVA</span><span class="swap">⇄</span></button>
-    <div id="charNotice" hidden role="status"></div>
-    <div id="judgeText" aria-live="off"></div>
-    <pre id="debug" aria-hidden="true"></pre>
-    <div id="timebar"></div>
+    <canvas id="stage" aria-label="道場のステージ（中央に型の人物、上部に 4 つの入力レーン）"></canvas>
+    <div id="loading">
+      <p class="brand">KIVA <b>THE KARATE</b> — セーパイ</p>
+      <div class="bar"><i id="loadBar"></i></div>
+      <p id="loadMsg">読み込み中…</p>
+      <pre id="loadError" hidden></pre>
+    </div>
+    <div id="result" hidden role="dialog" aria-labelledby="resultTitle">
+      <div class="card">
+        <h2 id="resultTitle">結果</h2>
+        <div id="resultBody"></div>
+        <button id="btnResultClose" type="button">閉じる</button>
+      </div>
+    </div>
   </main>
 
-  <aside id="side">
-    <div id="trackWrap"><canvas id="track" aria-label="譜面"></canvas></div>
-    <div id="pad" role="group" aria-label="ABXY 入力ボタン"></div>
-
-    <section id="controls">
-      <div class="actions" aria-label="プレイ操作">
-        <div class="mode" role="radiogroup" aria-label="プレイモード">
-          <label><input type="radio" name="mode" value="auto" checked><span>AUTO</span></label>
-          <label><input type="radio" name="mode" value="manual"><span>MANUAL</span></label>
-        </div>
-        <button id="btnStart" class="act primary" disabled>開始</button>
-        <button id="btnPause" class="act" disabled>一時停止</button>
-        <button id="btnRestart" class="act" disabled>最初から</button>
+  <section id="panel" aria-label="操作パネル">
+    <div id="controls">
+      <div id="pad" role="group" aria-label="入力ボタン（キーボードの Y・X・A・B でも操作できます）">
+        <button type="button" class="padbtn" data-b="Y" aria-label="Y 呼吸（長押し）"><b>Y</b><span>呼吸</span></button>
+        <button type="button" class="padbtn" data-b="X" aria-label="X 構え"><b>X</b><span>構え</span></button>
+        <button type="button" class="padbtn" data-b="A" aria-label="A 打撃"><b>A</b><span>打撃</span></button>
+        <button type="button" class="padbtn" data-b="B" aria-label="B 旋回"><b>B</b><span>旋回</span></button>
       </div>
-      <progress id="progress" max="1" value="0"></progress>
-      <div id="status" data-kind="info" role="status" aria-live="polite">起動中…</div>
-      <div id="padPanel" aria-live="polite"></div>
-      <details id="settings">
-        <summary>設定（音量・入力補正・画質）</summary>
-        <div class="settings">
-          <label class="vol">音量 <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8"></label>
-          <label class="lat" title="入力が遅れて判定される場合に、遅延分(ms)を差し引きます">入力補正 <input id="latency" type="number" min="-200" max="300" step="5" value="0">ms</label>
-          <label class="qual">画質
-            <select id="quality">
-              <option value="AUTO">AUTO（自動）</option>
-              <option value="CINEMATIC">CINEMATIC（演出強化）</option>
-              <option value="NORMAL">NORMAL（標準）</option>
-              <option value="PERFORMANCE">PERFORMANCE（低負荷）</option>
-            </select>
-          </label>
-          <span class="small">描画: <span id="rendererInfo">-</span></span>
-          <span class="small keys">キー: ↑/I/W=Y ←/J/A=X →/L/D=B ↓/K/S=A ／ Space=開始・停止 R=最初から</span>
-          <form id="logout" method="post" action="/__auth/logout" hidden><span class="small">ログイン中: <span id="who"></span></span> <button type="submit">ログアウト</button></form>
-        </div>
-      </details>
-    </section>
-  </aside>
-
-  <div id="result" hidden>
-    <div class="card">
-      <h2 id="resultTitle">結果</h2>
-      <div id="resultBody"></div>
-      <button id="btnResultClose">閉じる</button>
+      <div id="transport">
+        <button type="button" id="btnPlay" class="tbtn primary" disabled>▶ 開始</button>
+        <button type="button" id="btnRetry" class="tbtn" disabled>リトライ</button>
+        <button type="button" id="btnAuto" class="tbtn" aria-pressed="false" title="譜面どおりに自動入力（記録は手動プレイと区別）">AUTO</button>
+        <button type="button" id="btnEdit" class="tbtn" aria-pressed="false">編集</button>
+        <details id="more">
+          <summary class="tbtn">設定</summary>
+          <div class="settings">
+            <label>速度 <select id="speed"><option value="1">1×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label>
+            <label>音量 <input id="volume" type="range" min="0" max="1" step="0.01"></label>
+            <label>効果音 <input id="sfxVolume" type="range" min="0" max="1" step="0.01"></label>
+            <label>エフェクトの強さ <input id="fxStrength" type="range" min="0" max="1" step="0.05"></label>
+            <label><input id="lowFx" type="checkbox"> 低負荷（歪み・ぼかしを省略）</label>
+            <fieldset>
+              <legend>判定（譜面 JSON に保存）</legend>
+              <label>入力補正 <input id="inputOffset" type="number" step="5" min="-300" max="300"> ms</label>
+              <p class="hint">＋にすると、押した時刻をその分だけ早い時刻として判定します（いつも LATE になる＝画面や音より入力が遅れて届く場合に＋）。−はその逆です。</p>
+              <label>PERFECT ± <input id="winPerfect" type="number" step="5" min="10" max="200"> ms</label>
+              <label>GOOD ± <input id="winGood" type="number" step="5" min="20" max="300"> ms</label>
+              <label>許容限界 ± <input id="winMiss" type="number" step="5" min="30" max="400"> ms</label>
+              <label>長押しの終了の許容 <input id="winRelease" type="number" step="10" min="0" max="500"> ms</label>
+            </fieldset>
+            <p class="hint">キーボード: Y X A B ／ Space 開始・一時停止 ／ R リトライ。ゲームパッド（標準配置）: 上 = Y、左 = X、下 = A、右 = B（ボタンの印字ではなく位置で対応）。</p>
+          </div>
+        </details>
+      </div>
     </div>
-  </div>
+    <div id="status" role="status" aria-live="polite">起動中…</div>
+    <div id="editor" hidden></div>
+  </section>
 </div>
 <noscript>JavaScript を有効にしてください。</noscript>
-<script type="importmap">{"imports":{"three":"/vendor/three/three.module.js","three/addons/":"/vendor/three/addons/"}}</script>
-<script type="module" src="src/game.js"></script>
+<script type="module" src="app/main.js"></script>
 </body>
 </html>

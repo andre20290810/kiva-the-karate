@@ -44,7 +44,7 @@ test('dev server protects source footage, dotfiles, Git internals and dependenci
     }
     const home=await fetch('http://127.0.0.1:'+port+'/index.html');
     assert.equal(home.status,200);
-    const game=await fetch('http://127.0.0.1:'+port+'/src/game.js');
+    const game=await fetch('http://127.0.0.1:'+port+'/app/main.js');
     assert.equal(game.status,200);
   } finally {
     child.kill();
