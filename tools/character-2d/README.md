@@ -20,3 +20,8 @@ python tools\character-2d\package_frames.py --gen gen --kiva-pose kiva_pose.json
 **限界**: 参照は直立・腕を下ろした姿なので、大きな姿勢（横向きの構え、深い構え、蹴り）ではコートや髪が引き伸ばされ、
 参照に写っていない面（上げた脚の裏・腕の内側）は作れない。本当に描き直すには、姿勢を条件にした画像生成
 （ControlNet OpenPose ＋ 参照画像、または参照画像と姿勢列から動画を作るモデル）が必要で、GPU が要る。
+
+## 画像生成による描き直し（ControlNet OpenPose ＋ IP-Adapter）
+
+2D 変形の限界を越えるため、姿勢を条件にした画像生成でスプライトを描く道具を追加した（`GENERATE.md`）。
+重みの取得には huggingface.co への接続が要る。生成画像はまだ無い（2026-10-18 時点）。
