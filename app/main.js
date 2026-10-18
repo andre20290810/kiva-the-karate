@@ -122,7 +122,7 @@ export class App {
       this.clock.stop(-this.chart.settings.leadInSeconds);
       this.newJudge(this.clock.position());
       const stand = this.manifest.standIn ? ' ／ 人物画像はローカル試験用の代用素材です（提供 ZIP が未配置）' : '';
-      this.status(`準備完了: ノーツ ${this.chart.notes.length}、画像 ${this.store.count} 枚（0.2 秒間隔）。${this.audioNote}${restored ? ' ／ 自動保存した編集内容を復元しました' : ''}${stand}`, 'ok');
+      this.status(`準備完了: ノーツ ${this.chart.notes.length}、画像 ${this.store.count} 枚（0〜${this.duration.toFixed(1)} 秒）。${this.audioNote}${restored ? ' ／ 自動保存した編集内容を復元しました' : ''}${stand}`, 'ok');
       this.updateUi();
     } catch (e) {
       this.state = 'error';
@@ -145,9 +145,14 @@ export class App {
         if (!r.ok) { errs.push(`${one}: HTTP ${r.status}`); continue; }
         await this.clock.loadAudio(await r.arrayBuffer(), this.chart.audio.startAtTimelineSeconds || 0);
         this.audioSrc = one;
+        const kind = /opus/i.test(one) ? 'Opus（予備。このブラウザは AAC を再生できませんでした）' : /\.m4a$|\.aac$|\.mp4$/i.test(one) ? 'AAC' : '';
+        const info = document.getElementById('audioInfo');
+        if (info) info.textContent = `再生中の音声: ${one.split('/').pop()}${kind ? ` = ${kind}` : ''}${errs.length ? `（先に試して失敗: ${errs.join(' ／ ')}）` : ''}`;
         return `音源: ${one}`;
       } catch (e) { errs.push(`${one}: ${e.message.split('\n')[0]}`); }
     }
+    const info = document.getElementById('audioInfo');
+    if (info) info.textContent = `音声なし（${errs.join(' ／ ')}）`;
     return `音源を使えません（${errs.join(' ／ ')}）。効果音のみで進行します`;
   }
 

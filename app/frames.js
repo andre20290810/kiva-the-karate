@@ -26,7 +26,7 @@ export class FrameStore {
   indexAt(t) {
     const f = this.frames;
     if (t <= f[0].t) return 0;
-    // 0.2 秒間隔を仮定して当たりを付け、前後を時刻で確認（timestamps.csv の微小なずれにも対応）
+    // manifest の代表間隔で当たりを付け、前後を時刻で確認（timestamps.csv の微小なずれにも対応）
     let i = Math.min(f.length - 1, Math.max(0, Math.floor((t - f[0].t) / this.interval + 1e-6)));
     while (i + 1 < f.length && f[i + 1].t <= t + 1e-6) i++;
     while (i > 0 && f[i].t > t + 1e-6) i--;

@@ -29,9 +29,12 @@ if (missing.length) {
     process.exit(1);
   }
   for (const f of need) copy(f);
-  // 音声: AAC（Safari・Chrome 用、公開の主）と Opus（AAC を再生できないブラウザ用の予備）
-  for (const f of ['assets/seipai/audio.m4a', 'assets/seipai/audio_opus.m4a']) if (existsSync(join(root, f))) copy(f);
-  if (!existsSync(join(root, 'assets/seipai/audio.m4a'))) console.warn('注意: assets/seipai/audio.m4a（AAC）がありません');
+  // 音声: 譜面の audio.src に並べたファイル（AAC = Safari・Chrome 用の主、Opus = AAC を再生できないブラウザ用の予備）
+  const chart = JSON.parse(readFileSync(join(root, 'charts/seipai.json'), 'utf8'));
+  const audio = [].concat(chart.audio?.src || []);
+  const bad = audio.filter((f) => !existsSync(join(root, f)) || statSync(join(root, f)).size === 0);
+  if (bad.length) { console.error(`音声が無いか空です: ${bad.join(', ')}（sh tools/extract_audio.sh <元動画> assets/seipai）`); process.exit(1); }
+  for (const f of audio) copy(f);
 }
 // 旧 3D の素材やライブラリが紛れ込んでいないことを確認
 let n = 0, bytes = 0;
