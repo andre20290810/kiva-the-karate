@@ -100,7 +100,8 @@ for (const [name, vp] of Object.entries(VIEWS)) {
   const uniq = new Set(shown);
   let back = 0;
   for (let k = 1; k < shown.length; k++) if (shown[k] < shown[k - 1]) back++;
-  check(uniq.size === 412 && back === 0, `412 枚すべてを順番どおりに表示（${uniq.size} 種、逆行 ${back} 回）`);
+  const missing = [...Array(412).keys()].filter((i) => !uniq.has(i));
+  check(uniq.size === 412 && back === 0, `412 枚すべてを順番どおりに表示（${uniq.size} 種、逆行 ${back} 回${missing.length ? `、未表示 ${missing.slice(0, 5)}` : ''}）`);
   await p.screenshot({ path: `${out}/auto_end.png` });
   check(errors.length === 0, `AUTO 通し: ページエラーなし ${errors.slice(0, 2).join(' | ')}`);
   // フレーム落ち: 描画を 250ms ずつ止めながら AUTO で 20〜45 秒を再生しても取りこぼさない
@@ -227,6 +228,7 @@ for (const [name, vp] of Object.entries(VIEWS)) {
   await p.click('#btnEdit');
   await p.evaluate(() => window.__app.seek(30.0));
   await p.click('#editor [data-add=A]');
+  await p.waitForSelector('#nTime');
   const added = await p.evaluate(() => [...window.__app.editor.selected][0]);
   await p.fill('#nTime', '30.37');
   await p.dispatchEvent('#nTime', 'change');
@@ -238,13 +240,14 @@ for (const [name, vp] of Object.entries(VIEWS)) {
   const delId = await p.evaluate(() => window.__app.chart.notes.find((n) => n.button === 'B').id);
   await p.evaluate((id) => { window.__app.editor.selected = new Set([id]); window.__app.editor.act('del'); }, delId);
   await p.evaluate(() => window.__app.seek(50.0));
+  await p.waitForFunction(() => /コマ 250/.test(document.querySelector('#edFrameBody').textContent));
   await p.fill('#fDx', '0.02'); await p.fill('#fSc', '1.05');
   await p.click('#edFrameBody [data-f=apply]');
   const st1 = await p.evaluate(([a, y, d]) => {
     const c = window.__app.chart;
     return { a: c.notes.find((n) => n.id === a), y: c.notes.find((n) => n.id === y).duration, del: c.notes.some((n) => n.id === d), ov: c.display.frameOverrides[250], n: c.notes.length };
   }, [added, yId, delId]);
-  check(st1.a?.time === 30.37 && st1.a.action === 'kick' && st1.y === 3.1 && !st1.del && st1.ov?.scale === 1.05, `編集が反映（追加 A 30.37s 蹴り、Y 3.1 秒、B 削除、コマ 250 の補正）`);
+  check(st1.a?.time === 30.37 && st1.a.action === "kick" && st1.y === 3.1 && !st1.del && st1.ov?.scale === 1.05, `編集が反映（追加 A 30.37s 蹴り、Y 3.1 秒、B 削除、コマ 250 の補正）${JSON.stringify(st1).slice(0, 300)}`);
   // Undo / Redo
   await p.evaluate(() => window.__app.editor.undo());
   const undone = await p.evaluate(() => !window.__app.chart.display.frameOverrides[250]);

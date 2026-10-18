@@ -178,6 +178,23 @@ export class Effects {
     return c;
   }
 
+  /** ぼかし済みの画像（コマごとに 1 回だけ作る。毎フレームの filter は重いので使わない） */
+  blurred(key, src, px) {
+    const k = `blur|${key}|${px}`;
+    let c = this.sil.get(k);
+    if (!c) {
+      const pad = Math.ceil(px * 3);
+      c = canvas(src.width + pad * 2, src.height + pad * 2);
+      const g = c.getContext('2d');
+      if (this.filterOk) g.filter = `blur(${px}px)`;
+      g.drawImage(src, pad, pad);
+      c.pad = pad;
+      this.sil.set(k, c);
+      this._trimCache();
+    }
+    return c;
+  }
+
   _trimCache(all = false) {
     const max = all ? 0 : 24;
     while (this.sil.size > max) this.sil.delete(this.sil.keys().next().value);
@@ -242,15 +259,19 @@ export class Effects {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     // 輪郭の空気の揺らぎ: 淡いシルエットを横帯ごとに波打たせる
-    const sil = this.silhouette(cur.index, cur.bmp, r.w, r.h, '#bfefff');
-    const bands = this.low ? 6 : 14, bh = r.h / bands;
+    const sil0 = this.silhouette(cur.index, cur.bmp, r.w, r.h, '#bfefff');
+    const sil = this.low ? sil0 : this.blurred(`${cur.index}|breath|${r.w | 0}`, sil0, 3);
+    // ぼかし済みの画像（周囲に pad 画素の余白）を、余白ごと横帯に切って少しずつ左右へずらす（帯の境目は重ねない）
+    const pad = sil.pad || 0, sc = sil0.width / r.w;
+    const SH = sil.height, DH = r.h + (2 * pad) / sc;
+    const bands = this.low ? 6 : 14;
     ctx.globalAlpha = (0.12 + 0.2 * progress) * k;
-    if (this.filterOk && !this.low) ctx.filter = 'blur(3px)';
     for (let b = 0; b < bands; b++) {
       const off = Math.sin(b * 0.9 + S.t * 3.4) * (1.5 + 3 * progress) * (H / 400);
-      ctx.drawImage(sil, 0, b * bh * sil.height / r.h, sil.width, bh * sil.height / r.h + 1, r.x + off, r.y + b * bh, r.w, bh + 1);
+      const sy0 = Math.round((SH * b) / bands), sy1 = Math.round((SH * (b + 1)) / bands);
+      const dy0 = r.y - pad / sc + (DH * sy0) / SH, dh = (DH * (sy1 - sy0)) / SH;
+      ctx.drawImage(sil, 0, sy0, sil.width, sy1 - sy0, r.x - pad / sc + off, dy0, r.w + (2 * pad) / sc, dh);
     }
-    ctx.filter = 'none';
     // 胴体の周りの空気（ゆっくり上へ流れるノイズ）
     if (!this.low) {
       ctx.save();
@@ -288,9 +309,10 @@ export class Effects {
     // 輪郭の光（決まった瞬間に強く、すぐ引く）
     const rim = this.rim(cur.index, cur.bmp, r.w, r.h, '#ffe7b0', Math.max(1.5, S.standH / 220));
     ctx.globalAlpha = clamp01((1 - p) ** 1.4 * 0.95 * k);
-    if (this.filterOk && !this.low) ctx.filter = 'blur(1.2px)';
-    ctx.drawImage(rim, r.x - 4, r.y - 4, r.w + 8, r.h + 8);
-    ctx.filter = 'none';
+    if (!this.low) {
+      const rb = this.blurred(`${cur.index}|rim|${r.w | 0}`, rim, 1.5), pd = rb.pad;
+      ctx.drawImage(rb, r.x - 4 - pd, r.y - 4 - pd, r.w + 8 + pd * 2, r.h + 8 + pd * 2);
+    }
     ctx.globalAlpha = clamp01((1 - p) ** 2 * 0.6 * k);
     ctx.drawImage(rim, r.x - 4, r.y - 4, r.w + 8, r.h + 8);
     // 体の上を上から下へ走る光（シルエットの内側だけ）
