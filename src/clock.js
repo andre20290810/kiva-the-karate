@@ -45,7 +45,13 @@ export class AudioClock {
 
   setVolume(v) {
     this.volume = v;
-    if (this.gain) this.gain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.01);
+    if (this.gain) {
+      // 自動化だけで音量を変える（value の直接代入と混ぜない）
+      const p = this.gain.gain, now = this.ctx.currentTime;
+      p.cancelScheduledValues(now);
+      p.setValueAtTime(p.value, now);
+      p.setTargetAtTime(v, now, 0.01);
+    }
   }
 
   play(from = this.offset) {

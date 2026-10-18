@@ -2,7 +2,7 @@
 // 音声・画像・譜面・入力・判定・描画・エフェクトはそれぞれ別モジュール。
 
 import { AudioClock } from './clock.js';
-import { MobileAudioOutput } from './mobile-audio.js';
+import { configureAudioSession, silenceMedia } from './audio-output.js';
 import { OriginalVideoMode } from './original-video.js';
 import { ThreeStage } from './three-stage.js';
 import { FeedbackOverlay } from './feedback-overlay.js';
@@ -48,7 +48,6 @@ export class Game {
     this.params = new URLSearchParams(location.search);
     this.chartUrl = new URL(this.params.get('chart') || 'charts/seipai.chart.json', location.href).href;
     this.clock = new AudioClock();
-    this.mobileAudio = new MobileAudioOutput();
     this.mode = this.params.get('mode') === 'manual' ? 'manual' : 'auto';
     this.generation = 0;
     this.state = 'loading'; // loading | ready | playing | paused | ended | error
@@ -155,6 +154,7 @@ export class Game {
   setupDisplayModes() {
     const el = document.querySelector('#displayMode');
     this.originalVideo = new OriginalVideoMode(document.querySelector('#stageWrap'), 'assets/seipai/original.mp4');
+    silenceMedia(this.originalVideo.video); // 元動画は映像のみ（音は Web Audio の1経路）
     this.threeStage = new ThreeStage(document.querySelector('#stageWrap'));
     this.feedback = new FeedbackOverlay(document.querySelector('#stageWrap'),this.frames.def.width,this.frames.def.height,this.threeStage);
     this.displayMode = 'kiva-video';
@@ -299,12 +299,10 @@ export class Game {
 
   async start() {
     if (!(this.state === 'ready' || this.state === 'ended')) return;
-    this.mobileAudio.prime(this.clock.volume);
-    try { await this.clock.unlock(); } catch (e) { this.mobileAudio.stop(); this.status('音声を有効化できません: ' + e.message, 'error'); return; }
-    if(this.mobileAudio.enabled){
-      this.clock.gain.gain.value=0;
-      this.mobileAudio.playPromise?.then(()=>{if(this.mobileAudio.error && this.clock.gain) this.clock.gain.gain.value=this.clock.volume;});
-    }
+    // 音は Web Audio の1経路のみ（判定の基準時刻と同じ）。iPhone は再生用の音声セッションにする
+    this.audioSession = configureAudioSession();
+    try { await this.clock.unlock(); } catch (e) { this.status('音声を有効化できません: ' + e.message, 'error'); return; }
+    if (this.audioSession.hint) this.status(this.audioSession.hint);
     this.newRun();
     this.clock.onended = () => this.finish();
     this.input.resetHeld();
@@ -317,7 +315,6 @@ export class Game {
   pause(reason = '') {
     if (this.state !== 'playing') return;
     this.clock.pause();
-    this.mobileAudio.sync(this.clock.position(),false,1,this.clock.volume);
     this.state = 'paused';
     this.updateButtons();
     this.render(); // 停止位置で1回だけ描画（停止中は再描画しない＝静止）
@@ -326,12 +323,8 @@ export class Game {
 
   async resume() {
     if (this.state !== 'paused') return;
-    this.mobileAudio.prime(this.clock.volume,this.clock.position());
+    configureAudioSession();
     await this.clock.unlock();
-    if(this.mobileAudio.enabled){
-      this.clock.gain.gain.value=0;
-      this.mobileAudio.playPromise?.then(()=>{if(this.mobileAudio.error && this.clock.gain) this.clock.gain.gain.value=this.clock.volume;});
-    }
     this.input.resetHeld();
     this.clock.resume();
     this.state = 'playing';
@@ -343,7 +336,6 @@ export class Game {
   async restart() {
     if (!['playing', 'paused', 'ended'].includes(this.state)) return;
     this.clock.restart();
-    this.mobileAudio.stop();
     this.state = 'ready';
     await this.start();
   }
@@ -443,7 +435,6 @@ export class Game {
     const stageT = idle && (this.state === 'ready' || this.state === 'ended') ? performance.now() / 1000 % 600 : t;
     const { shownIdx } = this.scene.render(t, vt, { frameMs: this._frameMs || 16.7, stageT });
     this.originalVideo?.sync(vt,this.state === 'playing',this.chart.warp.rateAt(t));
-    this.mobileAudio.sync(t,this.state === 'playing',1,this.clock.volume);
     this.threeStage?.sync(vt);
     this.feedback?.render(t,this.displayMode || 'kiva-video');
     this.track.draw(t, this.judge ? this.judge.notes : this.chart.notes);
@@ -509,7 +500,7 @@ export class Game {
     const vol = $('#volume');
     vol.value = Number(store.get('kr.volume') ?? 0.8);
     this.clock.setVolume(Number(vol.value));
-    vol.addEventListener('input', () => { this.clock.setVolume(Number(vol.value)); if(this.mobileAudio.enabled)this.clock.gain.gain.value=0;store.set('kr.volume', vol.value); });
+    vol.addEventListener('input', () => { this.clock.setVolume(Number(vol.value)); store.set('kr.volume', vol.value); });
     const lat = $('#latency');
     lat.value = Math.round(this.inputLatency * 1000);
     lat.addEventListener('change', () => { this.inputLatency = Number(lat.value) / 1000; store.set('kr.inputLatency', lat.value); });
