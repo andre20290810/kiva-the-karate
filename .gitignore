@@ -6,3 +6,5 @@ dist/
 .dev.vars
 prototypes/
 tools/character-retargeting/patch-*.mjs
+__pycache__/
+test-results/

@@ -1,33 +1,29 @@
-# KIVA THE KARATE — Three visual modes (development prototype)
+# KIVA THE KARATE — 3 つの表示モード（開発中）
 
-## Shared gameplay
-All three views share AudioClock, score, chart timewarp, judgment, AUTO/MANUAL, keyboard and GameSir mappings. The VIEW selector changes presentation only.
+## 共通
+3 モードとも AudioClock（Web Audio の 1 経路）・譜面・タイムワープ・判定・スコア・AUTO/MANUAL・キーボード・GameSir を共有する。
+VIEW の切替は見た目だけを変え、時刻・判定には触れない（`tests/three-modes.mjs` で確認）。
 
-1. **KIVA / VIDEO**: original source `source/seipai.mp4`, displayed whole-frame, muted, clock-synchronized via `src/original-video.js`. This avoids the flawed foreground segmentation. Score and hit text remain.
-2. **KIVA / 3D TEST**: Blender-exported animated GLB (`prototypes/kiva_motion_2d_reference.glb`) rendered in a stationary Three.js stage (`src/three-stage.js`).
-3. **ALEXANDRE / 3D TEST**: a separate GLB (`prototypes/alexandre_appearance_proxy.glb`) with rough silver-blue hair, black coat, red lining; the same 82.2 s timing data. **Low-poly prototype only — not faithful to the original Alexandre reference video.**
+1. **MODE 1 KIVA ORIGINAL VIDEO** — `source/seipai.mp4` を切り抜かずに表示（無音・時計同期、`src/original-video.js`）。
+   2D の当たり演出は人物の外側の輪と火花だけ（中心の白い塗りは廃止。人物を白く覆わない）。
+2. **MODE 2 KIVA 3D (TECH PREVIEW)** — スキン付き人体モデル `assets/3d/kiva_seipai.glb`（`tools/character-3d`）。
+   静止したステージ（コンベア等の時間による背景移動なし）。
+3. **MODE 3 ALEXANDRE 3D (TECH PREVIEW)** — 同じ骨格の別モデル `assets/3d/alexandre_seipai.glb`（黒いロングコート・赤い裏地・銀髪・手袋・ブーツ）。
+   **参照動画のフレームを使えていないため、本人との一致は未確認。**
 
-## Important limitations (do not represent these as complete)
-- Monocular source landmarks are **2D observations**, with no measured depth. Limbs, body turning, foot placement, occlusion and physics must be reviewed and corrected against source footage. This is not validated motion capture.
-- Current 3D avatars are **debug geometry**, not quality-approved finished human likenesses. Alexandre appearance proxy is visibly crude and must NOT be sent to KIVA as a final game.
-- The rhythm chart has 23 candidate (unverified) note timings; human review/calibration required.
-- Video and 3D views use a separate translucent hit-ring overlay aligned to the source 2D pose projection. This is a restrained provisional cue; the original large background-scene VFX remain visually behind the foreground media. Joint alignment and visual polish still need review.
-- The 3D stage is fixed in world coordinates (no conveyor scroll). It is intentionally distinct from the original moving-stage shader.
-- Public URL has **not** been redeployed. The previously deployed version remains unchanged.
+GLB が無い場合は旧プロトタイプ（2D 観測を並べた確認用）を表示し、その旨を画面に出す。完成モデルとしては扱わない。
 
-## Private asset handling
-The repository is **PUBLIC**. `source/`, `assets/`, `prototypes/`, and `dist/` are Git-ignored. Do not push raw KIVA video, 412 cutouts, derived GLB files, reference Alexandre video, or private screenshots.
+## 3D の演出（`src/vfx3d.js`）
+- 手足のボーン位置に結び付く: 判定時に腰に対して最も速く動いている手（足は床から上がっているときだけ）を打撃部位とする
+- 打撃方向へ飛ぶ火花（残光つき）、打撃方向に垂直な 2 重の衝撃波、床の輪、打撃点の点光源（体の該当部分だけが照らされる）
+- 手足の速い動きにだけ出る軌跡、奥行き方向の浮遊光、輪郭光（背後から寒色・暖色）、ブルーム（白い道着は光らない閾値）
+- すべて時刻の関数（一時停止・再開・巻き戻しで同じ絵）。スコア・時刻には触れない
 
-The local PC has:
-- `source/seipai.mp4`
-- `source/seipai_assets/manifest.json` with 412x33 2D tracking observations
-- `source/retarget-prototype/{all_pose2d.json,full_humanoid_motion.blend,alexandre_appearance_proxy.blend}`
-- `prototypes/{kiva_motion_2d_reference.glb,alexandre_appearance_proxy.glb}`
+## 重要な制約
+- モーションは単眼映像からの推定（MediaPipe）。奥行き・回転は測定値ではない
+- いまの `*_seipai.glb` は **デモ動作**（補助動画の 12 枚から推定した姿勢と確認姿勢をつないだもの）。セーパイの動きではない。
+  セーパイの GLB は PC で `tools/character-3d/README.md` の手順で作る
+- 譜面の 23 ノーツは未検証の候補
 
-Reproduce source assets locally using `node tools/character-retargeting/export_full_pose.mjs`, Blender CLI with `tools/character-retargeting/create_full_motion.py`, and `create_alexandre_proxy.py`; export KIVA GLB via Blender glTF export. Then run `node tools/build-dist.mjs`. `prototypes/` must remain local.
-
-## Checks run
-- 61 unit tests passed.
-- Edge Chromium headless: all three modes switched successfully at 1200x800, 390x844, and 844x390, with no page errors.
-- GLB animations contain ~82.24 s each; browser Three.js rendered both.
-- Further visual QA and movement accuracy testing are REQUIRED before any production deploy.
+## 非公開素材
+リポジトリは公開。`source/` `assets/` `prototypes/` `dist/` は Git 管理外。元動画・参照動画・切り抜き・生成 GLB・参照画像はコミットしない。

@@ -40,8 +40,15 @@ cpSync(join(root,'vendor','three','three.module.js'),join(out,'vendor','three','
 cpSync(join(root,'vendor','three','three.core.js'),join(out,'vendor','three','three.core.js'));
 cpSync(join(root,'vendor','three','addons'),join(out,'vendor','three','addons'),{recursive:true});
 mkdirSync(join(out,'assets','3d'),{recursive:true});
-cpSync(join(root,'prototypes','kiva_motion_2d_reference.glb'),join(out,'assets','3d','kiva_motion.glb'));
-cpSync(join(root,'prototypes','alexandre_appearance_proxy.glb'),join(out,'assets','3d','alexandre_proxy.glb'));
+// スキン付き人体モデル（tools/character-3d で作成、assets/3d/ に置く）。無い場合だけ旧プロトタイプを入れる。
+const glb = [
+  ['assets/3d/kiva_seipai.glb', 'kiva_seipai.glb'], ['assets/3d/alexandre_seipai.glb', 'alexandre_seipai.glb'],
+  ['prototypes/kiva_motion_2d_reference.glb', 'kiva_motion.glb'], ['prototypes/alexandre_appearance_proxy.glb', 'alexandre_proxy.glb'],
+];
+for (const [src, name] of glb) if (existsSync(join(root, src))) cpSync(join(root, src), join(out, 'assets', '3d', name));
+for (const who of ['kiva', 'alexandre']) {
+  if (!existsSync(join(out, 'assets', '3d', `${who}_seipai.glb`))) console.warn(`注意: ${who} の人体モデル GLB がありません（3D モードは旧プロトタイプ表示になります）`);
+}
 let n = 0, bytes = 0;
 const walk = (d) => { for (const f of readdirSync(d)) { const p = join(d, f); const s = statSync(p); if (s.isDirectory()) walk(p); else { n++; bytes += s.size; } } };
 walk(out);

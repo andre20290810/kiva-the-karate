@@ -17,12 +17,7 @@ export class FeedbackOverlay {
    const s=Math.min(w/this.fw,h/this.fh);
    return {x:(w-this.fw*s)/2+anchor.x*s,y:(h-this.fh*s)/2+anchor.y*s};
   }
-  if(mode.endsWith('-3d')&&this.three.loaded&&this.three.active){
-   const T=this.three.THREE;
-   const p=new T.Vector3((anchor.x/this.fw-.5)*5.2,(.86-anchor.y/this.fh)*5.2-.55,0);
-   p.project(this.three.camera);
-   return {x:(p.x*.5+.5)*w,y:(-.5*p.y+.5)*h};
-  }
+  // 3D 表示では 3D 側（vfx3d.js）が手足のボーンに結び付けて描く
   return null;
  }
  render(t,mode){
@@ -32,6 +27,7 @@ export class FeedbackOverlay {
   const g=this.ctx;g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
   if(!w||!h)return;
   this.events=this.events.filter(e=>t-e.t<.6 && t>=e.t-.05);
+  if(mode.endsWith('-3d'))return;
   for(const e of this.events){
    const age=Math.max(0,t-e.t),life=Math.max(0,1-age/.55);
    const p=this.point(e.anchor,mode,w,h);
@@ -43,7 +39,8 @@ export class FeedbackOverlay {
    // Layered shockwave outside the body, visible above both 3D and original video.
    const glow=g.createRadialGradient(p.x,p.y,Math.max(1,radius*.36),p.x,p.y,radius*1.9);
    glow.addColorStop(0,'rgba('+rgb+',0)');
-   glow.addColorStop(.43,'rgba('+rgb+','+(life*.28*brightness)+')');
+   glow.addColorStop(.55,'rgba('+rgb+',0)');
+   glow.addColorStop(.75,'rgba('+rgb+','+(life*.16*brightness)+')');
    glow.addColorStop(1,'rgba('+rgb+',0)');
    g.fillStyle=glow;g.beginPath();g.arc(p.x,p.y,radius*1.9,0,Math.PI*2);g.fill();
    for(let ring=0;ring<3;ring++){
@@ -57,14 +54,13 @@ export class FeedbackOverlay {
    // Deterministic sparks, so pause/resume and replay draw identically.
    for(let k=0;k<16;k++){
      const angle=k*Math.PI*2/16 + k*.137;
-     const near=radius*.6,far=radius*(1.5+(k%4)*.2);
+     const near=radius*1.05,far=radius*(1.6+(k%4)*.2);
      const x1=p.x+Math.cos(angle)*near,y1=p.y+Math.sin(angle)*near;
      const x2=p.x+Math.cos(angle)*far,y2=p.y+Math.sin(angle)*far;
      g.lineWidth=(1.5+(k%3))*life;g.strokeStyle='rgba('+rgb+','+(life*.77*brightness)+')';
      g.beginPath();g.moveTo(x1,y1);g.lineTo(x1+(x2-x1)*life,y1+(y2-y1)*life);g.stroke();
    }
-   g.shadowBlur=0;g.fillStyle='rgba(255,255,255,'+(life*.45*brightness)+')';
-   g.beginPath();g.arc(p.x,p.y,Math.max(2,8*life),0,Math.PI*2);g.fill();
+   g.shadowBlur=0;
    g.restore();
   }
  }

@@ -173,7 +173,7 @@ export class Game {
     if (!mode.available) return;
     const token = this._modeToken = (this._modeToken || 0) + 1;
     if(mode.kind === '3d') {
-      try { await this.threeStage.init(); await this.threeStage.setVariant(mode.id); }
+      try { await this.threeStage.init(); this.asset3d = await this.threeStage.setVariant(mode.id); }
       catch(e) {
         console.error('3D scene:',e);
         this.status('3D preview could not load: '+e.message,'error');
@@ -190,7 +190,12 @@ export class Game {
     if(oldBtn)oldBtn.hidden=true;
     const oldNotice=document.querySelector('#charNotice');
     if(oldNotice)oldNotice.hidden=true;
-    if(mode.kind === '3d')this.status(mode.id === 'alexandre-3d' ? 'ALEXANDRE 3D TECH PREVIEW: low-poly appearance proxy; not final' : 'KIVA 3D TECH PREVIEW: depth and footwork not yet validated');
+    if(mode.kind === '3d') {
+      const legacy = this.asset3d?.kind === 'legacy';
+      const who = mode.id === 'alexandre-3d' ? 'ALEXANDRE 3D' : 'KIVA 3D';
+      this.status(legacy ? `${who} TECH PREVIEW: 人体モデル未配置のため旧プロトタイプ表示（完成モデルではありません）`
+        : `${who} TECH PREVIEW: 推定モーション（奥行き・回転は未検証）`);
+    }
     else if(this.state === 'ready')this.status('KIVA original-video mode: using uncut source footage');
     if(this.state !== 'playing')this.render();
   }
@@ -282,6 +287,7 @@ export class Game {
     this.judge.on((e) => (e.type === 'judged' ? this.onJudged(e) : this.onStray(e)));
     this.scene.reset();
     this.feedback?.reset();
+    this.threeStage?.reset();
     this.track.flashes = [];
     this.track.bursts = [];
     this.lastT = 0;
@@ -421,6 +427,7 @@ export class Game {
       const vi=this.frames.indexAt(this.chart.warp.map(n.t));
       const impact=n.fx?.find(f=>f.type==='impact'||f.type==='arc'||f.type==='flash')||n.fx?.[0];
       this.feedback?.hit({t:at,grade:e.result,anchor:this.scene.rig.anchor(impact,vi)});
+      this.threeStage?.hit({t:this.chart.warp.map(at),grade:e.result,seed:this.chart.notes.indexOf(n)+1});
     }
     if (e.result === 'MISS') {
       const app = $('#app');
