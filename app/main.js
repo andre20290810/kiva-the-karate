@@ -7,9 +7,9 @@ import { AutoPlayer } from './auto.js';
 import { Input } from './input.js';
 import { FrameStore } from './frames.js';
 import { Effects } from './fx.js';
-import { LaneRenderer, drawSequence, LANE_STYLE } from './lanes.js';
+import { LaneRenderer, LANE_STYLE } from './lanes.js';
 import { Sfx } from './sfx.js';
-import { BACKGROUNDS, orientationOf, containRect, laneRect, standingHeight, subjectTransform } from './layout.js';
+import { BACKGROUNDS, orientationOf, containRect, coverRect, laneRect, standingHeight, landscapeSubject, subjectTransform } from './layout.js';
 import { normalizeChart, validateChart, BUTTON_INFO } from './chart.js';
 import { Editor } from './editor.js';
 
@@ -145,14 +145,17 @@ export class App {
         if (!r.ok) { errs.push(`${one}: HTTP ${r.status}`); continue; }
         await this.clock.loadAudio(await r.arrayBuffer(), this.chart.audio.startAtTimelineSeconds || 0);
         this.audioSrc = one;
-        const kind = /opus/i.test(one) ? 'Opus（予備。このブラウザは AAC を再生できませんでした）' : /\.m4a$|\.aac$|\.mp4$/i.test(one) ? 'AAC' : '';
-        const info = document.getElementById('audioInfo');
-        if (info) info.textContent = `再生中の音声: ${one.split('/').pop()}${kind ? ` = ${kind}` : ''}${errs.length ? `（先に試して失敗: ${errs.join(' ／ ')}）` : ''}`;
+        this.audio = {
+          file: one.split('/').pop(),
+          codec: /opus/i.test(one) ? 'Opus（予備。このブラウザは AAC をデコードできませんでした）' : /\.(m4a|aac|mp4)$/i.test(one) ? 'AAC' : '不明',
+          skipped: errs.slice(), state: 'loaded', reason: '', signal: null,
+        };
+        this.renderAudioInfo();
         return `音源: ${one}`;
       } catch (e) { errs.push(`${one}: ${e.message.split('\n')[0]}`); }
     }
-    const info = document.getElementById('audioInfo');
-    if (info) info.textContent = `音声なし（${errs.join(' ／ ')}）`;
+    this.audio = { file: null, codec: '', skipped: errs, state: 'none', reason: errs.join(' ／ '), signal: null };
+    this.renderAudioInfo();
     return `音源を使えません（${errs.join(' ／ ')}）。効果音のみで進行します`;
   }
 
@@ -204,7 +207,7 @@ export class App {
 
   async play() {
     if (this.state === 'loading' || this.state === 'error') return;
-    await this.clock.unlock();
+    const audioOk = await this.clock.unlock();
     if (this.state === 'playing') return;
     if (this.state === 'ready' || this.state === 'ended') {
       const from = this.loop.on && this.loop.a != null ? this.loop.a : -this.chart.settings.leadInSeconds;
@@ -216,12 +219,73 @@ export class App {
     this.input.releaseAll();
     this.clock.play(this.clock.position());
     this.state = 'playing';
+    this.afterAudioStart(audioOk);
     this.updateUi();
+  }
+
+  /**
+   * 再生開始後の音声の状態。音声ファイルがあるのに AudioContext が動いていない場合は「再生中」とせず、
+   * 理由と「音声を再試行」ボタンを出す（ゲームは時計だけで進む）。出力信号は frame() で確認する。
+   */
+  afterAudioStart(ok) {
+    const a = this.audio;
+    if (!a || a.state === 'none') return;
+    a.signal = null; a.signalPeak = 0; a.signalSince = null;
+    if (ok && this.clock._audioMode) { a.state = 'playing'; a.reason = ''; }
+    else {
+      a.state = 'failed';
+      a.reason = this.clock.lastError || `AudioContext: ${this.clock.ctx?.state ?? 'なし'}`;
+      this.status(`音声を開始できませんでした（${a.reason}）。操作パネルの「🔈 音声を再試行」を押してください（ゲームは音なしで進行中）`, 'error');
+    }
+    this.renderAudioInfo();
+  }
+
+  async retryAudio() {
+    const ok = await this.clock.unlock();
+    if (ok && this.state === 'playing' && !this.clock._audioMode) this.clock.play(this.clock.position()); // 同じ位置のまま音声の時計へ
+    if (this.state === 'playing') this.afterAudioStart(ok);
+    else if (this.audio) { this.audio.state = ok ? 'loaded' : 'failed'; this.audio.reason = ok ? '' : this.clock.lastError; this.renderAudioInfo(); }
+    if (ok) this.status('音声を有効にしました', 'ok');
+  }
+
+  /** 再生中、音楽の出力に信号が出ているかを確かめる（0.6 秒以上、音のある区間で） */
+  checkAudioSignal(t) {
+    const a = this.audio;
+    if (!a || a.state !== 'playing' || this.state !== 'playing' || !this.clock._audioMode) return;
+    const pos = t - this.clock.audioStart;
+    if (pos < 0.5 || pos > this.clock.buffer.duration - 0.5) return;
+    const now = performance.now();
+    a.signalSince ??= now;
+    a.signalPeak = Math.max(a.signalPeak || 0, this.clock.outputLevel());
+    if (now - a.signalSince > 600) {
+      const sig = a.signalPeak > 1e-4;
+      if (sig !== a.signal) { a.signal = sig; this.renderAudioInfo(); }
+      a.signalSince = now; a.signalPeak = 0;
+    }
+  }
+
+  renderAudioInfo() {
+    const a = this.audio, info = $('#audioInfo'), btn = $('#btnAudio');
+    if (!a) return;
+    const ctxState = this.clock?.ctx?.state ?? 'なし';
+    const sess = navigator.audioSession ? navigator.audioSession.type : '未対応';
+    const file = a.file ? `${a.file}（${a.codec}）` : '音声ファイルなし';
+    const head = {
+      none: `音声なし: ${a.reason}`,
+      loaded: `音声: ${file} 読み込み済み（未再生）`,
+      paused: `音声: ${file} 一時停止中`,
+      failed: `音声を再生できていません: ${file} ／ 理由: ${a.reason}`,
+      playing: a.signal === false ? `音声: ${file} 再生処理中ですが出力信号がありません` : a.signal ? `再生中の音声: ${file} ／ 出力信号あり` : `音声: ${file} 再生開始（出力を確認中）`,
+    }[a.state];
+    info.textContent = `${head} ／ AudioContext: ${ctxState} ／ 音声セッション: ${sess}${a.skipped?.length ? ` ／ 先に試して失敗: ${a.skipped.join(' ／ ')}` : ''}`;
+    info.dataset.state = a.state;
+    btn.hidden = a.state !== 'failed';
   }
 
   pause() {
     if (this.state !== 'playing') return;
     this.clock.pause();
+    if (this.audio?.state === 'playing') { this.audio.state = 'paused'; this.renderAudioInfo(); }
     this.sfx?.breathStop();
     this.state = 'paused';
     this.updateUi();
@@ -353,18 +417,43 @@ export class App {
     // 向きは表示領域（ウィンドウ）の縦横比で決める
     this.orient = orientationOf(window.innerWidth, window.innerHeight);
     document.documentElement.dataset.orient = this.orient;
+    // ノッチ（安全域）の幅。横向きのレーン・HUD をその内側に置く
+    const cs = getComputedStyle($('#safeProbe'));
+    this.safe = { l: parseFloat(cs.paddingLeft) || 0, r: parseFloat(cs.paddingRight) || 0 };
   }
 
+  /**
+   * 画面配置。縦向き: 背景全体を収め（contain）、その矩形を基準にレーン・人物を置く（従来どおり）。
+   * 横向き: 背景は表示領域を余白なく埋め（cover、上下左右は切れてよい）、レーン・人物・HUD は
+   * 表示領域（ノッチの安全域を除く）を基準にする。人物は背景とは別の前景で、全コマ共通の大きさ。
+   */
   geometry() {
     const bgDef = BACKGROUNDS[this.orient];
+    const ext = this.manifest.fitExtents || this.manifest.extents;
+    if (this.orient === 'landscape') {
+      const bgDraw = coverRect(this.cssW, this.cssH, bgDef.w, bgDef.h);
+      const sl = this.safe?.l || 0, sr = this.safe?.r || 0;
+      const bg = { x: sl, y: 0, w: this.cssW - sl - sr, h: this.cssH };
+      const L = laneRect(bg, { compact: true });
+      L.panelAlpha = 0.42;
+      const { standH, anchor } = landscapeSubject({ x: 0, y: 0, w: this.cssW, h: this.cssH }, this.chart.display, ext);
+      return { bgDef, bg, bgDraw, L, standH, anchor };
+    }
     const bg = containRect(this.cssW, this.cssH, bgDef.w, bgDef.h);
     const L = laneRect(bg);
-    const standH = standingHeight(bg, L, this.chart.display, this.manifest.fitExtents || this.manifest.extents);
-    return { bgDef, bg, L, standH };
+    const standH = standingHeight(bg, L, this.chart.display, ext);
+    return { bgDef, bg, bgDraw: bg, L, standH, anchor: null };
   }
 
   transformFor(i, G = this.geometry()) {
-    return subjectTransform(this.store.frames[i], G.bg, G.standH, this.chart.display);
+    return subjectTransform(this.store.frames[i], G.bg, G.standH, this.chart.display, G.anchor);
+  }
+
+  /** コマ i の実際の人物領域（透明余白を除く bbox）の画面上の矩形 */
+  visibleBox(i, G = this.geometry()) {
+    const T = this.transformFor(i, G), [x, y, w, h] = this.store.frames[i].bbox;
+    const [X, Y] = T.toScreen(x, y);
+    return { x: X, y: Y, w: w * T.s, h: h * T.s };
   }
 
   raf() {
@@ -386,6 +475,7 @@ export class App {
       }
       this.auto?.update(t);
       this.judge.update(t);
+      this.checkAudioSignal(t);
       if (t >= this.duration - 1e-3) { this.finish(); t = this.duration; }
     }
     this.lastT = t;
@@ -403,7 +493,7 @@ export class App {
     ctx.fillStyle = bgDef.letterbox;
     ctx.fillRect(0, 0, this.cssW, this.cssH);
     const img = this.bgImages[this.orient === 'landscape' ? 0 : 1];
-    ctx.drawImage(img, bg.x, bg.y, bg.w, bg.h);
+    ctx.drawImage(img, G.bgDraw.x, G.bgDraw.y, G.bgDraw.w, G.bgDraw.h);
     // 人物
     const fi = this.store.indexAt(Math.max(0, t));
     this.store.prefetch(fi);
@@ -426,13 +516,12 @@ export class App {
     const lanesInfo = this.lanes.draw(ctx, L, t, this.judge ? this.judge.notes : [], {
       lead: this.chart.settings.laneLeadSeconds, held, selected: this.editor?.selected,
     });
-    drawSequence(ctx, bg, L, t, this.judge, this.chart.sequences);
     for (const b of ['Y', 'X', 'A', 'B']) if (this.padEls[b].classList.contains('down') !== held[b]) this.padEls[b].classList.toggle('down', held[b]);
     this.drawHud(ctx, G, t, fi);
     this.editor?.drawOverlay(ctx, G, t, fi);
     window.__debug = {
       t, frame: fi, shown, state: this.state, orient: this.orient, bg, lanes: L, standH, lanesInfo: { jx: lanesInfo.jx },
-      subject: g ? this.transformFor(g.index, G).crop() : null, anchor: g ? [this.transformFor(g.index, G).ox, this.transformFor(g.index, G).oy] : null,
+      bgDraw: G.bgDraw, subject: g ? this.transformFor(g.index, G).crop() : null, visible: g ? this.visibleBox(g.index, G) : null, anchor: g ? [this.transformFor(g.index, G).ox, this.transformFor(g.index, G).oy] : null,
       decoded: this.store.bitmaps.size, fx: this.fx.stats, auto: this.autoMode, rate: this.clock.rate,
     };
   }
@@ -475,7 +564,7 @@ export class App {
       ctx.textAlign = 'right'; ctx.textBaseline = 'top';
       ctx.fillStyle = 'rgba(255,240,220,0.85)';
       const L = G.L;
-      ctx.fillText(`${Math.max(0, t).toFixed(2)} 秒 ／ コマ ${fi}${this.state === 'paused' ? ' ／ 一時停止中' : ''}`, bg.x + bg.w - 10, L.y + L.h + 6 + (this.editMode ? 0 : fs * 2.2));
+      ctx.fillText(`${Math.max(0, t).toFixed(2)} 秒 ／ コマ ${fi}${this.state === 'paused' ? ' ／ 一時停止中' : ''}`, bg.x + bg.w - 10, L.y + L.h + 6);
     }
     ctx.restore();
   }
@@ -499,6 +588,15 @@ export class App {
 
   bindUi() {
     $('#btnPlay').addEventListener('click', () => this.togglePlay());
+    $('#btnAudio').addEventListener('click', () => this.retryAudio());
+    // iOS の割り込み（着信・画面ロックなど）で音声が止まったら、音なしで進めずに一時停止する
+    this.clock.onStateChange = (st) => {
+      if (st !== 'running' && this.state === 'playing' && this.clock._audioMode) {
+        this.pause();
+        this.status(`音声が中断されました（AudioContext: ${st}）。▶ 再開で続きから再生します`, 'error');
+      }
+      this.renderAudioInfo();
+    };
     $('#btnRetry').addEventListener('click', () => this.retry());
     $('#btnAuto').addEventListener('click', () => this.setAuto(!this.autoMode));
     $('#btnEdit').addEventListener('click', () => this.setEdit(!this.editMode));

@@ -6,6 +6,7 @@
     "test": "node --test tests/game2d.test.mjs tests/layout.test.mjs tests/auth-worker.test.mjs tests/server-security.test.mjs",
     "start": "node tools/serve.mjs 8177",
     "test:browser": "node tests/game2d-browser.mjs",
+    "test:audio": "node tests/audio-browser.mjs",
     "build:dist": "node tools/build-dist.mjs"
   },
   "devDependencies": {

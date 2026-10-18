@@ -12,6 +12,7 @@
 <body>
 <div id="app">
   <main id="stageWrap">
+    <div id="safeProbe" aria-hidden="true"></div>
     <canvas id="stage" aria-label="道場のステージ（中央に型の人物、上部に 4 つの入力レーン）"></canvas>
     <div id="loading">
       <p class="brand">KIVA <b>THE KARATE</b> — セーパイ</p>
@@ -39,6 +40,7 @@
       <div id="transport">
         <button type="button" id="btnPlay" class="tbtn primary" disabled>▶ 開始</button>
         <button type="button" id="btnRetry" class="tbtn" disabled>リトライ</button>
+        <button type="button" id="btnAudio" class="tbtn warn" hidden>🔈 音声を再試行</button>
         <button type="button" id="btnAuto" class="tbtn" aria-pressed="false" title="譜面どおりに自動入力（記録は手動プレイと区別）">AUTO</button>
         <button type="button" id="btnEdit" class="tbtn" aria-pressed="false">編集</button>
         <details id="more">

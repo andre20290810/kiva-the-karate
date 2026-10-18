@@ -11,8 +11,11 @@
 `worker/index.js` が全リクエスト（HTML・JS・画像・音声）を静的アセットより先に処理し、
 ログイン済みのブラウザにだけ `dist/` の内容を返します（`wrangler.jsonc` の `run_worker_first: true`）。
 
-**現状**: コードとローカル検証（workerd）は完了しています。Cloudflare へのデプロイ・DNS・本番での確認は**未実施**です
-（作業環境から Cloudflare に接続できず、認証情報もないため）。以下は利用者が行う手順です。
+**現状**: `kiva.world-of-andersen.com` に公開済み（Worker `kiva-the-karate`、`worker/public.js` = パスワードなし）。
+2026-10-18 に 107ba93 の dist をデプロイ（バージョン 8090e203）。以降の更新も同じ手順（手順 1 の `build-dist` → `npx wrangler deploy`）で、
+デプロイ後は公開 URL のファイルが `dist/` と一致することと、ゲームの起動を確認します。
+API トークン（`CLOUDFLARE_API_TOKEN`、テンプレート「Edit Cloudflare Workers」）と `CLOUDFLARE_ACCOUNT_ID` を環境変数に設定すれば
+`wrangler login` なしでデプロイできます。以下のパスワード付き構成（`worker/index.js`）の手順は、限定公開に戻す場合に使います。
 
 ## 0. 公開前の確認（必須）
 
@@ -71,12 +74,16 @@ Worker もホスト名が `kiva.world-of-andersen.com` 以外のアクセスを 
 
 ## 公開後の確認（音声・iPhone）
 
-設定欄の「再生中の音声」に、そのブラウザが実際に使っている音声が出ます。
-`audio.m4a = AAC` なら AAC で再生、`audio_opus.m4a = Opus（予備…）` なら AAC を再生できずに予備へ切り替わっています。
+設定欄の音声の行に、そのブラウザが使っている音声ファイル・コーデック・AudioContext の状態・音声セッション（iOS 17 以降）・
+出力信号の有無が出ます。「再生中の音声」と出るのは、AudioContext が動いていて音楽の出力に信号があるときだけです。
+`audio.m4a（AAC）` なら AAC、`audio_opus.m4a（Opus（予備…））` なら AAC をデコードできずに予備へ切り替わっています。
+iPhone では Web Audio が消音スイッチで無音になるため、開始ボタンで音声セッションを「再生」（navigator.audioSession、
+iOS 16 以前は無音の audio 要素）に切り替えます。iPhone のスピーカーから実際に音が出るかは、ブラウザ内からは測れません（実機で確認）。
 
 iPhone（Safari）での確認手順:
 1. `https://kiva.world-of-andersen.com/` を開き、消音スイッチを切って音量を上げる
-2. 「設定」を開き、「再生中の音声: audio.m4a = AAC」と出ていることを確認（Opus と出たら AAC の不具合）
+2. 「▶ 開始」の後に「設定」を開き、「再生中の音声: audio.m4a（AAC） ／ 出力信号あり ／ AudioContext: running ／ 音声セッション: playback」
+   と出ていることを確認（Opus と出たら AAC をデコードできていない。「再生できていません」と出たら理由を控えて「🔈 音声を再試行」）
 3. 「▶ 開始」→ 音が出る。冒頭 Y（約 5.8 秒）の呼吸の動きと音・レーンの判定線が合っている
 4. 一時停止 → 音と人物が同時に止まる。再開 → 同じ位置から続く
 5. 下のバーで 40 秒付近へシーク → 音・人物・ノーツが同じ位置から再開する

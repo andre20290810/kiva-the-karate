@@ -3,6 +3,8 @@
 // - 音声がないとき / 未許可のとき: performance.now() が基準
 // 描画フレーム数や setInterval の積算では時刻を決めない。
 
+const IS_IOS = typeof navigator !== 'undefined' && (/iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
 export class TimelineClock {
   constructor({ duration }) {
     this.duration = duration;
@@ -26,6 +28,12 @@ export class TimelineClock {
       this.gain = this.ctx.createGain();
       this.gain.gain.value = this.volume;
       this.gain.connect(this.ctx.destination);
+      // 出力に音声信号が乗っているかの確認用（表示だけに使う。音は変えない）
+      this.analyser = this.ctx.createAnalyser();
+      this.analyser.fftSize = 2048;
+      this.gain.connect(this.analyser);
+      this._probe = new Float32Array(this.analyser.fftSize);
+      this.ctx.onstatechange = () => this.onStateChange?.(this.ctx.state);
     }
     return this.ctx;
   }
@@ -37,10 +45,51 @@ export class TimelineClock {
     this.audioStart = startAtTimelineSeconds;
   }
 
-  /** ユーザー操作の中で呼ぶ（自動再生制限の解除） */
+  /**
+   * ユーザー操作（クリック・タップ）の中で呼ぶ。音を出せる状態になったら true。
+   * - iPhone: Web Audio は既定で消音スイッチに従って無音になるため、音声セッションを「再生」にする
+   *   （iOS 17 以降は navigator.audioSession、それより前は無音の audio 要素を鳴らして切り替える）
+   * - AudioContext は suspended だけでなく interrupted（iOS の割り込み後）からも再開する
+   */
   async unlock() {
     const ctx = this.ensureContext();
-    if (ctx && ctx.state === 'suspended') await ctx.resume();
+    if (!ctx) { this.lastError = 'Web Audio API に対応していません'; return false; }
+    this.lastError = '';
+    try {
+      if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback';
+    } catch (e) { this.lastError = `audioSession: ${e.message}`; }
+    if (!navigator.audioSession && IS_IOS) this._keepAlive();
+    if (ctx.state !== 'running') {
+      try {
+        await Promise.race([ctx.resume(), new Promise((r) => setTimeout(r, 1500))]);
+      } catch (e) { this.lastError = `resume: ${e.message}`; }
+    }
+    if (ctx.state !== 'running' && !this.lastError) this.lastError = `AudioContext が ${ctx.state} のまま`;
+    return ctx.state === 'running';
+  }
+
+  /** iOS 16 以前: 無音の audio 要素を再生して、ページの音声を消音スイッチの影響外（再生カテゴリ）にする */
+  _keepAlive() {
+    if (!this._silent) {
+      const rate = 8000, n = rate / 2, b = new ArrayBuffer(44 + n * 2), v = new DataView(b);
+      const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+      w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+      v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true);
+      v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+      this._silent = new Audio(URL.createObjectURL(new Blob([b], { type: 'audio/wav' })));
+      this._silent.loop = true;
+      this._silent.setAttribute('playsinline', '');
+    }
+    this._silent.play().catch((e) => { this.lastError = `audio 要素: ${e.message}`; });
+  }
+
+  /** 音楽の出力の大きさ（RMS、0〜1）。再生していない・音が無いと 0 */
+  outputLevel() {
+    if (!this.analyser) return 0;
+    this.analyser.getFloatTimeDomainData(this._probe);
+    let sum = 0;
+    for (let i = 0; i < this._probe.length; i++) sum += this._probe[i] * this._probe[i];
+    return Math.sqrt(sum / this._probe.length);
   }
 
   get usesAudio() { return !!(this.buffer && this.ctx && this.ctx.state === 'running'); }

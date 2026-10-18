@@ -19,6 +19,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
 #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 #stageWrap { position: relative; flex: 1 1 auto; min-height: 120px; overflow: hidden; }
 #stage { position: absolute; inset: 0; display: block; touch-action: none; }
+#safeProbe { position: absolute; visibility: hidden; pointer-events: none; padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
 
 #panel { flex: 0 0 auto; background: linear-gradient(#2a1d14, #1d140e); border-top: 1px solid var(--line);
   padding: 8px calc(10px + var(--safe-r)) calc(8px + var(--safe-b)) calc(10px + var(--safe-l));
@@ -40,6 +41,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
 .tbtn.primary { background: var(--accent); border-color: var(--accent); color: #1a0f08; font-weight: 700; }
 .tbtn[aria-pressed=true] { background: #ffd9b3; color: #1a0f08; border-color: #ffd9b3; font-weight: 700; }
 .tbtn:disabled { opacity: 0.45; }
+.tbtn.warn { background: #ffcf6a; border-color: #ffcf6a; color: #1a0f08; font-weight: 700; }
+.tbtn[hidden] { display: none; }
+#audioInfo[data-state=failed] { color: #ff9a9a; }
 #more { position: relative; }
 #more[open] .settings { position: absolute; right: 0; bottom: calc(100% + 6px); width: min(92vw, 380px); max-height: 60vh; overflow: auto;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; z-index: 5; box-shadow: 0 8px 30px #000a; }

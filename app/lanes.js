@@ -52,7 +52,7 @@ export class LaneRenderer {
     ctx.textBaseline = 'middle';
     // レーンの面（半透明。人物が見えるように）
     rr(ctx, L.x, L.y, L.w, L.h, 8);
-    ctx.fillStyle = 'rgba(12,8,5,0.6)';
+    ctx.fillStyle = `rgba(12,8,5,${L.panelAlpha ?? 0.6})`;
     ctx.fill();
     ctx.strokeStyle = 'rgba(255,230,200,0.18)'; ctx.lineWidth = 1; ctx.stroke();
     LANE_ORDER.forEach((b, k) => {
@@ -151,46 +151,4 @@ export class LaneRenderer {
     }
     ctx.textAlign = 'left';
   }
-}
-
-/** 連続コマンドの表示（現在のまとまりと進み具合） */
-export function drawSequence(ctx, bg, L, t, judge, sequences) {
-  if (!judge) return;
-  // 現在または次のノーツが属する連続コマンド
-  const upcoming = judge.notes.find((n) => !n.result || n.holding) || null;
-  const recent = [...judge.notes].reverse().find((n) => n.result && n.result !== 'SKIP' && t - (n.judgedAt ?? n.time) < 0.9);
-  const ref = recent && (!upcoming || upcoming.sequenceId !== recent.sequenceId) && upcoming && upcoming.time - t > 1.2 ? recent : upcoming;
-  if (!ref || !ref.sequenceId || ref.time - t > 3.2) return;
-  const seqNotes = judge.notes.filter((n) => n.sequenceId === ref.sequenceId);
-  const label = sequences.find((s) => s.id === ref.sequenceId)?.label || ref.sequenceId;
-  const y = L.y + L.h + Math.max(6, bg.h * 0.012);
-  let chip = Math.max(18, Math.min(30, bg.h * 0.04));
-  ctx.save();
-  ctx.font = `700 ${Math.round(chip * 0.52)}px system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif`;
-  let tw = ctx.measureText(label).width;
-  let total = tw + 16 + seqNotes.length * (chip + 4) + 8;
-  // 狭い画面: まとまりの名前を省き、それでも入らなければチップを小さくする
-  let showLabel = true;
-  if (total > bg.w - 16) { showLabel = false; tw = -16; total = seqNotes.length * (chip + 4) + 8; }
-  if (total > bg.w - 16) { chip = Math.max(12, (bg.w - 24) / seqNotes.length - 4); total = seqNotes.length * (chip + 4) + 8; }
-  let x = bg.x + (bg.w - total) / 2;
-  rr(ctx, x - 6, y - 4, total + 12, chip + 8, 8);
-  ctx.fillStyle = 'rgba(10,6,4,0.55)'; ctx.fill();
-  ctx.fillStyle = '#ffe9c4'; ctx.textBaseline = 'middle';
-  if (showLabel) ctx.fillText(label, x, y + chip / 2);
-  x += tw + 16;
-  for (const n of seqNotes) {
-    const st = LANE_STYLE[n.button];
-    const ok = n.result === 'PERFECT' || n.result === 'GOOD';
-    const miss = n.result === 'MISS';
-    rr(ctx, x, y, chip, chip, 6);
-    ctx.fillStyle = ok ? st.color : miss ? 'rgba(120,40,40,0.8)' : n.holding ? `rgba(${st.rgb},0.6)` : 'rgba(255,255,255,0.12)';
-    ctx.fill();
-    ctx.lineWidth = n === upcoming ? 2.5 : 1; ctx.strokeStyle = n === upcoming ? '#fff' : st.color; ctx.stroke();
-    ctx.fillStyle = ok ? '#111' : '#fff'; ctx.textAlign = 'center';
-    ctx.fillText(miss ? '×' : n.button, x + chip / 2, y + chip / 2 + 1);
-    ctx.textAlign = 'left';
-    x += chip + 4;
-  }
-  ctx.restore();
 }

@@ -47,7 +47,8 @@ for (const [name, vp] of Object.entries(VIEWS)) {
     const D = window.__debug;
     const vis = (el) => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth && r.width > 30 && r.height > 30; };
     return {
-      orient: D.orient, bg: D.bg, lanes: D.lanes, subject: D.subject, anchor: D.anchor,
+      orient: D.orient, bg: D.bg, bgDraw: D.bgDraw, lanes: D.lanes, cssW: window.__app.cssW, cssH: window.__app.cssH,
+      vis: (() => { const a = window.__app, G = a.geometry(), hs = []; for (let i = 0; i < a.store.count; i++) hs.push(a.visibleBox(i, G).h / a.cssH); hs.sort((x, y) => x - y); return hs[hs.length >> 1]; })(), subject: D.subject, anchor: D.anchor,
       img: window.__app.bgImages[D.orient === 'landscape' ? 0 : 1].src.split('/').pop(),
       pads: [...document.querySelectorAll('#pad [data-b]')].map(vis),
       transport: ['#btnPlay', '#btnRetry', '#btnAuto', '#btnEdit'].map((s) => vis(document.querySelector(s))),
@@ -57,8 +58,15 @@ for (const [name, vp] of Object.entries(VIEWS)) {
   check(d.img === expect, `${name}: 背景 ${d.img}（期待 ${expect}）`);
   check(d.pads.every(Boolean), `${name}: Y/X/A/B ボタンが画面内に全部見える ${JSON.stringify(d.pads)}`);
   check(d.transport.every(Boolean), `${name}: 再生・リトライ・AUTO・編集が見える ${JSON.stringify(d.transport)}`);
-  const cx = d.bg.x + d.bg.w / 2, cy = d.bg.y + d.bg.h / 2;
-  check(Math.abs(d.anchor[0] - cx) < 0.5 && Math.abs(d.anchor[1] - cy) < 0.5, `${name}: 胴体の中心が背景の中央 (${d.anchor.map((v) => v.toFixed(1))}) vs (${cx.toFixed(1)}, ${cy.toFixed(1)})`);
+  if (d.orient === 'portrait') {
+    const cx = d.bg.x + d.bg.w / 2, cy = d.bg.y + d.bg.h / 2;
+    check(Math.abs(d.anchor[0] - cx) < 0.5 && Math.abs(d.anchor[1] - cy) < 0.5, `${name}: 胴体の中心が背景の中央 (${d.anchor.map((v) => v.toFixed(1))}) vs (${cx.toFixed(1)}, ${cy.toFixed(1)})`);
+  } else {
+    const g = d.bgDraw;
+    check(g.x <= 0.5 && g.y <= 0.5 && g.x + g.w >= d.cssW - 0.5 && g.y + g.h >= d.cssH - 0.5, `${name}: 横向きの背景が表示領域を余白なく埋める ${JSON.stringify(g)}`);
+    check(Math.abs(d.anchor[0] - d.cssW / 2) < 0.5, `${name}: 人物は左右の中央`);
+    check(d.vis >= 0.7 && d.vis <= 0.85, `${name}: 人物の見える高さ（412 コマの中央値）が表示領域の 70〜85%（${(d.vis * 100).toFixed(1)}%）`);
+  }
   check(d.lanes.y >= d.bg.y && d.lanes.y + d.lanes.h <= d.bg.y + d.bg.h * 0.35, `${name}: 4 レーンが背景の上部`);
   await p.screenshot({ path: `${out}/layout_${name}.png` });
   check(!requests.some((u) => /\.glb|three|vendor\/|\/src\//i.test(u)), `${name}: 旧 3D の素材・コードを読み込まない`);
