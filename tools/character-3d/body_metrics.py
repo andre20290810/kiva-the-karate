@@ -38,7 +38,8 @@ if __name__ == '__main__':
     ap.add_argument('--model', required=True)
     ap.add_argument('--images', nargs='+')
     a = ap.parse_args()
-    rows = [(p.split('/')[-1], metrics(detect(a.model, p))) for p in a.images]
+    rows = [(p.split('/')[-1], metrics(P)) for p in a.images if (P := detect(a.model, p)) is not None]
+    print('detected', len(rows), 'of', len(a.images))
     print('%-22s' % '' + ''.join('%18s' % r[0][:17] for r in rows))
     for k in rows[0][1]:
         print('%-22s' % k + ''.join('%18.3f' % r[1][k] for r in rows))

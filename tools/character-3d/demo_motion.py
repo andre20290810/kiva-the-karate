@@ -4,7 +4,7 @@
 補助動画（突きの型）12 枚から推定した姿勢と確認用の手作り姿勢を、キー姿勢として時間に並べる。
 **セーパイの動きではない。** 本番のモーションは retarget.py で seipai.mp4 の推定関節から作る。
 
-  python demo_motion.py -- --blend kiva_body.blend --lm tsuki_lm.json --duration 82.2 --glb out.glb
+  python demo_motion.py -- --blend kiva_body.blend --lm tsuki_lm.json --duration 82.2 --glb assets/3d/kiva_demo.glb
 """
 import argparse
 import json
@@ -29,6 +29,8 @@ def main():
     ap.add_argument('--glb', required=True)
     ap.add_argument('--save')
     a = ap.parse_args(sys.argv[sys.argv.index('--') + 1:])
+    if a.glb.endswith('_seipai.glb'):
+        sys.exit('デモ動作をセーパイ用の *_seipai.glb に書き出すことはできません（*_demo.glb を指定）')
     bpy.ops.wm.open_mainfile(filepath=a.blend)
     arm = bpy.data.objects['Armature']
     rest = rest_np(arm)

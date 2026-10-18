@@ -43,6 +43,7 @@ mkdirSync(join(out,'assets','3d'),{recursive:true});
 // スキン付き人体モデル（tools/character-3d で作成、assets/3d/ に置く）。無い場合だけ旧プロトタイプを入れる。
 const glb = [
   ['assets/3d/kiva_seipai.glb', 'kiva_seipai.glb'], ['assets/3d/alexandre_seipai.glb', 'alexandre_seipai.glb'],
+  ['assets/3d/kiva_demo.glb', 'kiva_demo.glb'], ['assets/3d/alexandre_demo.glb', 'alexandre_demo.glb'],
   ['prototypes/kiva_motion_2d_reference.glb', 'kiva_motion.glb'], ['prototypes/alexandre_appearance_proxy.glb', 'alexandre_proxy.glb'],
 ];
 for (const [src, name] of glb) if (existsSync(join(root, src))) cpSync(join(root, src), join(out, 'assets', '3d', name));

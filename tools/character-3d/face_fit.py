@@ -179,8 +179,12 @@ def main():
         s = cheek_m / np.linalg.norm(mcan[454, :2] - mcan[234, :2])
         D = np.stack([diff_cm[:, 0] * s, -diff_cm[:, 2] * s * a.depth, diff_cm[:, 1] * s], 1)
         D = np.clip(D * a.damp, -0.004, 0.004)        # 1 回の変位は弱め・4 mm まで
-        C = np.concatenate([P3[CTRL], V[anchor_idx], V[neck_idx]])
-        DD = np.concatenate([D[CTRL], np.zeros((len(anchor_idx) + len(neck_idx), 3))])
+        # まぶたは目尻・目頭と一緒に動かす（眉を下げる変位で上まぶたが閉じないように）
+        for corners, lids in (((33, 133), (159, 145, 160, 144, 158, 153)), ((362, 263), (386, 374, 385, 380, 387, 373))):
+            D[list(lids)] = D[list(corners)].mean(0)
+        LIDS = [159, 145, 160, 144, 158, 153, 386, 374, 385, 380, 387, 373]
+        C = np.concatenate([P3[CTRL], P3[LIDS], V[anchor_idx], V[neck_idx]])
+        DD = np.concatenate([D[CTRL], D[LIDS], np.zeros((len(anchor_idx) + len(neck_idx), 3))])
         field = rbf_field(C, DD, a.sigma, lam=0.05)
         sel = np.nonzero(hw > 0.05)[0]
         V[sel] += field(V[sel]) * np.clip(hw[sel], 0, 1)[:, None]

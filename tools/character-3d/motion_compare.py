@@ -53,8 +53,9 @@ def main():
     ap.add_argument('--from', dest='t0', type=float, default=0)
     ap.add_argument('--to', dest='t1', type=float, default=1e9)
     ap.add_argument('--fps', type=float, default=30)
-    ap.add_argument('--render-dir')
+    ap.add_argument('--render-dir', nargs='*', default=[], help='3D の連番（複数可: 正面＝カメラ一致、横から など）')
     ap.add_argument('--height', type=int, default=720)
+    ap.add_argument('--render-labels', nargs='*', default=[])
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     rest = {k: np.array(v) for k, v in json.load(open(a.rest)).items()}
@@ -91,10 +92,15 @@ def main():
         bad = [n for n, c in cls.items() if c != 'ok']
         d.text((6, 22), ('mismatch: ' + ', '.join(f'{n}({cls[n]})' for n in bad))[:110] if bad else 'all joints within 0.25 torso', fill=(255, 220, 120))
         panels = [left]
-        if a.render_dir:
-            rp = os.path.join(a.render_dir, f'{k:05d}.png')
+        for j, rd in enumerate(a.render_dir):
+            rp = os.path.join(rd, f'{k:05d}.png')
             if os.path.exists(rp):
-                panels.append(Image.open(rp).convert('RGB'))
+                im3 = Image.open(rp).convert('RGB')
+                if j < len(a.render_labels):
+                    dd = ImageDraw.Draw(im3)
+                    dd.rectangle([0, 0, im3.width, 26], fill=(0, 0, 0))
+                    dd.text((6, 6), f'{a.render_labels[j]}  {label}', fill=(255, 255, 255))
+                panels.append(im3)
         H = a.height
         panels = [p.resize((int(p.width * H / p.height), H)) for p in panels]
         out = Image.new('RGB', (sum(p.width for p in panels), H))

@@ -94,6 +94,9 @@ def main():
     ap.add_argument('--out', required=True)
     ap.add_argument('--name', default='char')
     ap.add_argument('--views', default='front,side,back')
+    ap.add_argument('--angles', default='', help='name:deg,...（人物の向き。参照画像から測った向きに合わせて描く）')
+    ap.add_argument('--no-floor', action='store_true')
+    ap.add_argument('--bg', default='', help='背景色 r,g,b（参照画像に近い明るさで比べる）')
     ap.add_argument('--pose')
     ap.add_argument('--size', default='520x900')
     ap.add_argument('--samples', type=int, default=24)
@@ -129,6 +132,10 @@ def main():
     bpy.context.scene.view_settings.exposure = a.exposure
     center = (lo + hi) / 2
     add_lights(center)
+    if a.no_floor:
+        for o in list(bpy.data.objects):
+            if o.type == 'MESH' and o.name.startswith('Plane'):
+                bpy.data.objects.remove(o)
     cam_data = bpy.data.cameras.new('Cam')
     cam = bpy.data.objects.new('Cam', cam_data)
     bpy.context.collection.objects.link(cam)
@@ -145,6 +152,13 @@ def main():
     dist = extent / (2 * math.tan(cam_data.angle_y / 2)) if hasattr(cam_data, 'angle_y') else extent * 2
     cam_data.sensor_fit = 'VERTICAL'
     dist = extent / (2 * math.tan(cam_data.angle / 2 * (h / max(w, h))))
+    if a.angles:
+        for item in a.angles.split(','):
+            k, deg = item.split(':')
+            VIEW_ANGLES[k] = -float(deg)
+        a.views = ','.join(item.split(':')[0] for item in a.angles.split(','))
+    if a.bg:
+        bpy.context.scene.world.node_tree.nodes['Background'].inputs['Color'].default_value = (*map(float, a.bg.split(',')), 1)
     for v in a.views.split(','):
         ang = math.radians(VIEW_ANGLES[v])
         d = Vector((math.sin(ang), -math.cos(ang), 0))

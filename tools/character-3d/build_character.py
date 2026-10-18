@@ -42,9 +42,10 @@ VARIANTS = {
         'skin': (0.22, 0.115, 0.068), 'hair': (0.012, 0.009, 0.008),
     },
     'alexandre': {
-        'targets': [('macrodetails/universal-male-young-averagemuscle-averageweight.target', 1.0),
-                    ('macrodetails/caucasian-male-young.target', 1.0)],
-        'skin': (0.83, 0.66, 0.56), 'hair': (0.78, 0.80, 0.84),
+        # 体格の土台だけを男性の平均体型にし（参照で確認できる肩幅・胸・顎）、人種の属性ターゲットは使わない。
+        # 顔は face_fit.py（参照画像の 478 点）、比率は --fit の計測ターゲットで合わせる
+        'targets': [('macrodetails/universal-male-young-averagemuscle-averageweight.target', 1.0)],
+        'skin': (0.45, 0.31, 0.25), 'hair': (0.20, 0.20, 0.27),
     },
 }
 
@@ -251,6 +252,56 @@ def paint_gloves_boots(body):
             p.material_index = bi
 
 
+def hair_weights(ob, V, bones):
+    """長い髪: 首より上は頭、首〜肩は首と頭、肩より下は胸（上部の背骨）に追従させる（髪が腕に引っ張られない）"""
+    lm = garments.landmarks(bones)
+    head_z = np.asarray(bones['head']['head_b'])[2]
+    g = {n: ob.vertex_groups.new(name=n) for n in ('head', 'neck01', 'spine01', 'spine02')}
+    for i, p in enumerate(V):
+        z = p[2]
+        if z >= head_z:
+            w = {'head': 1.0}
+        elif z >= lm['neck_z']:
+            t = (head_z - z) / max(1e-6, head_z - lm['neck_z'])
+            w = {'head': 1 - 0.6 * t, 'neck01': 0.6 * t}
+        else:
+            t = min(1.0, (lm['neck_z'] - z) / 0.25)
+            w = {'neck01': 0.4 * (1 - t), 'spine01': 0.6 + 0.1 * t, 'spine02': 0.3 * t}
+        tot = sum(w.values())
+        for k, v in w.items():
+            g[k].add([i], v / tot, 'REPLACE')
+
+
+def hide_feet(body):
+    """靴の下の足の面を体から外す（靴と重なってちらつかないように）。足首より上は残す"""
+    import bmesh
+    names = {gr.index: gr.name for gr in body.vertex_groups}
+    bm = bmesh.new(); bm.from_mesh(body.data); bm.verts.ensure_lookup_table()
+    dl = body.data.vertices
+    kill = []
+    for v in bm.verts:
+        ws = {names[e.group]: e.weight for e in dl[v.index].groups}
+        if sum(w for n, w in ws.items() if n.startswith(('foot', 'toe'))) > 0.6:
+            kill.append(v)
+    bmesh.ops.delete(bm, geom=kill, context='VERTS')
+    bm.to_mesh(body.data); bm.free()
+
+
+def paint_shirt(body):
+    """白いシャツ: 胴・腕の体表を白に（ベストとコートの下。襟元の V から見える）。首から上は肌のまま"""
+    body.data.materials.append(material('ShirtWhite', (0.78, 0.78, 0.76), rough=0.7, sheen=0.2))
+    mi = len(body.data.materials) - 1
+    names = {gr.index: gr.name for gr in body.vertex_groups}
+    shirt = ('spine', 'clavicle', 'shoulder01', 'upperarm', 'lowerarm', 'root', 'pelvis')
+    for p in body.data.polygons:
+        w = {}
+        for vi in p.vertices:
+            for e in body.data.vertices[vi].groups:
+                w[names[e.group]] = w.get(names[e.group], 0) + e.weight
+        if w and max(w, key=w.get).startswith(shirt):
+            p.material_index = mi
+
+
 def mesh_obj(name, V, F, mat=None, smooth_shade=True):
     me = bpy.data.meshes.new(name)
     me.from_pydata([tuple(map(float, v)) for v in V], [], [list(map(int, f)) for f in F])
@@ -304,27 +355,61 @@ def add_garments(variant, vb, groups, wts, bones, body, arm):
         tail = mesh_obj('HairTail', tv, tf, hair_m)
         out = [(jacket, 0.004), (pants, 0.004), (belt, 0.006), (hair, 0.0), (tail, 0.0)]
     elif variant == 'alexandre':
-        coat_m = material('CoatBlack', (0.008, 0.008, 0.01), rough=0.55, sheen=0.04)
+        import alexandre_parts as ap
+        lm = garments.landmarks(bones)
+        knee_z = min(np.asarray(bones['lowerleg01.L']['head_b'])[2], np.asarray(bones['lowerleg01.R']['head_b'])[2])
+        coat_m = material('CoatLeather', (0.008, 0.007, 0.008), rough=0.38, sheen=0.02)
         lining = material('CoatLiningRed', (0.42, 0.015, 0.025), rough=0.45, sheen=0.3)
-        # 上半身は腰までの上衣、腰から下は一枚の裾（脚ごとの筒にしない）
-        jv, jf, _ = garments.gi_jacket(V, F, reg, bones, hem_below_crotch=-0.12, sleeve=0.95, ease=0.026, coat=True)
+        # 上半身: 前を開けて着る（ベストとシャツが見える）。腰から下は左右 2 枚の裾（背中にスリット）
+        jv, jf, _ = garments.gi_jacket(V, F, reg, bones, hem_below_crotch=-0.14, sleeve=0.97, ease=0.014, coat=True,
+                                       v_depth=0.30, v_slope=0.30, open_front=0.06)
         coat = mesh_obj('Coat', jv, jf, coat_m)
         coat.data.materials.append(lining)
-        sv, sf, sinfo = garments.coat_skirt(jv, bones)
+        sv, sf, sinfo = ap.vented_skirt(jv, bones)
         skirt = mesh_obj('CoatSkirt', sv, sf, coat_m)
         skirt.data.materials.append(lining)
         skirt_weights(skirt, sinfo)
-        pv, pf, _ = garments.gi_pants(V, F, reg, bones, ease=0.012, flare=0.006)
-        pants = mesh_obj('Trousers', pv, pf, material('TrousersDark', (0.03, 0.03, 0.035), rough=0.6))
-        hv, hf, _, _ = garments.hair_cap(V, F, reg, bones, thickness=0.018, fringe=True, long_back=0.04)
-        hair = mesh_obj('Hair', hv, hf, material('HairSilver', VARIANTS[variant]['hair'], rough=0.35, sheen=0.3))
-        out = [(coat, 0.006), (skirt, 0.006), (pants, 0.004), (hair, 0.0)]
-        paint_gloves_boots(body)
+        cv, cf = ap.stand_collar(V, reg, bones)
+        collar = mesh_obj('CoatCollar', cv, cf, coat_m)
+        collar.data.materials.append(lining)
+        lv, lf = ap.lapels(jv, bones)
+        lapel = mesh_obj('CoatLapels', lv, lf, coat_m)
+        kv, kf = ap.cuffs(bones, jv)
+        cuff = mesh_obj('CoatCuffs', kv, kf, coat_m)
+        tv_, tf_, tinfo = ap.straps(bones)
+        strap = mesh_obj('CoatStraps', tv_, tf_, material('StrapLeather', (0.02, 0.012, 0.01), rough=0.35))
+        skirt_weights(strap, tinfo)
+        vv, vf, _ = ap.vest(V, F, reg, bones)
+        vest = mesh_obj('Vest', vv, vf, material('VestBlack', (0.02, 0.02, 0.024), rough=0.4, sheen=0.1))
+        bv, bf = garments.belt(vv, bones, height=0.04, z=lm['crotch_z'] + 0.13)
+        belt = mesh_obj('Belt', bv, bf, material('BeltLeather', (0.015, 0.014, 0.014), rough=0.35))
+        pv, pf, _ = garments.gi_pants(V, F, reg, bones, ease=0.010, flare=0.004, bottom=knee_z - 0.12)   # 裾はブーツの中へ
+        pants = mesh_obj('Trousers', pv, pf, material('TrousersBlack', (0.02, 0.02, 0.024), rough=0.6))
+        bov, bof, _, shoe = ap.boots(V, F, reg, bones)
+        boot = mesh_obj('Boots', bov, bof, material('BootOxblood', (0.09, 0.022, 0.018), rough=0.3, sheen=0.05))
+        shv, shf = ap.shoes(V, reg, bones)
+        shoe_o = mesh_obj('Shoes', shv, shf, material('ShoeBlack', (0.012, 0.011, 0.011), rough=0.25))
+        gv_, gf_, _ = ap.gloves(V, F, reg, bones)
+        glove = mesh_obj('Gloves', gv_, gf_, material('GloveLeather', (0.015, 0.014, 0.015), rough=0.3))
+        hair_m = material('HairSilver', VARIANTS[variant]['hair'], rough=0.4, sheen=0.0)
+        (cap_v, cap_f, part), (stv, stf, srel), (tiev, tief) = ap.long_hair(V, F, reg, bones)
+        hair = mesh_obj('Hair', cap_v, cap_f, hair_m)
+        strands = mesh_obj('HairStrands', stv, stf, hair_m)
+        hair_weights(strands, stv, bones)
+        tie = mesh_obj('HairTie', tiev, tief, material('HairTie', (0.02, 0.02, 0.022), rough=0.4))
+        rigid(tie, 'head')
+        paint_shirt(body)
+        out = [(coat, 0.006), (skirt, 0.006), (collar, 0.006), (lapel, 0.004), (cuff, 0.004), (strap, 0.003),
+               (vest, 0.004), (belt, 0.005), (pants, 0.003), (boot, 0.004), (shoe_o, 0.0), (glove, 0.0), (hair, 0.0),
+               (strands, 0.012), (tie, 0.0)]
+
     waist_z = garments.landmarks(bones)['crotch_z'] + 0.1
     for ob, th in out:
-        if ob.name == 'CoatSkirt':
+        if ob.name in ('CoatSkirt', 'CoatStraps', 'HairStrands', 'HairTie'):
+            # 体から離れた布・髪は独自のウェイト（作成時に設定済み）
             bind(ob, arm)
-            solidify(ob, th, lining=True)
+            if th:
+                solidify(ob, th, lining=ob.name == 'CoatSkirt')
             continue
         transfer_weights(ob, body)   # 骨格に結び付ける前に人体のウェイトを転写
         if ob.name == 'Belt':
@@ -333,7 +418,10 @@ def add_garments(variant, vb, groups, wts, bones, body, arm):
             soften_skirt(ob, waist_z)
         bind(ob, arm)
         if th:
-            solidify(ob, th, lining=ob.name == 'Coat')
+            solidify(ob, th, lining=ob.name in ('Coat', 'CoatCollar'))
+    if variant == 'alexandre' and not os.environ.get('KEEP_FEET'):
+        # 靴の中の足（指）が靴から出ないよう体の足を外す。ウェイト転写（靴は足の骨に追従）の後に行う
+        hide_feet(body)
     return [o for o, _ in out]
 
 

@@ -29,7 +29,7 @@ for (const [vname, viewport] of Object.entries(VIEWS)) {
     await p.waitForFunction((m) => window.__game.displayMode === m, mode, { timeout: 60000 });
     const after = await p.evaluate(() => ({ t: window.__game.clock.position(), judged: window.__game.log.length, asset: window.__game.threeStage?.asset }));
     check(after.t >= before.t && after.t - before.t < 30, `${vname}/${mode}: 切替で音声時刻が戻らない（${before.t.toFixed(2)}→${after.t.toFixed(2)} s）`);
-    if (mode.endsWith('-3d')) check(after.asset?.kind === 'skinned', `${vname}/${mode}: スキン付き人体モデルを使用（${after.asset?.path}）`);
+    if (mode.endsWith('-3d')) check(['skinned', 'demo'].includes(after.asset?.kind), `${vname}/${mode}: スキン付き人体モデルを使用（${after.asset?.kind}: ${after.asset?.path}）`);
     // 判定が出てエフェクトが生成されるまで待つ
     let fx = null;
     for (let i = 0; i < 40; i++) {

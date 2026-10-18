@@ -71,11 +71,17 @@ def main():
         im = Image.open(p).convert('RGB')
         name = os.path.basename(p)
         box = (0, 0, im.width, im.height)
+        a_scale = 1
         if not a.no_crop and name in pose:
-            n = np.array(pose[name]['image'])[0, :2] * [im.width, im.height]
-            box = (int(n[0] - 40), int(n[1] - 50), int(n[0] + 40), int(n[1] + 40))
-            im = im.crop(box).resize((80 * a.scale, 90 * a.scale), Image.LANCZOS)
-        res = detect(det, np.asarray(im), 1 if a.no_crop else a.scale)
+            P = np.array(pose[name]['image'])[:, :2] * [im.width, im.height]
+            n = P[0]
+            # 切り出しの大きさは耳と肩の幅から決める（小さい顔も大きい顔も同じ構図になるように）
+            s = max(40.0, 1.5 * np.linalg.norm(P[7] - P[8]), 0.45 * np.linalg.norm(P[11] - P[12]))
+            box = (int(n[0] - s), int(n[1] - 1.25 * s), int(n[0] + s), int(n[1] + s))
+            k = max(1.0, 480.0 / (2 * s))
+            im = im.crop(box).resize((int(2 * s * k), int(2.25 * s * k)), Image.LANCZOS)
+            a_scale = k
+        res = detect(det, np.asarray(im), 1 if a.no_crop else a_scale)
         if res is None:
             out.append({'name': name, 'missing': True})
             continue

@@ -124,6 +124,12 @@ def process(frames, rest, fps=30.0, smooth=True, foot_lock=True, lock_speed=0.25
 
     qc に dict を渡すと、左右の取り違え・前後反転の修正を先に行い、その記録を入れる（motion_qc.py）。
     """
+    # 入力の実際の時刻間隔から fps を決める（5 fps の間引きデータを 30 fps として平滑化・足の速度を計算しないように）
+    times = [f.get('time') for f in frames]
+    if len(frames) > 2 and all(t is not None for t in times):
+        fps = 1.0 / float(np.median(np.diff(times)))
+    if qc is not None:
+        qc['input_fps'] = round(fps, 3)
     if qc is not None and len(frames) > 1:
         import copy
         import motion_qc

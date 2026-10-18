@@ -14,6 +14,8 @@ const from = +arg('from', 0), to = +arg('to', 4), fps = +arg('fps', 24);
 const hits = (arg('hits', '') || '').split(',').filter(Boolean).map(Number);
 const grade = arg('grade', 'PERFECT');
 const orbit = +arg('orbit', 0);
+const yaw = +arg('yaw', 0); // 固定のカメラ角度（度）。90 で人物の右側から（奥行きの確認用）
+const noFx = process.argv.includes('--no-fx'); // 動作比較用: 演出を消す
 const [w, h] = arg('size', '720x900').split('x').map(Number);
 const out = arg('out', 'test-results/capture.mp4');
 const keep = process.argv.includes('--keep-frames'); // motion_compare.py の --render-dir に使う（連番 PNG を残す）
@@ -31,8 +33,13 @@ for (let i = 0; i <= n; i++) {
   const t = from + i / fps;
   const fire = [];
   while (hi < hits.length && hits[hi] <= t + 1e-6) fire.push(hits[hi++]);
-  await p.evaluate(({ t, fire, grade, orbit, k }) => {
+  await p.evaluate(({ t, fire, grade, orbit, k, yaw, noFx }) => {
     const st = window.__stage;
+    if (noFx && st.vfx) st.vfx.group.visible = false;
+    if (yaw && !orbit) {
+      st.resize(); const r0 = Math.hypot(st.camera.position.x, st.camera.position.z), a = yaw * Math.PI / 180;
+      st.camera.position.set(Math.sin(a) * r0, st.camera.position.y, Math.cos(a) * r0); st.camera.lookAt(0, 0.72, 0);
+    }
     if (orbit) {
       const a = k * orbit * Math.PI / 180, d = st.camera.position.length() || 4.2, r = Math.hypot(st.camera.position.x, st.camera.position.z) || 4;
       st.resize(); const r0 = Math.hypot(st.camera.position.x, st.camera.position.z);
@@ -41,7 +48,7 @@ for (let i = 0; i <= n; i++) {
     }
     st.sync(t);
     for (const ft of fire) { st.hit({ t: ft, grade, seed: Math.round(ft * 100) }); st.sync(t); }
-  }, { t, fire, grade, orbit, k: i / n });
+  }, { t, fire, grade, orbit, k: i / n, yaw, noFx });
   await p.screenshot({ path: join(frames, String(i).padStart(5, '0') + '.png') });
 }
 await browser.close();

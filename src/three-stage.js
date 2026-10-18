@@ -8,10 +8,12 @@ import { Vfx3D, findLimbBones } from './vfx3d.js';
 export const MODEL_SOURCES = Object.freeze({
   'kiva-3d': [
     { path: 'assets/3d/kiva_seipai.glb', kind: 'skinned' },
+    { path: 'assets/3d/kiva_demo.glb', kind: 'demo' },
     { path: 'assets/3d/kiva_motion.glb', kind: 'legacy' },
   ],
   'alexandre-3d': [
     { path: 'assets/3d/alexandre_seipai.glb', kind: 'skinned' },
+    { path: 'assets/3d/alexandre_demo.glb', kind: 'demo' },
     { path: 'assets/3d/alexandre_proxy.glb', kind: 'legacy' },
   ],
 });
@@ -127,7 +129,7 @@ export class ThreeStage {
     this.duration = gltf.animations[0].duration;
     this.mixer.setTime(0);
     this.footCorrections = [];
-    if (entry.kind === 'skinned') {
+    if (entry.kind === 'skinned' || entry.kind === 'demo') {
       // 接地はモーション作成時に処理済み（Blender の床 z=0 → ここでは FLOOR_Y）
       this.model.position.set(0, FLOOR_Y, 0);
       this.model.scale.setScalar(1);

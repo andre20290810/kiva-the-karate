@@ -9,6 +9,10 @@ test('3D: スキン付き人体モデルを優先し、旧プロトタイプは�
     assert.equal(MODEL_SOURCES[id][0].kind, 'skinned');
     assert.match(MODEL_SOURCES[id][0].path, /^assets\/3d\/.+_seipai\.glb$/);
     assert.equal(MODEL_SOURCES[id].at(-1).kind, 'legacy');
+    // デモ（補助動画の姿勢をつないだもの）はセーパイ用 GLB とは別名
+    const demo = MODEL_SOURCES[id].find((s) => s.kind === 'demo');
+    assert.match(demo.path, /_demo\.glb$/);
+    assert.notEqual(demo.path, MODEL_SOURCES[id][0].path);
   }
 });
 

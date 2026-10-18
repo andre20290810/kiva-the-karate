@@ -161,7 +161,8 @@ def landmarks(bones):
     return lm
 
 
-def gi_jacket(V, F, reg, bones, *, hem_below_crotch=0.18, sleeve=0.86, ease=0.022, coat=False):
+def gi_jacket(V, F, reg, bones, *, hem_below_crotch=0.18, sleeve=0.86, ease=0.022, coat=False,
+              v_depth=None, v_slope=0.42, open_front=0.0):
     """道着の上衣（coat=True でロングコート: 裾を膝下まで・ゆとりを大きく）"""
     lm = landmarks(bones)
     n = len(V)
@@ -185,20 +186,23 @@ def gi_jacket(V, F, reg, bones, *, hem_below_crotch=0.18, sleeve=0.86, ease=0.02
     cx, cy = lm['center_xy']
     v_top = lm['neck_z'] + 0.01
     # 襟元は浅い V（道着は襟が重なる。下に白い肌着を着ている想定で、深く開けない）
-    v_depth = 0.11 if not coat else 0.07
+    if v_depth is None:
+        v_depth = 0.11 if not coat else 0.07
     for i in range(n):
         if V[i, 1] < cy - 0.02 and V[i, 2] > v_top - v_depth:
-            if abs(V[i, 0] - cx) < (V[i, 2] - (v_top - v_depth)) * 0.42 + 0.012:
+            if abs(V[i, 0] - cx) < (V[i, 2] - (v_top - v_depth)) * v_slope + 0.012:
                 keep[i] = False
+        elif open_front and V[i, 1] < cy - 0.02 and abs(V[i, 0] - cx) < open_front:
+            keep[i] = False                     # 前を開けて着る（中の服が見える）
     Vs, Fs, used = submesh(V, F, keep)
     N = vertex_normals(Vs, Fs)
     r_sub = reg[used]
     off = np.full(len(Vs), ease)
     for k in range(len(Vs)):
         if r_sub[k] == 'forearm':
-            off[k] += 0.016          # 袖口はゆったり
+            off[k] += 0.016 if not coat else 0.005          # 袖口はゆったり（道着）。コートは細身
         elif r_sub[k] == 'upperarm':
-            off[k] += 0.010
+            off[k] += 0.010 if not coat else 0.003
         elif r_sub[k] in ('pelvis', 'thigh', 'shin'):
             off[k] += 0.012 + (0.04 if coat else 0.0) * max(0.0, (lm['crotch_z'] - Vs[k, 2]) / 0.5)
     Vo = Vs + N * off[:, None]
@@ -230,15 +234,16 @@ def clamp_offset(Vo, Vs, Fs, max_off, iters=3):
     return out
 
 
-def gi_pants(V, F, reg, bones, *, ease=0.016, flare=0.03, waist_up=0.03):
+def gi_pants(V, F, reg, bones, *, ease=0.016, flare=0.03, waist_up=0.03, bottom=None):
     lm = landmarks(bones)
     n = len(V)
     keep = np.zeros(n, dtype=bool)
     top = lm['waist_z'] + waist_up
+    bottom = lm['ankle_z'] + 0.05 if bottom is None else bottom
     for i in range(n):
         r, z = reg[i], V[i, 2]
         if r in ('pelvis', 'thigh', 'shin') or (r == 'torso' and z < top):
-            keep[i] = z > lm['ankle_z'] + 0.05
+            keep[i] = z > bottom
     Vs, Fs, used = submesh(V, F, keep)
     N = vertex_normals(Vs, Fs)
     t = np.clip((lm['crotch_z'] - Vs[:, 2]) / max(0.2, lm['crotch_z'] - lm['ankle_z']), 0, 1)

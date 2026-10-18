@@ -16,6 +16,29 @@
 
 **推定であって測定ではない**: 単眼映像の奥行き・体の回転は推定値。顔の細部・見えない部分は作っていない／推定で補っている。
 
+## v4（2026-10-18 後半）: ALEXANDRE の参照に基づく造形と、セーパイ実動画での比較
+
+入力: `CLAUDE_KIVA_ALEXANDRE_INPUTS_20261018.zip`（非公開。リポジトリ・公開サイトに置かない）
+- `alexandre_parts.py` … 立ち襟・ラペル・前開き・背中スリット付きの裾・赤い裏地・腰の革紐・袖口のカフ・ベスト・
+  白いシャツ・ベルト・膝下ブーツ（胴）と靴（断面の積み重ねで作った閉じた形）・手袋・長い銀髪（後ろへ流した頭の土台、
+  耳の後ろから腰まで一続きの髪の量感＋毛筋、顔の両脇の毛束、ハーフアップの結び目）
+- `silhouette_compare.py` … 白背景の回転動画と、同じ向きのモデル描画の輪郭を身長でそろえて重ねる
+- ALEXANDRE の顔は提供静止画（正面）と回転動画 0.5 s に合わせ、2.0 s・斜めの肖像・全身画は評価だけに使う
+- デモ動作の GLB は `*_demo.glb`（`demo_motion.py` は `*_seipai.glb` への書き出しを拒否する）
+
+```bat
+rem ALEXANDRE（顔の合わせ込み用の土台 → 顔 → 本体）
+set KEEP_FEET=1
+blender -b -P tools\character-3d\build_character.py -- --mh %MH% --out base --variant alexandre --fit alex_fit.json
+set KEEP_FEET=
+blender -b -P tools\character-3d\face_fit.py -- --blend base\alexandre_body.blend --ref face_fit_ref.json --model face_landmarker.task --mh %MH% --out alex_face_offsets.npy --iters 4
+blender -b -P tools\character-3d\build_character.py -- --mh %MH% --out source\character-3d --variant alexandre --fit alex_fit.json --face-offsets alex_face_offsets.npy
+rem セーパイ同時刻比較（正面＝カメラ一致、横＝奥行き確認）
+node tests\capture-3d.mjs --variant kiva-3d --from 28.2 --to 33.6 --fps 30 --size 576x1024 --no-fx --keep-frames --out cmp\front.mp4
+node tests\capture-3d.mjs --variant kiva-3d --from 28.2 --to 33.6 --fps 30 --size 576x1024 --no-fx --yaw 90 --keep-frames --out cmp\side.mp4
+python tools\character-3d\motion_compare.py --lm seipai_lm.json --rest rest_joints.json --video source\seipai.mp4 --from 28.2 --to 33.6 --render-dir cmp\front.mp4.frames cmp\side.mp4.frames --render-labels "3D front" "3D side" --out cmp\frames
+```
+
 ## v3（2026-10-18）: 参照画像の測定に基づく造形と、動きの検証道具
 
 | 道具 | 内容 |

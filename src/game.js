@@ -191,10 +191,11 @@ export class Game {
     const oldNotice=document.querySelector('#charNotice');
     if(oldNotice)oldNotice.hidden=true;
     if(mode.kind === '3d') {
-      const legacy = this.asset3d?.kind === 'legacy';
+      const kind = this.asset3d?.kind;
       const who = mode.id === 'alexandre-3d' ? 'ALEXANDRE 3D' : 'KIVA 3D';
-      this.status(legacy ? `${who} TECH PREVIEW: 人体モデル未配置のため旧プロトタイプ表示（完成モデルではありません）`
-        : `${who} TECH PREVIEW: 推定モーション（奥行き・回転は未検証）`);
+      this.status(kind === 'legacy' ? `${who} TECH PREVIEW: 人体モデル未配置のため旧プロトタイプ表示（完成モデルではありません）`
+        : kind === 'demo' ? `${who} TECH PREVIEW: デモ動作（セーパイではありません）`
+        : `${who} TECH PREVIEW: セーパイ元動画からの推定モーション（奥行き・回転は未検証）`);
     }
     else if(this.state === 'ready')this.status('KIVA original-video mode: using uncut source footage');
     if(this.state !== 'playing')this.render();
