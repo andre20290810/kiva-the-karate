@@ -1,6 +1,6 @@
 // 3D 表示の確認動画を作る（時刻を固定刻みで進めて 1 枚ずつ撮り、ffmpeg で MP4 にする）。
 //   npm start（別ターミナル）→ node tests/capture-3d.mjs --variant kiva-3d --from 9 --to 15 --fps 24 --hits 9.66,14.49 --out file.mp4
-//   --orbit 360 で人物の周りを一周（モデル確認用）。--size 720x900
+//   --orbit 360 で人物の周りを一周（モデル確認用）。--size 720x900。--keep-frames で連番 PNG を残す
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -16,6 +16,7 @@ const grade = arg('grade', 'PERFECT');
 const orbit = +arg('orbit', 0);
 const [w, h] = arg('size', '720x900').split('x').map(Number);
 const out = arg('out', 'test-results/capture.mp4');
+const keep = process.argv.includes('--keep-frames'); // motion_compare.py の --render-dir に使う（連番 PNG を残す）
 const frames = out + '.frames';
 rmSync(frames, { recursive: true, force: true }); mkdirSync(frames, { recursive: true });
 const exe = process.env.CHROME_PATH || (existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
@@ -47,5 +48,5 @@ await browser.close();
 const require = createRequire(import.meta.url);
 const ffmpeg = require('@ffmpeg-installer/ffmpeg').path;
 execFileSync(ffmpeg, ['-y', '-loglevel', 'error', '-framerate', String(fps), '-i', join(frames, '%05d.png'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', out]);
-rmSync(frames, { recursive: true, force: true });
-console.log('wrote', out, n + 1, 'frames');
+if (!keep) rmSync(frames, { recursive: true, force: true });
+console.log('wrote', out, n + 1, 'frames', keep ? '(frames kept in ' + frames + ')' : '');

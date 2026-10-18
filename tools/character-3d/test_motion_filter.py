@@ -50,6 +50,39 @@ def test_foot_lock_reduces_sliding():
     assert slide(fixed) < slide(raw) * 0.3, (slide(fixed), slide(raw))
 
 
+def _with_image(f, rng):
+    w = np.asarray(f['world'])
+    im = np.zeros((33, 4)); im[:, 3] = 0.9
+    im[:, 0] = 0.5 + w[:, 0] * 0.4 * 1024 / 576; im[:, 1] = 0.5 + w[:, 1] * 0.4   # 画素で等方になるように
+    f['image'] = im.tolist(); f['size'] = [576, 1024]
+    return f
+
+
+def test_qc_fixes_lr_swap_and_depth_flip():
+    import motion_qc
+    rng = np.random.default_rng(3)
+    frames = [_with_image(mp_frame(rng, 0.004), rng) for _ in range(20)]
+    # 10 フレーム目: 左右ラベルの取り違え。14 フレーム目: 右前腕の奥行きだけが反転（前に出した腕が後ろに見える）
+    for f in frames:
+        ww = np.asarray(f['world']); ww[16, 2] = ww[14, 2] - 0.2; ww[16, 1] = ww[14, 1] - 0.05; f['world'] = ww.tolist()
+    for k in ('image', 'world'):
+        frames[10][k] = np.asarray(frames[10][k])[motion_qc.SWAP].tolist()
+    w = np.asarray(frames[14]['world']); w[16, 2] = w[14, 2] + 0.2; frames[14]['world'] = w.tolist()
+    qc = {}
+    mf.process(frames, REST, smooth=False, foot_lock=False, qc=qc)
+    assert 10 in qc['lr_swaps_fixed'], qc
+    assert (14, 'limb-depth 14-16') in qc['depth_flips_fixed'], qc['depth_flips_fixed']
+
+
+def test_reprojection_small_for_consistent_pose():
+    import motion_qc
+    rng = np.random.default_rng(4)
+    f = _with_image(mp_frame(rng, 0.0), rng)
+    Js, _ = mf.process([f], REST, smooth=False, foot_lock=False)
+    rep = motion_qc.reprojection(Js[0], f)
+    assert rep['mean'] < 0.12, rep['mean']
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in list(globals().items()):

@@ -39,7 +39,7 @@ VARIANTS = {
     'kiva': {
         'targets': [('macrodetails/universal-female-young-averagemuscle-averageweight.target', 1.0),
                     ('macrodetails/asian-female-young.target', 1.0)],
-        'skin': (0.42, 0.25, 0.165), 'hair': (0.012, 0.009, 0.008),
+        'skin': (0.22, 0.115, 0.068), 'hair': (0.012, 0.009, 0.008),
     },
     'alexandre': {
         'targets': [('macrodetails/universal-male-young-averagemuscle-averageweight.target', 1.0),
@@ -69,9 +69,15 @@ def material(name, color, rough=0.6, sheen=0.0, sss=0.0, metallic=0.0):
     return m
 
 
-def build_body(data_dir, variant):
+def build_body(data_dir, variant, face_offsets=None, extra_targets=()):
     verts, groups, uvs, face_uv = mh_body.load_obj(os.path.join(data_dir, '3dobjs', 'base.obj'))
-    verts = mh_body.apply_targets(verts, data_dir, VARIANTS[variant]['targets'])
+    # 体型: 基本の体格に加え、参照画像で測った比率（body_metrics.py）に合わせる計測ターゲット
+    verts = mh_body.apply_targets(verts, data_dir, list(VARIANTS[variant]['targets']) + list(extra_targets))
+    if face_offsets is not None:
+        # 参照画像の顔の点に合わせた変位（face_fit.py）。Blender 座標の変位を MakeHuman 座標へ戻して足す
+        off = np.load(face_offsets)
+        n = min(len(off), len(verts))
+        verts[:n] += np.stack([off[:n, 0], off[:n, 2], -off[:n, 1]], 1) / 0.1
     bones = mh_body.skeleton(data_dir, verts)
     wts = mh_body.weights(data_dir)
     bones, wts = mh_body.collapse(bones, wts, KEEP_BONES)
@@ -190,7 +196,7 @@ def soften_skirt(ob, waist_z, depth=0.35, keep=0.45):
 def add_brows(body, eyes, hair_color):
     """眉: 眼球の上の前向きの面を髪色に近い材質にする（MakeHuman の眉アセットは同梱されていないため）"""
     import numpy as np
-    body.data.materials.append(material('Brow', tuple(c * 1.4 for c in hair_color), rough=0.7))
+    body.data.materials.append(material('Brow', (0.05, 0.035, 0.028), rough=0.7))   # 細く目立たない眉（参照では髪より薄く見える）
     mi = len(body.data.materials) - 1
     for side in (1, -1):
         pts = np.array([tuple(v.co) for v in eyes.data.vertices if (v.co.x > 0) == (side > 0)])
@@ -265,7 +271,7 @@ def solidify(ob, thickness, offset=1.0, lining=False):
     m.offset = offset
     if lining:
         m.material_offset = 1          # 内側の面を 2 番目の材質（裏地）に
-    m.use_even_offset = True
+    m.use_even_offset = False   # True だと鋭い頂点で厚みが突き出る（背中に「ひれ」が出た）
     # アーマチュアより先に厚みを付ける（変形後に厚みが崩れない）
     bpy.context.view_layer.objects.active = ob
     bpy.ops.object.modifier_move_to_index(modifier=m.name, index=0)
@@ -288,10 +294,13 @@ def add_garments(variant, vb, groups, wts, bones, body, arm):
         pants = mesh_obj('GiPants', pv, pf, gi)
         bv, bf = garments.belt(jv, bones)
         belt = mesh_obj('Belt', bv, bf, material('BeltBlack', (0.018, 0.018, 0.02), rough=0.55))
-        hv, hf, _, _ = garments.hair_cap(V, F, reg, bones)
+        hv, hf, part = garments.hair_shell(V, F, reg, bones)   # 後ろへ引いてまとめた髪（中央分け）
         hair_m = material('Hair', VARIANTS[variant]['hair'], rough=0.38)
         hair = mesh_obj('Hair', hv, hf, hair_m)
-        tv, tf = garments.ponytail(bones)
+        hair.data.materials.append(material('Scalp', tuple(c * 0.8 for c in VARIANTS[variant]['skin']), rough=0.6))
+        for k in part:
+            hair.data.polygons[k].material_index = 1
+        tv, tf = garments.hair_bun_and_strands(V, reg, bones)
         tail = mesh_obj('HairTail', tv, tf, hair_m)
         out = [(jacket, 0.004), (pants, 0.004), (belt, 0.006), (hair, 0.0), (tail, 0.0)]
     elif variant == 'alexandre':
@@ -333,10 +342,14 @@ def main():
     ap.add_argument('--mh', required=True)
     ap.add_argument('--out', required=True)
     ap.add_argument('--variant', default='kiva')
+    ap.add_argument('--face-offsets', help='face_fit.py の出力（.npy）')
+    ap.add_argument('--fit', help='計測ターゲットの JSON（[[target, weight], ...]）')
     args = ap.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else sys.argv[1:])
     os.makedirs(args.out, exist_ok=True)
     clear_scene()
-    vb, groups, uvs, face_uv, bones, wts = build_body(args.mh, args.variant)
+    import json as _json
+    extra = [tuple(x) for x in _json.load(open(args.fit))] if args.fit else []
+    vb, groups, uvs, face_uv, bones, wts = build_body(args.mh, args.variant, args.face_offsets, extra)
     V = VARIANTS[args.variant]
     body, _ = mesh_from_groups('Body', vb, groups, ['body'], wts)
     body.data.materials.append(material('Skin', V['skin'], rough=0.6, sss=0.05))

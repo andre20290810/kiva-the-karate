@@ -16,6 +16,38 @@
 
 **推定であって測定ではない**: 単眼映像の奥行き・体の回転は推定値。顔の細部・見えない部分は作っていない／推定で補っている。
 
+## v3（2026-10-18）: 参照画像の測定に基づく造形と、動きの検証道具
+
+| 道具 | 内容 |
+| --- | --- |
+| `face_landmarks.py` / `face_metrics.py` | 参照画像の顔 478 点（MediaPipe Face Landmarker）を頭の向きを除いた正準空間で測り、輪郭・目・鼻・口・顎の比率を出す |
+| `face_fit.py` | モデルの顔を同じ検出器で測り、差をガウス RBF で頭部メッシュに反映（左右対称・反復・減衰）。出力は頂点ごとの変位 |
+| `body_metrics.py` | 全身の 2D 比率（肩幅・腰幅・胴・大腿・下腿・頭）。`--fit` の計測ターゲットの重みを決めるのに使う |
+| `build_character.py --face-offsets --fit` | 上の 2 つを反映して組み立てる |
+| `motion_qc.py` | 左右ラベルの取り違え・手足の奥行き反転・胴体の前後取り違えの修正、跳びの検出、2D 再投影誤差と原因の目安 |
+| `motion_compare.py` | 元映像（動画の区間 or 静止画）と 3D を同じ時刻で並べ、誤差を metrics.json に出す |
+| `extract_reference_frames.py` | 参照動画から正面・斜め・側面・全身の高画質フレームを選んで書き出す（動画 ID・時刻を記録） |
+| `mesh_compare.py` | 画像→3D の AI ツールの出力などを、同じ物差しで採否判定（`IMAGE_TO_3D.md`） |
+
+KIVA v3 の組み立て:
+```bat
+python tools\character-3d\face_landmarks.py --model face_landmarker.task --images （正面フレーム）... --pose-json tsuki_lm.json --out face_ref.json
+blender -b -P tools\character-3d\build_character.py -- --mh %MH% --out base --variant kiva --fit kiva_fit.json
+blender -b -P tools\character-3d\face_fit.py -- --blend base\kiva_body.blend --ref face_ref.json --model face_landmarker.task --mh %MH% --out kiva_face_offsets.npy --iters 5
+blender -b -P tools\character-3d\build_character.py -- --mh %MH% --out source\character-3d --variant kiva --face-offsets kiva_face_offsets.npy --fit kiva_fit.json
+```
+
+セーパイの同一時刻比較（28.2〜33.6 秒）:
+```bat
+python tools\character-3d\landmarks_mp.py --model pose_landmarker_heavy.task --video source\seipai.mp4 --out seipai_lm.json
+blender -b -P tools\character-3d\retarget.py -- --blend source\character-3d\kiva_body.blend --lm seipai_lm.json --out source\character-3d\kiva --fps 30 --glb assets\3d\kiva_seipai.glb
+rem motion_qc.json（修正した取り違え・反転、跳び）と rest_joints.json が出る
+npm start
+node tests\capture-3d.mjs --variant kiva-3d --from 28.2 --to 33.6 --fps 30 --size 576x1024 --keep-frames --out source\cmp\3d.mp4
+python tools\character-3d\motion_compare.py --lm seipai_lm.json --rest source\character-3d\kiva\rest_joints.json --video source\seipai.mp4 --from 28.2 --to 33.6 --render-dir source\cmp\3d.mp4.frames --out source\cmp\side_by_side
+ffmpeg -framerate 30 -i source\cmp\side_by_side\%05d.png -c:v libx264 -pix_fmt yuv420p source\cmp\seipai_28-33_compare.mp4
+```
+
 ## PC での手順（Windows、Blender 4.2 以降）
 
 ```bat

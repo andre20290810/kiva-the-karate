@@ -119,8 +119,18 @@ def ground(J, ankle_h):
     return J
 
 
-def process(frames, rest, fps=30.0, smooth=True, foot_lock=True, lock_speed=0.25, lock_height=0.03):
-    """frames: [{'world': 33x4}] → [J]（モデル座標、骨長固定、接地・足固定済み）。欠落フレームは前後で補間。"""
+def process(frames, rest, fps=30.0, smooth=True, foot_lock=True, lock_speed=0.25, lock_height=0.03, qc=None):
+    """frames: [{'world': 33x4}] → [J]（モデル座標、骨長固定、接地・足固定済み）。欠落フレームは前後で補間。
+
+    qc に dict を渡すと、左右の取り違え・前後反転の修正を先に行い、その記録を入れる（motion_qc.py）。
+    """
+    if qc is not None and len(frames) > 1:
+        import copy
+        import motion_qc
+        frames = copy.deepcopy(frames)
+        if all('image' in f for f in frames if not f.get('missing')):
+            qc['lr_swaps_fixed'] = motion_qc.fix_lr_swaps(frames)
+        qc['depth_flips_fixed'] = motion_qc.fix_depth_flips(frames, fps)
     rest = {k: np.asarray(v, dtype=float) for k, v in rest.items()}
     L = lengths(rest)
     T = len(frames)
@@ -183,4 +193,7 @@ def process(frames, rest, fps=30.0, smooth=True, foot_lock=True, lock_speed=0.25
                         J[f'toe.{q}'] = J[f'toe.{q}'] + dt
             else:
                 anchor = {q: J[f'ankle.{q}'].copy() for q in sup}
+    if qc is not None:
+        import motion_qc
+        qc['jumps'] = motion_qc.detect_jumps(out, fps)
     return out, contact

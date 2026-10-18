@@ -102,6 +102,7 @@ def main():
     ap.add_argument('--bbox-frames', default='', help='カメラの枠を決めるのに使うフレーム（カンマ区切り）')
     ap.add_argument('--focus', default='')
     ap.add_argument('--ground', action='store_true', help='最も低い頂点を床に合わせる')
+    ap.add_argument('--exposure', type=float, default=-0.6, help='露出（白い道着で肌が白飛びしないように）')
     a = ap.parse_args(sys.argv[sys.argv.index('--') + 1:])
     bpy.ops.wm.open_mainfile(filepath=a.blend)
     w, h = map(int, a.size.split('x'))
@@ -125,6 +126,7 @@ def main():
         bpy.context.view_layer.update()
         lo, hi = bbox(meshes)
     setup_render(w, h, a.samples)
+    bpy.context.scene.view_settings.exposure = a.exposure
     center = (lo + hi) / 2
     add_lights(center)
     cam_data = bpy.data.cameras.new('Cam')

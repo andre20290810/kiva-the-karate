@@ -207,7 +207,27 @@ def gi_jacket(V, F, reg, bones, *, hem_below_crotch=0.18, sleeve=0.86, ease=0.02
     N2 = vertex_normals(Vo, Fs)
     gap = np.einsum('ij,ij->i', Vo - Vs, N2)
     Vo += N2 * np.maximum(0, ease * 0.8 - gap)[:, None]
-    return tidy_edges(Vo, Fs), Fs, used
+    Vo = tidy_edges(Vo, Fs)
+    return clamp_offset(Vo, Vs, Fs, 0.03 if not coat else 0.07), Fs, used
+
+
+def clamp_offset(Vo, Vs, Fs, max_off, iters=3):
+    """体表から離れすぎた頂点（股・お尻の谷で縁の整形に引っ張られたひれ状の突起）を戻してならす"""
+    out = Vo.copy()
+    for _ in range(iters):
+        d = out - Vs
+        n = np.linalg.norm(d, axis=1)
+        bad = n > max_off
+        if not bad.any():
+            break
+        out[bad] = Vs[bad] + d[bad] * (max_off / n[bad])[:, None]
+        out = smooth(out, Fs, iters=2, lam=0.3, pin=~bad)
+    d = out - Vs
+    n = np.linalg.norm(d, axis=1)
+    bad = n > max_off
+    out[bad] = Vs[bad] + d[bad] * (max_off / n[bad])[:, None]
+    print('clamp_offset: vertices pulled back', int(bad.sum()), 'max offset before %.3f' % float(np.linalg.norm(Vo - Vs, axis=1).max()))
+    return out
 
 
 def gi_pants(V, F, reg, bones, *, ease=0.016, flare=0.03, waist_up=0.03):
@@ -327,7 +347,7 @@ def _ring_distance(F, n, seeds):
     return d
 
 
-def hair_cap(V, F, reg, bones, *, thickness=0.016, fringe=False, long_back=0.0):
+def hair_cap(V, F, reg, bones, *, thickness=0.016, fringe=False, long_back=0.0, part=False):
     """頭皮を覆う髪の土台。顔の前面は残す。"""
     head = np.asarray(bones['head']['head_b'])
     n = len(V)
@@ -359,7 +379,10 @@ def hair_cap(V, F, reg, bones, *, thickness=0.016, fringe=False, long_back=0.0):
     N2 = vertex_normals(Vo, Fs)
     gap = np.einsum('ij,ij->i', Vo - Vs, N2)
     Vo += N2 * np.maximum(0, thickness * 0.8 * taper - gap)[:, None]
-    return tidy_edges(Vo, Fs, iters=20), Fs, used, {'top': top, 'face_y': face_y}
+    Vo = tidy_edges(Vo, Fs, iters=20)
+    if part:
+        Vo = center_part(Vo, Vs, head)
+    return Vo, Fs, used, {'top': top, 'face_y': face_y}
 
 
 def ponytail(bones, *, length=0.15, base_r=0.034, tip_r=0.02, bun=True):
@@ -417,3 +440,155 @@ def coat_skirt(jacket_V, bones, *, below_knee=0.12, flare=0.16, bins=64, rows=16
     V = np.array(verts)
     V = smooth(V, faces, iters=4, lam=0.3, pin=np.array([i < W for i in range(len(V))]))
     return V, faces, info
+
+
+def _head_surface(V, reg, z, ang, center):
+    """頭部の、高さ z・水平方向 ang（-y=正面を 0、+x 側が正）での表面の点"""
+    hv = V[[i for i in range(len(V)) if reg[i] == 'head']]
+    near = hv[np.abs(hv[:, 2] - z) < 0.008]
+    d = near[:, :2] - center[:2]
+    a = np.arctan2(d[:, 0], -d[:, 1])
+    sel = near[np.abs((a - ang + math.pi) % (2 * math.pi) - math.pi) < 0.12]
+    if not len(sel):
+        sel = near
+    r = np.linalg.norm(sel[:, :2] - center[:2], axis=1)
+    p = sel[np.argmax(r)].copy()
+    return p, (p[:2] - center[:2]) / max(1e-6, np.linalg.norm(p[:2] - center[:2]))
+
+
+def ellipsoid(c, r, nu=24, nv=14):
+    verts, faces = [], []
+    for i in range(nv + 1):
+        th = math.pi * i / nv
+        for j in range(nu):
+            ph = 2 * math.pi * j / nu
+            verts.append(c + np.array([r[0] * math.sin(th) * math.cos(ph), r[1] * math.sin(th) * math.sin(ph), r[2] * math.cos(th)]))
+    for i in range(nv):
+        for j in range(nu):
+            j2 = (j + 1) % nu
+            faces.append([i * nu + j, i * nu + j2, (i + 1) * nu + j2, (i + 1) * nu + j])
+    return np.array(verts), faces
+
+
+def hair_bun_and_strands(V, reg, bones, *, bun_r=(0.028, 0.020, 0.024), bun_drop=0.02, strand_r=0.003, strands=False, tail=0.07):
+    """後ろで低くまとめた髷（シニヨン）と、こめかみから垂れる数本の後れ毛。
+
+    観察（補助動画 1VrFkxAX…、0.5/8/38/49/79 s 正面・17/59/91/105/118 s 背面）: 中央分けで後ろへ強く引き、
+    うなじの高さで丸くまとめている。こめかみの両側に細い毛束が垂れる。大きさ・本数は推定。
+    """
+    head = np.asarray(bones['head']['head_b'])
+    hv = V[[i for i in range(len(V)) if reg[i] == 'head']]
+    center = np.array([head[0], hv[:, 1].mean(), head[2]])
+    zb = head[2] - 0.005 - bun_drop
+    back, _ = _head_surface(V, reg, zb + 0.03, math.pi, center)
+    bc = np.array([head[0], back[1] + bun_r[1] * 0.35, zb])
+    bv, bf = ellipsoid(bc, bun_r)
+    parts = [(bv, bf)]
+    if tail:
+        # 結び目から襟元へ垂れる短い毛先（側面・背面フレームで襟に掛かって見える）
+        pts = [bc + np.array([0, 0.004 + 0.012 * t, -bun_r[2] * 0.5 - tail * t]) for t in np.linspace(0, 1, 8)]
+        parts.append(tube(pts, [0.017 * (1 - 0.3 * t) for t in np.linspace(0, 1, 8)], segments=12))
+    top = hv[:, 2].max()
+    for side in ((1, -1) if strands else ()):
+        pts = []
+        for k in range(9):
+            t = k / 8
+            z = head[2] + (top - head[2]) * (0.50 - 0.45 * t)
+            p, n = _head_surface(V, reg, z, side * (1.38 + 0.08 * t), center)
+            off = 0.016 + 0.006 * t
+            pts.append(np.array([p[0] + n[0] * off, p[1] + n[1] * off, z]))
+        radii = [strand_r * (1.0 - 0.5 * (k / 8)) for k in range(9)]
+        parts.append(tube(pts, radii, segments=8))
+    verts, faces = [], []
+    for v, f in parts:
+        b = len(verts)
+        verts.extend(v.tolist())
+        faces.extend([[b + i for i in q] for q in f])
+    return np.array(verts), faces
+
+
+def center_part(Vo, Vs, head, *, width=0.006, depth=0.6):
+    """髪の土台の中央に分け目を付ける（前頭部〜頭頂の中心線で厚みを減らす）"""
+    out = Vo.copy()
+    for i in range(len(Vo)):
+        dx = abs(Vs[i, 0] - head[0])
+        if dx < width * 2 and Vs[i, 1] < head[1] + 0.03 and Vs[i, 2] > head[2] + 0.12:
+            w = max(0.0, 1 - dx / (width * 2)) ** 2 * depth
+            out[i] = Vo[i] + (Vs[i] - Vo[i]) * w
+    return out
+
+
+def envelope(Vo, c, z0, na=72, nz=40, blur=2):
+    """髪の外形を、頭の周りの角度×高さごとの最大半径でならす（耳の凹凸に沿わず、上を覆うように）"""
+    d = Vo[:, :2] - c
+    r = np.linalg.norm(d, axis=1)
+    a = np.arctan2(d[:, 0], -d[:, 1])
+    zmin, zmax = Vo[:, 2].min(), Vo[:, 2].max()
+    ia = ((a + math.pi) / (2 * math.pi) * na).astype(int) % na
+    iz = np.clip(((Vo[:, 2] - zmin) / max(1e-6, zmax - zmin) * nz).astype(int), 0, nz - 1)
+    env = np.zeros((na, nz))
+    np.maximum.at(env, (ia, iz), r)
+    k = np.exp(-np.arange(-blur, blur + 1) ** 2 / (blur ** 2))
+    k /= k.sum()
+    sm = env.copy()
+    for _ in range(2):
+        sm = np.maximum(sm, np.stack([sum(k[j] * np.roll(sm[:, z], j - blur) for j in range(len(k))) for z in range(nz)], 1))
+        sm = np.maximum(sm, np.stack([np.convolve(np.pad(sm[i], blur, mode='edge'), k, mode='valid') for i in range(na)], 0))
+    target = sm[ia, iz] * 0.985
+    grow = np.maximum(r, target) / np.maximum(r, 1e-6)
+    out = Vo.copy()
+    out[:, :2] = c + d * grow[:, None]
+    return out
+
+
+def hair_shell(V, F, reg, bones, *, thickness=0.015, front=0.60, temple=0.22, nape=-0.03, ear_x=1.0):
+    """後ろへ引いてまとめた髪の土台。生え際を「頭の周りの角度 → 高さ」の曲線で決める。
+
+    観察（補助動画の正面・背面フレーム）: 中央分け、こめかみと耳の上半分を髪が覆い、後頭部はうなじまで覆う。
+    生え際の高さ（頭頂までの比）front/temple と耳の位置 ear_x は推定値。
+    返り値: 頂点, 面, 分け目の面の番号（地肌の色にする）
+    """
+    head = np.asarray(bones['head']['head_b'])
+    hv = V[[i for i in range(len(V)) if reg[i] == 'head']]
+    top = hv[:, 2].max()
+    h0 = top - head[2]
+    c = np.array([head[0], hv[:, 1].mean()])
+    keep = np.zeros(len(V), dtype=bool)
+
+    def line(a):
+        a = abs(a)
+        if a < 0.35:
+            return front
+        if a < 1.25:
+            return front + (temple - front) * (a - 0.35) / 0.9
+        if a < 1.95:
+            return temple + (nape / h0 - temple) * (a - 1.25) / 0.7
+        return nape / h0
+
+    for i in range(len(V)):
+        if reg[i] not in ('head', 'neck'):
+            continue
+        x, y, z = V[i]
+        a = math.atan2(x - c[0], -(y - c[1]))
+        if (z - head[2]) / h0 < line(a):
+            continue
+        # 耳（横に張り出した部分）は髪から出す
+        if abs(x - c[0]) > ear_x and (z - head[2]) / h0 < temple + 0.12 and 0.9 < abs(a) < 2.2:
+            continue
+        keep[i] = True
+    Vs, Fs, used = submesh(V, F, keep)
+    N = vertex_normals(Vs, Fs)
+    ring = _ring_distance(Fs, len(Vs), boundary_vertices(Fs, len(Vs)))
+    taper = np.clip(ring / 4.0, 0.15, 1.0) ** 0.8
+    # 頭頂に少しだけ量感（引っ詰め髪なので控えめ）
+    crown = np.clip(((Vs[:, 2] - head[2]) / h0 - 0.7) / 0.3, 0, 1)
+    Vo = Vs + N * ((thickness + 0.004 * crown) * taper)[:, None]
+    Vo = smooth(Vo, Fs, iters=6, lam=0.45, pin=boundary_vertices(Fs, len(Vs)))
+    N2 = vertex_normals(Vo, Fs)
+    gap = np.einsum('ij,ij->i', Vo - Vs, N2)
+    Vo += N2 * np.maximum(0, thickness * 0.8 * taper - gap)[:, None]
+    Vo = envelope(Vo, c, head[2])
+    Vo = tidy_edges(Vo, Fs, iters=20)
+    part = [k for k, f in enumerate(Fs)
+            if abs(Vo[f, 0].mean() - c[0]) < 0.0022 and Vo[f, 1].mean() < c[1] + 0.02 and (Vo[f, 2].mean() - head[2]) / h0 > front]
+    return Vo, Fs, part

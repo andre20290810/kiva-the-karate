@@ -69,6 +69,8 @@ def main():
     rest = rest_np(arm)
     data = json.load(open(a.lm))
     os.makedirs(a.out, exist_ok=True)
+    # motion_compare.py 用（Blender なしで同じ骨長の 3D 関節を作れるように）
+    json.dump({k: v.tolist() for k, v in rest.items()}, open(os.path.join(a.out, 'rest_joints.json'), 'w'))
     if a.stills:
         for f in data['frames']:
             if f.get('missing'):
@@ -79,7 +81,11 @@ def main():
             bpy.ops.wm.save_as_mainfile(filepath=os.path.join(a.out, f'fit_{name}.blend'), copy=True)
             print('fitted', name)
         return
-    Js, contact = motion_filter.process(data['frames'], rest, fps=a.fps)
+    qc = {}
+    Js, contact = motion_filter.process(data['frames'], rest, fps=a.fps, qc=qc)
+    json.dump(qc, open(os.path.join(a.out, 'motion_qc.json'), 'w'), indent=1)
+    print('qc: lr swaps fixed', len(qc.get('lr_swaps_fixed', [])), 'depth flips fixed', len(qc.get('depth_flips_fixed', [])),
+          'jump frames', len({j[0] for j in qc.get('jumps', [])}))
     times = [f.get('time') for f in data['frames']]
     bake(arm, Js, a.fps, times=times if all(t is not None for t in times) else None)
     json.dump({s: c.tolist() for s, c in contact.items()}, open(os.path.join(a.out, 'foot_contact.json'), 'w'))
