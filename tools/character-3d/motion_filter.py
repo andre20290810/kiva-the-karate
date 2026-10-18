@@ -111,6 +111,61 @@ def lengths(rest):
     return L
 
 
+def hip_height_from_2d(frames, out, L, fps, qc=None, max_drop=0.30):
+    """腰の高さを 2D 画像の縦の距離から推定し、3D の腰が高すぎるときは膝を曲げて下げる（足首の位置は保つ）。
+
+    単眼 3D（MediaPipe world）は、背面から見た構えで膝の曲がり（奥行き方向）を浅く見積もることがある
+    （28.2〜33.6 秒の比較で確認）。カメラは腰の高さ付近で水平に近いので、画像の縦の距離は奥行きの影響が小さい。
+    倍率は同じフレームの胴体の縦の長さ（3D の胴の長さ / 画像の胴の縦の長さ）から求め、時間方向に平滑化する。
+    """
+    T = len(out)
+    est = np.full(T, np.nan)
+    for t, f in enumerate(frames):
+        if f.get('missing'):
+            continue
+        im = np.asarray(f['image'])
+        h = f.get('size', [1, 1])[1]
+        torso_px = abs((im[11, 1] + im[12, 1]) / 2 - (im[23, 1] + im[24, 1]) / 2) * h
+        if torso_px < 1e-3:
+            continue
+        k = L['torso'] / torso_px
+        legs = [((im[27, 1] - im[23, 1]) * h, im[27, 3]), ((im[28, 1] - im[24, 1]) * h, im[28, 3])]
+        # 見えている方の脚（可視度の高い方）を主に使う
+        w = np.array([max(0.05, v) for _, v in legs])
+        est[t] = float(np.dot([d for d, _ in legs], w) / w.sum()) * k
+    ok = ~np.isnan(est)
+    if ok.sum() < 3:
+        return
+    idx = np.arange(T)
+    est = np.interp(idx, idx[ok], est[ok])
+    est = one_euro(est[:, None].repeat(3, 1), np.ones(T), fps, min_cutoff=0.8, beta=0.2)[:, 0]
+    # 3D の胴（首の付け根〜股関節）と画像の胴（肩〜MediaPipe の腰点）は測る点が違うので、
+    # 冒頭の直立（最初の 1 秒）で「3D の腰の高さ / 画像からの推定」をそろえる
+    cur0 = np.array([(J['hip.L'][2] + J['hip.R'][2]) / 2 - (J['ankle.L'][2] + J['ankle.R'][2]) / 2 for J in out])
+    n0 = max(3, min(T, int(round(fps))))
+    calib = float(np.median(cur0[:n0] / np.maximum(est[:n0], 1e-6)))
+    est = est * calib
+    if qc is not None:
+        qc['hip_height_2d_calibration'] = round(calib, 3)
+    drops = []
+    for t, J in enumerate(out):
+        cur = (J['hip.L'][2] + J['hip.R'][2]) / 2 - (J['ankle.L'][2] + J['ankle.R'][2]) / 2
+        d = float(np.clip(cur - est[t], 0, max_drop))
+        drops.append(d)
+        if d < 0.015:
+            continue
+        ank = {s: J[f'ankle.{s}'].copy() for s in 'LR'}
+        toe = {s: J[f'toe.{s}'].copy() for s in 'LR'}
+        for k2 in J:
+            J[k2] = J[k2] - np.array([0, 0, d])
+        for s in 'LR':
+            k_, a_ = two_bone_ik(J[f'hip.{s}'], ank[s], J[f'knee.{s}'] + np.array([0, -0.05, 0]), L[f'thigh.{s}'], L[f'shin.{s}'])
+            J[f'knee.{s}'], J[f'ankle.{s}'], J[f'toe.{s}'] = k_, a_, toe[s] + (a_ - ank[s])
+    if qc is not None:
+        qc['hip_drop_from_2d_m'] = {'mean': round(float(np.mean(drops)), 3), 'max': round(float(np.max(drops)), 3),
+                                    'frames_lowered': int(np.sum(np.array(drops) >= 0.015))}
+
+
 def ground(J, ankle_h):
     """低い方の足首が床（静止時の足首の高さ）に来るように全体を上下させる"""
     dz = ankle_h - min(J['ankle.L'][2], J['ankle.R'][2])
@@ -119,7 +174,7 @@ def ground(J, ankle_h):
     return J
 
 
-def process(frames, rest, fps=30.0, smooth=True, foot_lock=True, lock_speed=0.25, lock_height=0.03, qc=None):
+def process(frames, rest, fps=30.0, smooth=True, foot_lock=True, lock_speed=0.25, lock_height=0.03, qc=None, hip_from_2d=True):
     """frames: [{'world': 33x4}] → [J]（モデル座標、骨長固定、接地・足固定済み）。欠落フレームは前後で補間。
 
     qc に dict を渡すと、左右の取り違え・前後反転の修正を先に行い、その記録を入れる（motion_qc.py）。
@@ -162,6 +217,8 @@ def process(frames, rest, fps=30.0, smooth=True, foot_lock=True, lock_speed=0.25
         for j in range(len(names)):
             P[:, j] = one_euro(P[:, j], V[:, j], fps)
     out = [ground(rebuild({nm: P[t, j] for j, nm in enumerate(names)}, rest, L), rest['ankle.L'][2]) for t in range(T)]
+    if hip_from_2d and all('image' in f for f in frames if not f.get('missing')):
+        hip_height_from_2d(frames, out, L, fps, qc)
     # 腰の水平移動: 推定 world は腰中心のため、支持脚の足首を固定して腰を動かす
     contact = {s: np.zeros(T, dtype=bool) for s in 'LR'}
     if foot_lock and T > 2:
