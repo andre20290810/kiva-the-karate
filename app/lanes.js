@@ -40,6 +40,26 @@ export class LaneRenderer {
    * @param notes Judge.notes（result/holding を持つ）
    * @param o   {lead, judge, held:{Y:bool...}, selected:Set<id>, edit:bool}
    */
+  /** レーンの背景・枠（人物より奥）。行の区切りと、押している行の明るさもここ */
+  drawBack(ctx, L, o = {}) {
+    const { rowH } = L;
+    ctx.save();
+    rr(ctx, L.x, L.y, L.w, L.h, 8);
+    ctx.fillStyle = `rgba(12,8,5,${L.panelAlpha ?? 0.6})`;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,230,200,0.18)'; ctx.lineWidth = 1; ctx.stroke();
+    LANE_ORDER.forEach((b, k) => {
+      const y = L.y + k * rowH, st = LANE_STYLE[b];
+      if (k) { ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(L.x + 4, y, L.w - 8, 1); }
+      if (o.held?.[b]) { ctx.fillStyle = `rgba(${st.rgb},0.14)`; ctx.fillRect(L.x + 2, y + 1, L.w - 4, rowH - 2); }
+    });
+    ctx.restore();
+  }
+
+  /**
+   * レーンの手前側（人物より手前）: ボタンのラベル・判定線・ノーツ・判定の文字。
+   * 奥側（drawBack）と分けて、間に人物を描く（人物の頭がレーンの面に隠れない）。
+   */
   draw(ctx, L, t, notes, o) {
     const { rowH } = L;
     const labelW = Math.min(118, Math.max(58, L.w * 0.16));
@@ -50,16 +70,9 @@ export class LaneRenderer {
     ctx.save();
     ctx.font = `600 ${Math.round(rowH * 0.42)}px system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif`;
     ctx.textBaseline = 'middle';
-    // レーンの面（半透明。人物が見えるように）
-    rr(ctx, L.x, L.y, L.w, L.h, 8);
-    ctx.fillStyle = `rgba(12,8,5,${L.panelAlpha ?? 0.6})`;
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,230,200,0.18)'; ctx.lineWidth = 1; ctx.stroke();
     LANE_ORDER.forEach((b, k) => {
       const y = L.y + k * rowH, st = LANE_STYLE[b];
       const held = o.held?.[b];
-      if (k) { ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(L.x + 4, y, L.w - 8, 1); }
-      if (held) { ctx.fillStyle = `rgba(${st.rgb},0.14)`; ctx.fillRect(L.x + 2, y + 1, L.w - 4, rowH - 2); }
       // ラベル: 丸いボタン文字 ＋ 意味（色だけに頼らない）
       const r = rowH * 0.36, cx = L.x + 8 + r, cy = y + rowH / 2;
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -73,7 +86,9 @@ export class LaneRenderer {
       if (labelW > 70) ctx.fillText(BUTTON_INFO[b].meaning, cx + r + 6, cy + 1);
     });
     // 判定位置の線
-    ctx.fillStyle = 'rgba(255,240,210,0.9)';
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(jx - 2.5, L.y + 3, 5, L.h - 6);
+    ctx.fillStyle = 'rgba(255,240,210,0.95)';
     ctx.fillRect(jx - 1.5, L.y + 3, 3, L.h - 6);
     ctx.save();
     ctx.beginPath(); ctx.rect(jx - rowH * 0.5, L.y, right - jx + rowH * 0.5 + 6, L.h); ctx.clip();

@@ -66,6 +66,18 @@ for (const [name, vp] of Object.entries(VIEWS)) {
     check(g.x <= 0.5 && g.y <= 0.5 && g.x + g.w >= d.cssW - 0.5 && g.y + g.h >= d.cssH - 0.5, `${name}: 横向きの背景が表示領域を余白なく埋める ${JSON.stringify(g)}`);
     check(Math.abs(d.anchor[0] - d.cssW / 2) < 0.5, `${name}: 人物は左右の中央`);
     check(d.vis >= 0.7 && d.vis <= 0.85, `${name}: 人物の見える高さ（412 コマの中央値）が表示領域の 70〜85%（${(d.vis * 100).toFixed(1)}%）`);
+    // 表示順: 背景 → レーンの背景・枠 → 人物 → ノーツ・判定線（人物の頭がレーンの面に隠れない）
+    const order = await p.evaluate(() => {
+      const a = window.__app, seq = [], ctx = a.ctx;
+      const back = a.lanes.drawBack, front = a.lanes.draw, di = ctx.drawImage;
+      a.lanes.drawBack = function (...x) { seq.push('laneBack'); return back.apply(this, x); };
+      a.lanes.draw = function (...x) { seq.push('laneFront'); return front.apply(this, x); };
+      ctx.drawImage = function (img, ...x) { seq.push(img === a.bgImages[0] || img === a.bgImages[1] ? 'bg' : 'image'); return di.call(this, img, ...x); };
+      a.draw(a.t);
+      a.lanes.drawBack = back; a.lanes.draw = front; ctx.drawImage = di;
+      return seq.filter((v, i) => v !== seq[i - 1]).join(' → ');
+    });
+    check(/^bg → laneBack → image( → image)* → laneFront/.test(order), `${name}: 表示順 ${order}`);
   }
   check(d.lanes.y >= d.bg.y && d.lanes.y + d.lanes.h <= d.bg.y + d.bg.h * 0.35, `${name}: 4 レーンが背景の上部`);
   await p.screenshot({ path: `${out}/layout_${name}.png` });

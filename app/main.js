@@ -494,6 +494,10 @@ export class App {
     ctx.fillRect(0, 0, this.cssW, this.cssH);
     const img = this.bgImages[this.orient === 'landscape' ? 0 : 1];
     ctx.drawImage(img, G.bgDraw.x, G.bgDraw.y, G.bgDraw.w, G.bgDraw.h);
+    // 表示順（奥 → 手前）: 背景 → レーンの背景・枠 → 人物（とエフェクト） → ノーツ・判定線
+    const held = {};
+    for (const b of ['Y', 'X', 'A', 'B']) held[b] = this.held[b] || t - this.flash[b] < 0.08;
+    this.lanes.drawBack(ctx, L, { held });
     // 人物
     const fi = this.store.indexAt(Math.max(0, t));
     this.store.prefetch(fi);
@@ -510,9 +514,7 @@ export class App {
     const holding = this.judge?.notes.find((n) => n.holding);
     if (holding) this.fx.renderHold(ctx, S, this.judge.holdProgress(holding, t));
     this.fx.renderOver(ctx, S);
-    // レーン・連続コマンド・HUD
-    const held = {};
-    for (const b of ['Y', 'X', 'A', 'B']) held[b] = this.held[b] || t - this.flash[b] < 0.08;
+    // レーンの手前側（ラベル・判定線・ノーツ・判定）と HUD
     const lanesInfo = this.lanes.draw(ctx, L, t, this.judge ? this.judge.notes : [], {
       lead: this.chart.settings.laneLeadSeconds, held, selected: this.editor?.selected,
     });
