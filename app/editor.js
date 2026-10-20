@@ -5,7 +5,6 @@
 import { BUTTONS, BUTTON_INFO, ACTION_LABEL, EFFECT_PRESETS, exportChart, parseChartText, makeNote, normalizeChart, validateChart } from './chart.js';
 import { LANE_ORDER, LANE_STYLE } from './lanes.js';
 
-const AUTOSAVE_KEY = 'kiva2d.chart.autosave.v1';
 const FRAME = 0.2;
 const r2 = (v) => Math.round(v * 100) / 100;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -33,7 +32,7 @@ export class Editor {
     const before = structuredClone(this.chart);
     const next = structuredClone(this.chart);
     fn(next);
-    const v = validateChart(next, { frameCount: this.app.manifest.frameCount });
+    const v = validateChart(next, { frameCount: this.app.manifest.frameCount, gameVersion: this.app.version });
     if (v.errors.length) {
       this.message(`変更できません: ${v.errors[0]}`, 'error');
       return false;
@@ -75,10 +74,39 @@ export class Editor {
 
   autosave() {
     clearTimeout(this._saveT);
-    this._saveT = setTimeout(() => {
-      const ok = (() => { try { localStorage.setItem(AUTOSAVE_KEY, exportChart(this.chart)); return true; } catch { return false; } })();
-      this.root.querySelector('#edSaved').textContent = ok ? `自動保存 ${new Date().toLocaleTimeString()}` : '自動保存できません（ブラウザの保存領域が使えません。JSON を書き出してください）';
-    }, 300);
+    this._savePending = true;
+    this._saveT = setTimeout(() => this.writeAutosave(), 300);
+  }
+
+  writeAutosave() {
+    clearTimeout(this._saveT);
+    this._savePending = false;
+    const ok = (() => { try { localStorage.setItem(this.app.keys.autosave, exportChart(this.chart)); return true; } catch { return false; } })();
+    this.saveFailed = !ok;
+    this.root.querySelector('#edSaved').textContent = ok ? `自動保存 ${new Date().toLocaleTimeString()}` : '自動保存できません（ブラウザの保存領域が使えません。JSON を書き出してください）';
+    return ok;
+  }
+
+  /** 保存されていない編集（補正欄の未適用の入力・自動保存の待ち・保存の失敗） */
+  unsavedSummary() {
+    const items = [];
+    if (this.frameDraft) items.push(`コマ ${this.frameDraft.frame} の未適用の補正`);
+    if (this._savePending) items.push('自動保存の前の編集');
+    if (this.saveFailed) items.push('自動保存に失敗した編集（JSON の書き出しを推奨）');
+    return items;
+  }
+
+  /** 未保存の編集を保存する（未適用の補正は適用してから保存）。保存できたら true */
+  saveAll() {
+    if (this.frameDraft) this.root.querySelector('[data-f=apply]')?.click();
+    return this.writeAutosave();
+  }
+
+  /** 未保存の編集を捨てる（未適用の補正と、自動保存の前の編集）。保存済みの内容は変えない */
+  discardUnsaved() {
+    clearTimeout(this._saveT);
+    this._savePending = false;
+    this.frameDraft = null;
   }
 
   message(msg, kind = 'info') {
@@ -762,7 +790,7 @@ export class Editor {
     const a = document.createElement('a');
     const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 16);
     a.href = URL.createObjectURL(blob);
-    a.download = `seipai-chart-${stamp}.json`;
+    a.download = `seipai-${this.app.ver.label}-chart-${stamp}.json`;
     document.body.append(a);
     a.click();
     a.remove();
@@ -779,7 +807,7 @@ export class Editor {
   }
 
   importText(text, name = 'JSON') {
-    const r = parseChartText(text, { frameCount: this.app.manifest.frameCount });
+    const r = parseChartText(text, { frameCount: this.app.manifest.frameCount, gameVersion: this.app.version });
     if (!r.ok) {
       this.message(`読み込めませんでした（今の編集内容はそのままです）: ${r.errors.slice(0, 3).join(' ／ ')}`, 'error');
       return false;

@@ -5,6 +5,9 @@ import { existsSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
 const base = process.env.BASE || 'http://127.0.0.1:8177/';
+// GAME_VERSION=v2 で ver2 を確認（URL に ?v= を付ける）
+const GV = process.env.GAME_VERSION || '';
+const vq = (q) => (GV ? `${q}${q.includes('?') ? '&' : '?'}v=${GV}` : q);
 const out = process.argv[2] || 'test-results/game2d';
 mkdirSync(out, { recursive: true });
 const exe = process.env.CHROME_PATH || (existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
@@ -20,7 +23,7 @@ async function open(viewport, q = '?fresh=1') {
   p.on('pageerror', (e) => errors.push(e.message));
   p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   p.on('request', (r) => requests.push(r.url()));
-  await p.goto(base + q);
+  await p.goto(base + vq(q));
   await p.waitForFunction(() => ['ready', 'error'].includes(document.documentElement.dataset.state), null, { timeout: 90000 });
   return { ctx, p, errors, requests };
 }
@@ -93,7 +96,7 @@ for (const [name, vp] of Object.entries(VIEWS)) {
   const p = await ctx.newPage();
   const req = [];
   p.on('request', (r) => req.push(r.url()));
-  await p.goto(base + '?fresh=1&mode=kiva-3d&view=3d');
+  await p.goto(base + vq('?fresh=1&mode=kiva-3d&view=3d'));
   await p.waitForFunction(() => document.documentElement.dataset.state === 'ready', null, { timeout: 90000 });
   const r = await p.evaluate(() => ({ sel: !!document.querySelector('#displayMode, [data-mode=three]'), q: localStorage.getItem('kiva.quality') }));
   check(!r.sel && r.q === null, '旧設定（kiva.quality など）を消し、3D の切替 UI が無い');
@@ -282,7 +285,7 @@ for (const [name, vp] of Object.entries(VIEWS)) {
   const exported = readFileSync(file, 'utf8');
   // 自動保存を消して開き直す（初期譜面に戻る）→ ファイルを読み込む
   await p.evaluate(() => localStorage.clear());
-  await p.goto(base + '?fresh=1');
+  await p.goto(base + vq('?fresh=1'));
   await p.waitForFunction(() => document.documentElement.dataset.state === 'ready', null, { timeout: 90000 });
   const fresh = await p.evaluate(() => window.__app.chart.notes.length);
   await p.click('#btnEdit');
@@ -302,7 +305,7 @@ for (const [name, vp] of Object.entries(VIEWS)) {
   check(!bad.ok && bad.same && /読み込めません/.test(bad.msg), `不正な JSON はメッセージを出して拒否（${bad.msg.slice(0, 40)}…）`);
   // 自動保存 → 開き直すと復元
   await p.waitForTimeout(500);
-  await p.goto(base);
+  await p.goto(base + vq(''));
   await p.waitForFunction(() => document.documentElement.dataset.state === 'ready', null, { timeout: 90000 });
   const restored = await p.evaluate((a) => window.__app.chart.notes.some((n) => n.id === a), added);
   check(restored, '自動保存した編集内容を開き直しても復元');

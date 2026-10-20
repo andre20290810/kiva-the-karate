@@ -20,6 +20,17 @@
       <p id="loadMsg">読み込み中…</p>
       <pre id="loadError" hidden></pre>
     </div>
+    <div id="verDialog" hidden role="dialog" aria-labelledby="verDialogTitle">
+      <div class="card">
+        <h2 id="verDialogTitle">保存していない編集があります</h2>
+        <p id="verDialogBody"></p>
+        <div class="ed-row">
+          <button type="button" id="verSave">保存して切り替え</button>
+          <button type="button" id="verDiscard">破棄して切り替え</button>
+          <button type="button" id="verCancel">キャンセル</button>
+        </div>
+      </div>
+    </div>
     <div id="result" hidden role="dialog" aria-labelledby="resultTitle">
       <div class="card">
         <h2 id="resultTitle">結果</h2>
@@ -44,8 +55,10 @@
         <button type="button" id="btnAuto" class="tbtn" aria-pressed="false" title="譜面どおりに自動入力（記録は手動プレイと区別）">AUTO</button>
         <button type="button" id="btnEdit" class="tbtn" aria-pressed="false">編集</button>
         <details id="more">
-          <summary class="tbtn">設定</summary>
+          <summary class="tbtn" title="設定（バージョンの切り替えもここ）"><b id="verBadge" class="ver-badge">ver1</b><span aria-hidden="true">⚙</span><span class="sum-label">設定</span></summary>
           <div class="settings">
+            <label>バージョン <select id="gameVersion" aria-describedby="verNote"><option value="v1">ver1（2026-10-10 撮影）</option><option value="v2">ver2（2026-10-20 撮影）</option></select></label>
+            <p class="hint" id="verNote">素材・譜面・音声・自動保存・記録はバージョンごとに別です。切り替えると、そのバージョンの先頭（開始前）から始まります。</p>
             <label>速度 <select id="speed"><option value="1">1×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label>
             <label>音量 <input id="volume" type="range" min="0" max="1" step="0.01"></label>
             <label>効果音 <input id="sfxVolume" type="range" min="0" max="1" step="0.01"></label>

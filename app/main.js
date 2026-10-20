@@ -12,9 +12,9 @@ import { Sfx } from './sfx.js';
 import { BACKGROUNDS, orientationOf, containRect, coverRect, laneRect, standingHeight, landscapeSubject, subjectTransform } from './layout.js';
 import { normalizeChart, validateChart, BUTTON_INFO } from './chart.js';
 import { Editor } from './editor.js';
+import { GAME_VERSIONS, VERSION_KEY, resolveVersion } from './versions.js';
 
 const $ = (s) => document.querySelector(s);
-const AUTOSAVE_KEY = 'kiva2d.chart.autosave.v1';
 const PREFS_KEY = 'kiva2d.prefs.v1';
 // 旧 3D 版の保存設定（表示モード・画質など）。新しい 2D 版では使わないので消す
 const LEGACY_KEYS = ['kiva.quality', 'kiva.displayMode', 'kiva.character', 'kiva.padProfiles.v1', 'kr.inputLatency', 'kr.volume'];
@@ -44,6 +44,12 @@ function loadImage(src) {
 export class App {
   constructor() {
     this.params = new URLSearchParams(location.search);
+    // バージョン（素材・譜面・音声の組）。保存先もバージョンごと
+    this.version = resolveVersion(this.params, store.get(VERSION_KEY));
+    this.ver = GAME_VERSIONS[this.version];
+    this.keys = this.ver.keys;
+    store.set(VERSION_KEY, this.version);
+    document.documentElement.dataset.version = this.version;
     this.state = 'loading';
     this.autoMode = this.params.get('auto') === '1';
     this.editMode = false;
@@ -80,10 +86,10 @@ export class App {
   // ---------- 読み込み ----------
   async load() {
     try {
-      this.progress(0, '譜面を読み込み中…');
-      const chartUrl = new URL(this.params.get('chart') || 'charts/seipai.json', location.href).href;
+      this.progress(0, `${this.ver.label} の譜面を読み込み中…`);
+      const chartUrl = new URL(this.params.get('chart') || this.ver.chart, location.href).href;
       const initial = await fetchJson(chartUrl, '初期譜面');
-      const v0 = validateChart(initial);
+      const v0 = validateChart(initial, { gameVersion: this.version });
       if (v0.errors.length) throw new Error('初期譜面にエラーがあります:\n' + v0.errors.join('\n'));
       this.initialChart = normalizeChart(initial);
       const manifestUrl = new URL(this.initialChart.source.frameManifest, location.href).href;
@@ -95,11 +101,11 @@ export class App {
       this.duration = this.manifest.durationSeconds || this.initialChart.source.durationSeconds;
       // 自動保存された編集内容があれば復元（壊れていれば初期譜面）
       let chart = this.initialChart, restored = false;
-      const saved = store.get(AUTOSAVE_KEY);
+      const saved = store.get(this.keys.autosave);
       if (saved && !this.params.has('fresh')) {
         try {
           const obj = JSON.parse(saved);
-          const v = validateChart(obj, { frameCount: this.manifest.frameCount });
+          const v = validateChart(obj, { frameCount: this.manifest.frameCount, gameVersion: this.version });
           if (!v.errors.length) { chart = normalizeChart(obj); restored = true; }
         } catch { /* 初期譜面を使う */ }
       }
@@ -122,7 +128,9 @@ export class App {
       this.clock.stop(-this.chart.settings.leadInSeconds);
       this.newJudge(this.clock.position());
       const stand = this.manifest.standIn ? ' ／ 人物画像はローカル試験用の代用素材です（提供 ZIP が未配置）' : '';
-      this.status(`準備完了: ノーツ ${this.chart.notes.length}、画像 ${this.store.count} 枚（0〜${this.duration.toFixed(1)} 秒）。${this.audioNote}${restored ? ' ／ 自動保存した編集内容を復元しました' : ''}${stand}`, 'ok');
+      let switched = null;
+      try { switched = sessionStorage.getItem('kiva2d.switchedTo'); sessionStorage.removeItem('kiva2d.switchedTo'); } catch { /* なし */ }
+      this.status(`${switched === this.version ? `${this.ver.label} に切り替えました（▶ で先頭から開始）。` : `${this.ver.label}: `}準備完了: ノーツ ${this.chart.notes.length}、画像 ${this.store.count} 枚（0〜${this.duration.toFixed(1)} 秒）。${this.audioNote}${restored ? ' ／ 自動保存した編集内容を復元しました' : ''}${stand}`, 'ok');
       this.updateUi();
     } catch (e) {
       this.state = 'error';
@@ -347,11 +355,11 @@ export class App {
     this.sfx?.breathStop();
     const s = this.judge.summary();
     const auto = this.autoMode || this.usedAuto;
-    const rec = { auto, ...s, at: new Date().toISOString() };
+    const rec = { auto, ...s, gameVersion: this.version, at: new Date().toISOString() };
     window.__lastResult = { ...rec, log: this.log };
     if (!auto) {
-      const best = JSON.parse(store.get('kiva2d.best.manual') || 'null');
-      if (!best || s.score > best.score) store.set('kiva2d.best.manual', JSON.stringify(rec));
+      const best = JSON.parse(store.get(this.keys.best) || 'null');
+      if (!best || s.score > best.score) store.set(this.keys.best, JSON.stringify(rec));
     }
     $('#resultTitle').textContent = auto ? 'AUTO 再生の記録（手動プレイの成績には含めません）' : '結果';
     $('#resultBody').innerHTML = `<dl>
@@ -586,11 +594,48 @@ export class App {
     this.editor?.syncState();
   }
 
+  /**
+   * バージョンを切り替える。再生中なら止め（音声・判定・エフェクト）、未保存の編集があれば保存か破棄を選ばせてから、
+   * そのバージョンでページを読み込み直す（画像・音声・譜面が前のバージョンと混ざらない）。先頭（開始前）から始まる。
+   */
+  requestVersion(id) {
+    if (!GAME_VERSIONS[id] || id === this.version) return;
+    if (this.state === 'playing') this.pause();
+    this.sfx?.breathStop();
+    const items = this.editor?.unsavedSummary() || [];
+    if (!items.length) { this.switchVersion(id); return; }
+    const dlg = $('#verDialog');
+    $('#verDialogBody').textContent = `${GAME_VERSIONS[id].label} に切り替える前に: ${items.join('、')}。保存しますか？（${this.ver.label} の自動保存に入ります）`;
+    dlg.hidden = false;
+    const close = () => { dlg.hidden = true; $('#verSave').onclick = $('#verDiscard').onclick = $('#verCancel').onclick = null; };
+    $('#verSave').onclick = () => {
+      if (!this.editor.saveAll()) { close(); this.status('保存できませんでした。JSON を書き出してから切り替えてください', 'error'); $('#gameVersion').value = this.version; return; }
+      close(); this.switchVersion(id);
+    };
+    $('#verDiscard').onclick = () => { this.editor.discardUnsaved(); close(); this.switchVersion(id); };
+    $('#verCancel').onclick = () => { close(); $('#gameVersion').value = this.version; };
+  }
+
+  switchVersion(id) {
+    store.set(VERSION_KEY, id);
+    try { sessionStorage.setItem('kiva2d.switchedTo', id); } catch { /* 表示だけ */ }
+    const u = new URL(location.href);
+    u.searchParams.set('v', id);
+    u.searchParams.delete('chart'); // 別の譜面ファイルの指定は引き継がない
+    this.state = 'loading';
+    location.replace(u.href);
+  }
+
   savePrefs() { store.set(PREFS_KEY, JSON.stringify(this.prefs)); }
 
   bindUi() {
     $('#btnPlay').addEventListener('click', () => this.togglePlay());
     $('#btnAudio').addEventListener('click', () => this.retryAudio());
+    // バージョンの切り替え
+    $('#verBadge').textContent = this.ver.label;
+    const vs = $('#gameVersion');
+    vs.value = this.version;
+    vs.addEventListener('change', () => this.requestVersion(vs.value));
     // iOS の割り込み（着信・画面ロックなど）で音声が止まったら、音なしで進めずに一時停止する
     this.clock.onStateChange = (st) => {
       if (st !== 'running' && this.state === 'playing' && this.clock._audioMode) {

@@ -16,6 +16,36 @@ npm run test:browser   :: 実素材でのブラウザ確認（npm start を別�
 ```
 `?fresh=1` を付けると、自動保存した編集内容を使わずに初期譜面で起動します。
 
+## バージョン（ver1／ver2）
+
+ゲームのコードは共通で、バージョンごとに素材・譜面・音声の組を読み込みます（`app/versions.js`）。
+
+| | ver1 | ver2 |
+|---|---|---|
+| 撮影 | セーパイ_20261010.mp4（576×1024） | セーパイ20261020（Drive ID 1HG7NvuwNuOfX2xmZHOPLTPHVywd7N4p5、720×1280） |
+| 人物画像 | `assets/seipai/`（412 枚、切り抜きを 9 コマ修正） | `assets/seipai_v2/`（提供の完成素材 412 枚をそのまま使用。Drive フォルダ 1TKxb414ovXxV14arbTjB244k1jLKXmq0） |
+| 譜面 | `charts/seipai.json`（gameVersion なし = ver1） | `charts/seipai_v2.json`（gameVersion: "v2"） |
+| 音声 | `assets/seipai/audio.m4a`（AAC）・`audio_opus.m4a` | `assets/seipai_v2/audio.m4a`（AAC）・`audio_opus.m4a` |
+| 自動保存 | `kiva2d.chart.autosave.v1`（従来のキー） | `kiva2d.v2.chart.autosave` |
+| 手動プレイの記録 | `kiva2d.best.manual`（従来のキー） | `kiva2d.v2.best.manual` |
+
+- 切り替え: 設定の「バージョン」（設定ボタンに今のバージョンを表示）。URL の `?v=v2` でも指定でき、最後に選んだものを覚えます。
+  再生中なら止め、未保存の編集（補正欄の未適用の入力など）があれば「保存して切り替え／破棄して切り替え／キャンセル」を選びます。
+  切り替えはページを読み込み直すので、前のバージョンの画像・音声・判定・エフェクトは残りません。先頭（開始前）から始まり、▶ で開始します
+  （音声はタップで始める必要があるため自動では始めません）。
+- JSON: 書き出しに `gameVersion` を入れます。別バージョンの JSON は読み込まず、メッセージを出します。`gameVersion` のない従来の JSON は ver1 です。
+- ver2 の素材の作り方（Git 管理外）:
+  ```
+  python tools/frames-2d/prepare_frames.py --src <ver2 の PNG フォルダ> --out assets/seipai_v2 --model pose_landmarker_heavy.task --video source/seipai_v2.mp4
+  ffmpeg -i source/seipai_v2.mp4 -map 0:a:0 -vn -af "aresample=async=1:first_pts=0" -c:a aac -b:a 192k assets/seipai_v2/audio.m4a
+  ffmpeg -i source/seipai_v2.mp4 -map 0:a:0 -vn -af "aresample=async=1:first_pts=0" -c:a libopus -b:a 128k -f mp4 assets/seipai_v2/audio_opus.m4a
+  python tools/chart/build_initial_chart.py --version v2 --manifest assets/seipai_v2/manifest.json --out charts/seipai_v2.json
+  ```
+  ver2 の動画の音声は映像より 0.023 秒遅れて始まるため、先頭に無音を足して「音声の 0 秒 = 映像の 0 秒」にしています。
+  ver2 の PNG は 412 枚すべてが元動画の該当フレーム（timestamps.csv の source_frame_index）と画素一致（平均差 0.00）。
+- ver1 の保存: タグ `ver1`（コミット f723a71）。Git 管理外の素材を含めた一式は引き継ぎの `ver1_snapshot_f723a71/`
+  （ver1_dist = そのまま公開できる dist、ver1_assets = 人物画像・配置・背景・音声・譜面、bundle）。
+
 ## 素材の配置（公開リポジトリには含めない。`assets/` `source/` は Git 管理外）
 
 | 用途 | 置き場所 | 作り方 |

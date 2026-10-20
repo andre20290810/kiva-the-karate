@@ -4,8 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { containRect, laneRect, standingHeight, subjectTransform, orientationOf, BACKGROUNDS } from '../app/layout.js';
 import { DEFAULT_DISPLAY } from '../app/chart.js';
 
-const manifestPath = new URL('../assets/seipai/manifest.json', import.meta.url);
-const hasManifest = existsSync(manifestPath);
+const MANIFESTS = { ver1: '../assets/seipai/manifest.json', ver2: '../assets/seipai_v2/manifest.json' };
 const VIEWS = { '390x844': [390, 844 - 190], '844x390': [844, 390 - 76], '1366x768': [1366, 768 - 104] };
 
 test('向き: 表示領域の縦横比で決める', () => {
@@ -19,7 +18,9 @@ test('背景は縦横比を保って全体を収める', () => {
   assert.ok(r.w <= 390 + 1e-9 && r.h <= 654 + 1e-9);
 });
 
-test('全コマ（manifest の枚数）: 胴体の中心が背景の中央、レーンと重ならず背景に収まる、倍率が脈打たない', { skip: !hasManifest && 'assets/seipai/manifest.json がありません' }, () => {
+for (const [ver, rel] of Object.entries(MANIFESTS)) {
+const manifestPath = new URL(rel, import.meta.url);
+test(`${ver} 全コマ（manifest の枚数）: 胴体の中心が背景の中央、レーンと重ならず背景に収まる、倍率が脈打たない`, { skip: !existsSync(manifestPath) && `${rel} がありません` }, () => {
   const m = JSON.parse(readFileSync(manifestPath));
   assert.equal(m.frames.length, m.frameCount);
   for (let k = 1; k < m.frames.length; k++) assert.ok(m.frames[k].t > m.frames[k - 1].t, `コマ ${k} の時刻が増えていない`);
@@ -50,3 +51,5 @@ test('全コマ（manifest の枚数）: 胴体の中心が背景の中央、レ
     assert.ok(standH <= 0.55 * bg.h + 1e-6 && standH >= 0.4 * bg.h, `${name}: standH ${(standH / bg.h).toFixed(2)}`);
   }
 });
+}
+

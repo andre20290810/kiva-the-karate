@@ -15,7 +15,7 @@ async function open(browser, viewport) {
   const p = await ctx.newPage();
   const errors = [];
   p.on('pageerror', (e) => errors.push(e.message));
-  await p.goto(`${base}?fresh=1`);
+  await p.goto(`${base}?fresh=1${process.env.GAME_VERSION ? `&v=${process.env.GAME_VERSION}` : ''}`);
   await p.waitForFunction(() => ['ready', 'error'].includes(document.documentElement.dataset.state), null, { timeout: 120000 });
   return { ctx, p, errors };
 }

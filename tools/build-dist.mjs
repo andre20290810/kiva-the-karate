@@ -4,7 +4,8 @@
 //   node tools/build-dist.mjs --allow-missing-assets … 素材なしでコードだけ（動作確認用）
 //   node tools/build-dist.mjs --allow-stand-in      … ローカル試験用の代用素材でも作る（公開しないこと）
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { join, resolve, extname } from 'node:path';
+import { join, resolve, extname, dirname } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const root = resolve(import.meta.dirname, '..');
 const out = join(root, 'dist');
@@ -15,26 +16,37 @@ mkdirSync(out, { recursive: true });
 const copy = (rel) => cpSync(join(root, rel), join(out, rel), { recursive: true });
 for (const rel of ['index.html', 'app']) copy(rel);
 mkdirSync(join(out, 'charts'), { recursive: true });
-copy('charts/seipai.json');
 
-const need = ['assets/seipai/manifest.json', 'assets/seipai/cut', 'assets/stage/IMG_7441.JPG', 'assets/stage/IMG_7439.JPG'];
-const missing = need.filter((f) => !existsSync(join(root, f)));
+// バージョンごとの譜面・人物画像（manifest と cut/）・音声。どれか欠けていれば止める（--allow-missing-assets を除く）
+const { GAME_VERSIONS } = await import(pathToFileURL(join(root, 'app/versions.js')).href);
+const stage = ['assets/stage/IMG_7441.JPG', 'assets/stage/IMG_7439.JPG'];
+const missing = stage.filter((f) => !existsSync(join(root, f)));
+const plan = [];
+for (const v of Object.values(GAME_VERSIONS)) {
+  copy(v.chart);
+  const chart = JSON.parse(readFileSync(join(root, v.chart), 'utf8'));
+  const man = chart.source.frameManifest, dir = dirname(man);
+  const audio = [].concat(chart.audio?.src || []);
+  const files = [man, `${dir}/cut`, ...audio];
+  for (const f of files) if (!existsSync(join(root, f)) || statSync(join(root, f)).size === 0) missing.push(`${v.label}: ${f}`);
+  plan.push({ v, man, files });
+}
 if (missing.length) {
   if (!allowMissing) { console.error(`素材が不足しています: ${missing.join(', ')}（README「素材の配置」）`); process.exit(1); }
   console.warn('注意: 素材なしで dist を作成しました（公開不可）');
 } else {
-  const manifest = JSON.parse(readFileSync(join(root, 'assets/seipai/manifest.json'), 'utf8'));
-  if (manifest.standIn && !allowStandIn) {
-    console.error('assets/seipai は代用素材（standIn）です。提供 ZIP から prepare_frames.py で作り直してください（試験だけなら --allow-stand-in）');
-    process.exit(1);
+  for (const { v, man, files } of plan) {
+    const manifest = JSON.parse(readFileSync(join(root, man), 'utf8'));
+    if (manifest.standIn && !allowStandIn) {
+      console.error(`${v.label} の人物画像は代用素材（standIn）です。提供素材から prepare_frames.py で作り直してください（試験だけなら --allow-stand-in）`);
+      process.exit(1);
+    }
+    const cuts = readdirSync(join(root, dirname(man), 'cut')).length;
+    if (cuts !== manifest.frameCount) { console.error(`${v.label}: cut/ の画像 ${cuts} 枚と manifest の ${manifest.frameCount} 枚が合いません`); process.exit(1); }
+    for (const f of files) copy(f);
+    console.log(`${v.label}: 人物画像 ${cuts} 枚・音声 ${files.length - 2} 件`);
   }
-  for (const f of need) copy(f);
-  // 音声: 譜面の audio.src に並べたファイル（AAC = Safari・Chrome 用の主、Opus = AAC を再生できないブラウザ用の予備）
-  const chart = JSON.parse(readFileSync(join(root, 'charts/seipai.json'), 'utf8'));
-  const audio = [].concat(chart.audio?.src || []);
-  const bad = audio.filter((f) => !existsSync(join(root, f)) || statSync(join(root, f)).size === 0);
-  if (bad.length) { console.error(`音声が無いか空です: ${bad.join(', ')}（sh tools/extract_audio.sh <元動画> assets/seipai）`); process.exit(1); }
-  for (const f of audio) copy(f);
+  for (const f of stage) copy(f);
 }
 // 旧 3D の素材やライブラリが紛れ込んでいないことを確認
 let n = 0, bytes = 0;

@@ -38,13 +38,22 @@ const round = (v, d = 3) => Math.round(v * 10 ** d) / 10 ** d;
  * 譜面 JSON を検証する。現在の編集内容は変更しない。
  * @returns {{errors:string[], warnings:string[]}}
  */
-export function validateChart(chart, { frameCount, durationSeconds } = {}) {
+/** 譜面の対象バージョン（gameVersion が無い従来の JSON は ver1） */
+export const chartVersion = (chart) => (chart && chart.gameVersion != null ? chart.gameVersion : 'v1');
+const VERSION_LABEL = (v) => String(v).replace(/^v/, 'ver');
+
+export function validateChart(chart, { frameCount, durationSeconds, gameVersion } = {}) {
   const errors = [];
   const warnings = [];
   const err = (m) => errors.push(m);
   if (!chart || typeof chart !== 'object' || Array.isArray(chart)) return { errors: ['JSON の中身がオブジェクトではありません'], warnings };
   if (chart.schemaVersion !== SCHEMA_VERSION) {
     err(`schemaVersion が ${JSON.stringify(chart.schemaVersion)} です（対応しているのは ${SCHEMA_VERSION}）`);
+    return { errors, warnings };
+  }
+  if (chart.gameVersion != null && !/^v\d+$/.test(String(chart.gameVersion))) err(`gameVersion が ${JSON.stringify(chart.gameVersion)} です（"v1" や "v2"）`);
+  else if (gameVersion != null && chartVersion(chart) !== gameVersion) {
+    err(`この JSON は ${VERSION_LABEL(chartVersion(chart))} 用の譜面です（今は ${VERSION_LABEL(gameVersion)}）。${VERSION_LABEL(chartVersion(chart))} に切り替えてから読み込んでください`);
     return { errors, warnings };
   }
   const src = chart.source || {};
@@ -130,6 +139,7 @@ export function validateChart(chart, { frameCount, durationSeconds } = {}) {
 /** 検証済みの譜面を、欠けた既定値を補った新しいオブジェクトにする（元は変更しない）。 */
 export function normalizeChart(chart) {
   const c = structuredClone(chart);
+  c.gameVersion = chartVersion(chart);
   c.settings = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
   c.display = {
     ...DEFAULT_DISPLAY, ...(c.display || {}),
@@ -156,6 +166,7 @@ export function exportChart(chart) {
   const c = normalizeChart(chart);
   const out = {
     schemaVersion: SCHEMA_VERSION,
+    gameVersion: c.gameVersion,
     title: c.title ?? 'セーパイ',
     source: c.source,
     audio: c.audio,
