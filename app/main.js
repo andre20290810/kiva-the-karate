@@ -425,6 +425,8 @@ export class App {
     // 向きは表示領域（ウィンドウ）の縦横比で決める
     this.orient = orientationOf(window.innerWidth, window.innerHeight);
     document.documentElement.dataset.orient = this.orient;
+    // 設定の小窓を操作パネルのすぐ上に出すため（パネルの中に入れるとスクロール領域で切れる）
+    document.documentElement.style.setProperty('--panel-h', `${Math.round($('#panel').getBoundingClientRect().height)}px`);
     // ノッチ（安全域）の幅。横向きのレーン・HUD をその内側に置く
     const cs = getComputedStyle($('#safeProbe'));
     this.safe = { l: parseFloat(cs.paddingLeft) || 0, r: parseFloat(cs.paddingRight) || 0 };

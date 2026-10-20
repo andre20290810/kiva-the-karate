@@ -45,7 +45,8 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
 .tbtn[hidden] { display: none; }
 #audioInfo[data-state=failed] { color: #ff9a9a; }
 #more { position: relative; }
-#more[open] .settings { position: absolute; right: 0; bottom: calc(100% + 6px); width: min(92vw, 380px); max-height: 60vh; overflow: auto;
+#more[open] .settings { position: fixed; right: calc(8px + var(--safe-r)); bottom: calc(var(--panel-h, 120px) + 6px); width: min(calc(100vw - 16px), 380px);
+  max-height: calc(100vh - var(--panel-h, 120px) - 14px); max-height: calc(100dvh - var(--panel-h, 120px) - 14px); overflow: auto;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; z-index: 5; box-shadow: 0 8px 30px #000a; }
 .settings label { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
 .settings input[type=number] { width: 6em; }
