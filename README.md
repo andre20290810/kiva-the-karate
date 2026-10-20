@@ -43,6 +43,22 @@ npm run test:browser   :: 実素材でのブラウザ確認（npm start を別�
   ```
   ver2 の動画の音声は映像より 0.023 秒遅れて始まるため、先頭に無音を足して「音声の 0 秒 = 映像の 0 秒」にしています。
   ver2 の PNG は 412 枚すべてが元動画の該当フレーム（timestamps.csv の source_frame_index）と画素一致（平均差 0.00）。
+- ver2 の BGM（ver2 だけ。ver1 の音声・設定は従来どおり）: 開始前の画面の「BGM」で 3 曲から選びます（初回は Devil In The Fire、
+  最後に選んだ曲を `kiva2d.v2.audio` に保存）。選んだ曲を読み込めるまで開始できず、失敗したら曲名と「再試行」を出します。
+  BGM は元動画の音声と同じ AudioContext・同じ時間軸で鳴らし（時間軸 0 秒 = 曲の先頭、開始前の待ち時間は鳴らない）、一時停止・再開・シーク・
+  リトライ・速度変更に同じ時計で追従します。演武の終わり（82.27 秒）に向けて 1.5 秒でフェードアウトして止め、曲の長さに合わせて演武は延ばしません。
+  再生中は曲を変えられず、一時停止中・終了後に選び直すと先頭（開始前）に戻ります。ver1 へ切り替えるときは音をすべて止めてから読み込み直します。
+  | 表示名 | 原本（Drive フォルダ 1pYQmki-bQQ8Pkd0Qg-fOIiwJ8Zt0i9Ht、`source/bgm_dl/orig/` に保存） | 配信用 | 音量合わせ |
+  |---|---|---|---|
+  | Devil In The Fire（初期） | Devil In The Fire0.0(1).mp3（-13.3 LUFS） | `assets/seipai_v2/bgm/devil.m4a`（AAC）・`devil.opus.m4a` | -4.7 dB |
+  | AUTODRIVING THE SPEAR | AUTODRIVING THE SPEAR 1.1.wav（48 kHz 16 bit、-16.1 LUFS） | `spear.m4a`・`spear.opus.m4a` | -1.9 dB |
+  | UPRISING OVERDRIVE VORTEX | uprising-overdrive-vortex1.0(2).mp3（-13.1 LUFS） | `uprising.m4a`・`uprising.opus.m4a` | -4.9 dB |
+
+  配信用は原本の先頭から 85 秒（演武は 82.3 秒）を AAC 160 kbps と予備の Opus 112 kbps にしたもの（各 1.1〜1.7 MB）。原本の音量は変えず、
+  再生側で -18 LUFS にそろえます（`app/versions.js` の gainDb）。作り直し:
+  `ffmpeg -i <原本> -map 0:a:0 -vn -t 85 -c:a aac -b:a 160k devil.m4a`、`ffmpeg -i <原本> -map 0:a:0 -vn -t 85 -c:a libopus -b:a 112k -f mp4 devil.opus.m4a`。
+  音量: 設定の「BGM」「元動画の音声」「効果音」で個別に調整・ミュート（ver2 用に保存）。初期値は BGM 0.4・音声 0.8・効果音 0.9 で、
+  効果音は BGM の平均より 5〜7 dB 大きく聞こえ、3 つを重ねた最終出力はリミッターで 1.0 未満（確認: `npm run test:bgm`）。
 - ver1 の保存: タグ `ver1`（コミット f723a71）。Git 管理外の素材を含めた一式は引き継ぎの `ver1_snapshot_f723a71/`
   （ver1_dist = そのまま公開できる dist、ver1_assets = 人物画像・配置・背景・音声・譜面、bundle）。
 

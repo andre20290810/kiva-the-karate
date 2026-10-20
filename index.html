@@ -20,6 +20,13 @@
       <p id="loadMsg">読み込み中…</p>
       <pre id="loadError" hidden></pre>
     </div>
+    <div id="bgmPanel" hidden aria-label="BGM の選択">
+      <label for="bgmSel">BGM</label>
+      <select id="bgmSel"></select>
+      <span id="bgmStatus" role="status" aria-live="polite"></span>
+      <button type="button" id="bgmRetry" hidden>再試行</button>
+      <button type="button" id="bgmStart" class="tbtn primary">▶ 開始</button>
+    </div>
     <div id="verDialog" hidden role="dialog" aria-labelledby="verDialogTitle">
       <div class="card">
         <h2 id="verDialogTitle">保存していない編集があります</h2>
@@ -60,8 +67,11 @@
             <label>バージョン <select id="gameVersion" aria-describedby="verNote"><option value="v1">ver1（2026-10-10 撮影）</option><option value="v2">ver2（2026-10-20 撮影）</option></select></label>
             <p class="hint" id="verNote">素材・譜面・音声・自動保存・記録はバージョンごとに別です。切り替えると、そのバージョンの先頭（開始前）から始まります。</p>
             <label>速度 <select id="speed"><option value="1">1×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label>
-            <label>音量 <input id="volume" type="range" min="0" max="1" step="0.01"></label>
-            <label>効果音 <input id="sfxVolume" type="range" min="0" max="1" step="0.01"></label>
+            <label class="mix-off">音量 <input id="volume" type="range" min="0" max="1" step="0.01"></label>
+            <label class="mix-off">効果音 <input id="sfxVolume" type="range" min="0" max="1" step="0.01"></label>
+            <div class="mix-on mixrow"><span>BGM</span><input id="mixBgm" type="range" min="0" max="1" step="0.01" aria-label="BGM の音量"><label><input id="muteBgm" type="checkbox"> ミュート</label></div>
+            <div class="mix-on mixrow"><span>元動画の音声</span><input id="mixVoice" type="range" min="0" max="1" step="0.01" aria-label="元動画の音声の音量"><label><input id="muteVoice" type="checkbox"> ミュート</label></div>
+            <div class="mix-on mixrow"><span>効果音</span><input id="mixSfx" type="range" min="0" max="1" step="0.01" aria-label="効果音の音量"><label><input id="muteSfx" type="checkbox"> ミュート</label></div>
             <label>エフェクトの強さ <input id="fxStrength" type="range" min="0" max="1" step="0.05"></label>
             <label><input id="lowFx" type="checkbox"> 低負荷（歪み・ぼかしを省略）</label>
             <fieldset>

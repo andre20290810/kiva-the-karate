@@ -50,6 +50,20 @@ export class App {
     this.keys = this.ver.keys;
     store.set(VERSION_KEY, this.version);
     document.documentElement.dataset.version = this.version;
+    // BGM のあるバージョン（ver2）: BGM の選択と 3 系統の音量はバージョンごとに保存
+    this.mixMode = !!this.ver.bgm;
+    document.documentElement.dataset.mix = String(this.mixMode);
+    if (this.mixMode) {
+      let saved = {};
+      try { saved = JSON.parse(store.get(this.keys.audio) || '{}') || {}; } catch { saved = {}; }
+      this.audioPrefs = {
+        bgm: this.ver.bgm.some((t) => t.id === saved.bgm) ? saved.bgm : this.ver.defaultBgm,
+        levels: { ...this.ver.defaultLevels, ...(saved.levels || {}) },
+        mutes: { voice: false, bgm: false, sfx: false, ...(saved.mutes || {}) },
+      };
+    }
+    this.bgmState = null;
+    this._bgmToken = 0;
     this.state = 'loading';
     this.autoMode = this.params.get('auto') === '1';
     this.editMode = false;
@@ -110,10 +124,15 @@ export class App {
         } catch { /* 初期譜面を使う */ }
       }
       this.chart = chart;
-      this.clock = new TimelineClock({ duration: this.duration });
+      this.clock = new TimelineClock({ duration: this.duration, mix: this.mixMode });
       this.clock.volume = this.prefs.volume;
       this.sfx = new Sfx(this.clock);
       this.sfx.volume = this.prefs.sfx;
+      if (this.mixMode) {
+        Object.assign(this.clock.levels, this.audioPrefs.levels);
+        Object.assign(this.clock.mutes, this.audioPrefs.mutes);
+        this.sfx.volume = 1.7; // 効果音の大きさは効果音の系統（音量・ミュート）で決める。BGM に埋もれないよう +4.6 dB（最後のリミッターで割れない）
+      }
       const bgP = Promise.all([loadImage(BACKGROUNDS.landscape.src), loadImage(BACKGROUNDS.portrait.src)]);
       this.store = new FrameStore(this.manifest, manifestUrl);
       const framesP = this.store.fetchAll((d, n) => this.progress(0.05 + 0.85 * d / n, `人物画像を読み込み中… ${d}/${n}`));
@@ -130,6 +149,7 @@ export class App {
       const stand = this.manifest.standIn ? ' ／ 人物画像はローカル試験用の代用素材です（提供 ZIP が未配置）' : '';
       let switched = null;
       try { switched = sessionStorage.getItem('kiva2d.switchedTo'); sessionStorage.removeItem('kiva2d.switchedTo'); } catch { /* なし */ }
+      if (this.mixMode) this.loadBgmTrack(this.audioPrefs.bgm); // 読み込み終わるまで開始ボタンは押せない
       this.status(`${switched === this.version ? `${this.ver.label} に切り替えました（▶ で先頭から開始）。` : `${this.ver.label}: `}準備完了: ノーツ ${this.chart.notes.length}、画像 ${this.store.count} 枚（0〜${this.duration.toFixed(1)} 秒）。${this.audioNote}${restored ? ' ／ 自動保存した編集内容を復元しました' : ''}${stand}`, 'ok');
       this.updateUi();
     } catch (e) {
@@ -213,8 +233,14 @@ export class App {
     this.newJudge(t);
   }
 
+  get needsBgm() { return this.mixMode && (this.state === 'ready' || this.state === 'ended') && this.bgmState?.status !== 'ready'; }
+
   async play() {
     if (this.state === 'loading' || this.state === 'error') return;
+    if (this.needsBgm) {
+      this.status(this.bgmState?.status === 'error' ? `BGM「${this.bgmState.label}」を読み込めませんでした。「再試行」を押してください` : `BGM「${this.bgmState?.label ?? ''}」を読み込み中です。読み込み後に開始できます`, 'error');
+      return;
+    }
     const audioOk = await this.clock.unlock();
     if (this.state === 'playing') return;
     if (this.state === 'ready' || this.state === 'ended') {
@@ -264,7 +290,8 @@ export class App {
     if (pos < 0.5 || pos > this.clock.buffer.duration - 0.5) return;
     const now = performance.now();
     a.signalSince ??= now;
-    a.signalPeak = Math.max(a.signalPeak || 0, this.clock.outputLevel());
+    if (this.mixMode && this.clock.mutes.voice && (this.clock.mutes.bgm || !this.clock.bgm)) return; // すべてミュート中は判定しない
+    a.signalPeak = Math.max(a.signalPeak || 0, this.clock.outputLevel() + (this.mixMode ? this.clock.bgmLevel() : 0));
     if (now - a.signalSince > 600) {
       const sig = a.signalPeak > 1e-4;
       if (sig !== a.signal) { a.signal = sig; this.renderAudioInfo(); }
@@ -586,7 +613,8 @@ export class App {
     const st = this.state;
     const playBtn = $('#btnPlay');
     playBtn.textContent = st === 'playing' ? '❚❚ 一時停止' : st === 'paused' ? '▶ 再開' : '▶ 開始';
-    playBtn.disabled = st === 'loading' || st === 'error';
+    playBtn.disabled = st === 'loading' || st === 'error' || this.needsBgm;
+    this.renderBgm();
     $('#btnRetry').disabled = st === 'loading' || st === 'error';
     $('#btnAuto').setAttribute('aria-pressed', String(this.autoMode));
     $('#btnEdit').setAttribute('aria-pressed', String(this.editMode));
@@ -594,6 +622,73 @@ export class App {
     document.documentElement.dataset.auto = String(this.autoMode);
     document.documentElement.dataset.edit = String(this.editMode);
     this.editor?.syncState();
+  }
+
+  // ---------- BGM（ver2） ----------
+  /** 選んだ曲を読み込む（AAC → 予備の Opus の順に試す）。読み込み中・失敗中は開始できない */
+  async loadBgmTrack(id) {
+    const t = this.ver.bgm.find((x) => x.id === id) || this.ver.bgm[0];
+    const token = ++this._bgmToken;
+    this.clock.clearBgm(); // 前の曲は二度と鳴らさない
+    this.bgmState = { id: t.id, label: t.label, status: 'loading', error: '', src: null };
+    this.updateUi();
+    const errs = [];
+    for (const src of t.src) {
+      try {
+        const r = await fetch(new URL(src, location.href).href);
+        if (!r.ok) { errs.push(`${src.split('/').pop()}: HTTP ${r.status}`); continue; }
+        const buf = await this.clock.decode(await r.arrayBuffer());
+        if (token !== this._bgmToken) return; // 読み込み中に別の曲が選ばれた
+        this.clock.setBgm(buf, { gain: 10 ** (t.gainDb / 20), fade: 1.5, label: t.label });
+        this.bgmState = { ...this.bgmState, status: 'ready', src, codec: /opus/i.test(src) ? 'Opus（予備）' : 'AAC' };
+        this.updateUi();
+        return;
+      } catch (e) {
+        if (token !== this._bgmToken) return;
+        errs.push(`${src.split('/').pop()}: ${String(e.message).split('\n')[0]}`);
+      }
+    }
+    if (token !== this._bgmToken) return;
+    this.bgmState = { ...this.bgmState, status: 'error', error: errs.join(' ／ ') };
+    this.updateUi();
+  }
+
+  /** 曲を選び直す。再生中は選べない（一時停止中・終了後は先頭に戻してから） */
+  chooseBgm(id) {
+    if (!this.mixMode || this.state === 'playing' || this.state === 'loading') return;
+    if (this.state === 'paused' || this.state === 'ended') {
+      const from = -this.chart.settings.leadInSeconds;
+      this.clock.stop(from);
+      this.newJudge(from);
+      this.log = [];
+      $('#result').hidden = true;
+      this.state = 'ready';
+    }
+    this.audioPrefs.bgm = id;
+    this.saveAudioPrefs();
+    this.loadBgmTrack(id);
+  }
+
+  saveAudioPrefs() { if (this.mixMode) store.set(this.keys.audio, JSON.stringify(this.audioPrefs)); }
+
+  renderBgm() {
+    const panel = $('#bgmPanel');
+    if (!this.mixMode) { panel.hidden = true; return; }
+    const st = this.state;
+    panel.hidden = this.editMode || !(st === 'ready' || st === 'paused' || st === 'ended');
+    const b = this.bgmState;
+    const sel = $('#bgmSel');
+    if (sel.value !== this.audioPrefs.bgm) sel.value = this.audioPrefs.bgm;
+    const msg = $('#bgmStatus');
+    if (!b) { msg.textContent = ''; return; }
+    msg.dataset.kind = b.status === 'error' ? 'error' : '';
+    msg.textContent = b.status === 'loading' ? `「${b.label}」を読み込み中…`
+      : b.status === 'error' ? `「${b.label}」を読み込めませんでした（${b.error}）`
+      : st === 'paused' ? '曲を変えると先頭からになります' : `読み込み済み（${b.codec}）`;
+    $('#bgmRetry').hidden = b.status !== 'error';
+    const start = $('#bgmStart');
+    start.textContent = st === 'paused' ? '▶ 再開' : '▶ 開始';
+    start.disabled = this.needsBgm;
   }
 
   /**
@@ -619,6 +714,7 @@ export class App {
   }
 
   switchVersion(id) {
+    this.clock?.shutdown(); // 今のバージョンの音（元動画の音声・BGM）を確実に止める
     store.set(VERSION_KEY, id);
     try { sessionStorage.setItem('kiva2d.switchedTo', id); } catch { /* 表示だけ */ }
     const u = new URL(location.href);
@@ -633,6 +729,23 @@ export class App {
   bindUi() {
     $('#btnPlay').addEventListener('click', () => this.togglePlay());
     $('#btnAudio').addEventListener('click', () => this.retryAudio());
+    window.addEventListener('pagehide', () => this.clock?.shutdown());
+    if (this.mixMode) {
+      $('#bgmSel').innerHTML = this.ver.bgm.map((t) => `<option value="${t.id}">${t.label}</option>`).join('');
+      $('#bgmSel').value = this.audioPrefs.bgm;
+      $('#bgmSel').addEventListener('change', (e) => this.chooseBgm(e.target.value));
+      $('#bgmRetry').addEventListener('click', () => this.loadBgmTrack(this.audioPrefs.bgm));
+      $('#bgmStart').addEventListener('click', () => this.play());
+      // 3 系統の音量とミュート
+      for (const [k, id, mute] of [['bgm', '#mixBgm', '#muteBgm'], ['voice', '#mixVoice', '#muteVoice'], ['sfx', '#mixSfx', '#muteSfx']]) {
+        const el = $(id), m = $(mute);
+        el.value = this.audioPrefs.levels[k];
+        m.checked = this.audioPrefs.mutes[k];
+        el.addEventListener('input', () => this.clock.setLevel(k, Number(el.value)));
+        el.addEventListener('change', () => { this.audioPrefs.levels[k] = Number(el.value); this.clock.setLevel(k, Number(el.value)); this.saveAudioPrefs(); });
+        m.addEventListener('change', () => { this.audioPrefs.mutes[k] = m.checked; this.clock.setMute(k, m.checked); this.saveAudioPrefs(); });
+      }
+    }
     // バージョンの切り替え
     $('#verBadge').textContent = this.ver.label;
     const vs = $('#gameVersion');

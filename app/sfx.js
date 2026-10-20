@@ -23,7 +23,7 @@ export class Sfx {
   _out(gain) {
     const g = this.ctx.createGain();
     g.gain.value = gain * this.volume;
-    g.connect(this.ctx.destination);
+    g.connect(this.clock.sfxBus || this.ctx.destination); // BGM のあるバージョンは効果音の系統（音量・ミュート）へ
     return g;
   }
 

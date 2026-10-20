@@ -62,6 +62,21 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
 #loading .bar { width: min(70vw, 360px); height: 6px; background: #3a2a1d; border-radius: 3px; overflow: hidden; margin: 0 auto; }
 #loading .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.15s; }
 #loading pre { color: #ff9a9a; white-space: pre-wrap; text-align: left; max-width: 90vw; }
+#bgmPanel { position: absolute; left: 50%; bottom: 46px; transform: translateX(-50%); z-index: 3; display: flex; flex-wrap: wrap; gap: 8px;
+  align-items: center; justify-content: center; max-width: calc(100% - 16px); padding: 8px 12px; border-radius: 12px;
+  background: rgba(20, 13, 8, 0.86); border: 1px solid var(--line); box-shadow: 0 6px 20px #0008; }
+#bgmPanel[hidden] { display: none; }
+#bgmPanel label { font-weight: 700; color: #ffd9b3; }
+#bgmPanel select { font: inherit; min-height: 36px; max-width: 64vw; color: var(--fg); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; }
+#bgmPanel #bgmStatus { font-size: 12px; color: var(--dim); }
+#bgmPanel #bgmStatus[data-kind=error] { color: #ff9a9a; }
+#bgmPanel button { min-height: 36px; }
+#bgmRetry { border: 1px solid #ffcf6a; background: #ffcf6a; color: #1a0f08; border-radius: 10px; padding: 4px 12px; font-weight: 700; }
+.mix-on { display: none; }
+[data-mix=true] .mix-on { display: grid; }
+[data-mix=true] .mix-off { display: none; }
+.mixrow { grid-template-columns: 7.5em 1fr auto; gap: 8px; align-items: center; }
+.mixrow label { white-space: nowrap; font-size: 12px; }
 #verDialog { position: absolute; inset: 0; display: grid; place-items: center; background: #000a; z-index: 6; padding: 16px; }
 #verDialog[hidden] { display: none; }
 #verDialog .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; max-width: 460px; width: 100%; }

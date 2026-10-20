@@ -8,6 +8,7 @@
     "test:browser": "node tests/game2d-browser.mjs",
     "test:audio": "node tests/audio-browser.mjs",
     "test:version": "node tests/version-browser.mjs",
+    "test:bgm": "node tests/bgm-browser.mjs",
     "build:dist": "node tools/build-dist.mjs"
   },
   "devDependencies": {

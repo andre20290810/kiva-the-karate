@@ -52,3 +52,16 @@ test('JSON: 対象バージョンを書き出し、別バージョンの JSON �
   assert.equal(exportChart(again.chart), exportChart(normalizeChart(v2)));
   assert.ok(validateChart({ ...v2, gameVersion: 'x2' }).errors.length);
 });
+
+test('ver2 の BGM: 3 曲、初期は Devil In The Fire、配信用の AAC と予備の Opus。ver1 には BGM なし', () => {
+  const v2 = GAME_VERSIONS.v2;
+  assert.deepEqual(v2.bgm.map((t) => t.label), ['Devil In The Fire', 'AUTODRIVING THE SPEAR', 'UPRISING OVERDRIVE VORTEX']);
+  assert.equal(v2.defaultBgm, 'devil');
+  for (const t of v2.bgm) {
+    assert.ok(/\.m4a$/.test(t.src[0]) && !/opus/.test(t.src[0]), `${t.label}: 先頭は AAC`);
+    assert.ok(/opus/.test(t.src[1]), `${t.label}: 予備は Opus`);
+    assert.ok(!t.src.some((u) => /drive\.google|^https?:/.test(u)), `${t.label}: 配信用素材（Drive の URL ではない）`);
+  }
+  assert.equal(GAME_VERSIONS.v1.bgm, undefined);
+  assert.equal(GAME_VERSIONS.v1.keys.audio, undefined);
+});
