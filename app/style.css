@@ -26,11 +26,13 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
   max-height: 62vh; max-height: 62dvh; overflow-y: auto; overscroll-behavior: contain; }
 #controls { display: flex; gap: 10px; align-items: stretch; }
 #pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; flex: 1 1 auto; max-width: 560px; }
-.padbtn { --c: #888; position: relative; border: 2px solid var(--c); border-radius: 14px; background: color-mix(in srgb, var(--c) 18%, #1a120c);
+.padbtn { --c: #888; position: relative; border: 2px solid var(--c); border-radius: 14px; background: color-mix(in srgb, var(--c) 12%, #120c08);
   color: #fff; min-height: 64px; padding: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center;
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: pointer; }
-.padbtn b { font-size: 24px; line-height: 1; }
-.padbtn span { font-size: 12px; color: #f0e2d0; }
+.padbtn b { font-size: 32px; line-height: 1; font-weight: 700; font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "IPAGothic", sans-serif;
+  color: color-mix(in srgb, var(--c) 72%, #fff); text-shadow: 0 0 1px #000, 0 1px 0 #000, 0 2px 4px #000c; }
+.padbtn:active b, .padbtn.down b { color: #111; text-shadow: none; }
+.padbtn span { font-size: 12px; color: #f0e2d0; font-weight: 700; opacity: 0.85; }
 .padbtn[data-b=Y] { --c: var(--Y); } .padbtn[data-b=X] { --c: var(--X); } .padbtn[data-b=A] { --c: var(--A); } .padbtn[data-b=B] { --c: var(--B); }
 .padbtn:active, .padbtn.down { background: var(--c); color: #111; }
 .padbtn:active span { color: #111; }
@@ -98,7 +100,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
 @media (orientation: landscape) and (max-height: 500px) {
   #panel { padding-top: 6px; padding-bottom: calc(6px + var(--safe-b)); }
   .padbtn { min-height: 52px; flex-direction: row; gap: 6px; }
-  .padbtn b { font-size: 20px; }
+  .padbtn b { font-size: 26px; }
   .tbtn, #transport summary { min-height: 40px; padding: 4px 10px; }
   #status { display: none; }
   #transport { flex-wrap: nowrap; }

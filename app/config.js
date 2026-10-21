@@ -17,6 +17,10 @@ export const GAME = Object.freeze({
       src: ['assets/seipai_v2/bgm/uprising.m4a', 'assets/seipai_v2/bgm/uprising.opus.m4a'] }),
   ]),
   defaultBgm: 'devil',
-  // 初期音量（0〜1）。効果音が聞こえ、3 つ重ねても割れない値（最後にリミッター）
-  defaultLevels: Object.freeze({ voice: 0.8, bgm: 0.4, sfx: 0.9 }),
+  // 初期音量（0〜1）。効果音は 0（設定で上げる）。3 つを重ねても割れない（最後にリミッター）
+  defaultLevels: Object.freeze({ voice: 0.8, bgm: 0.4, sfx: 0 }),
+  // 効果音の音量を一度だけ 0 に戻す（既存の保存内容にも適用。BGM・元動画の音声は変えない）。値を変えると再び一度だけ適用される
+  sfxResetId: '2026-10-21-sfx-zero',
+  // ノーツ・レーン・操作パネルの文字（入力の割り当て Y・X・A・B は変えない）
+  glyphs: Object.freeze({ Y: '息', X: '構', A: '撃', B: '旋' }),
 });

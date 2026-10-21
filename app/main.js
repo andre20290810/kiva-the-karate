@@ -65,7 +65,14 @@ export class App {
         bgm: this.ver.bgm.some((t) => t.id === saved.bgm) ? saved.bgm : this.ver.defaultBgm,
         levels: { ...this.ver.defaultLevels, ...(saved.levels || {}) },
         mutes: { voice: false, bgm: false, sfx: false, ...(saved.mutes || {}) },
+        sfxReset: saved.sfxReset ?? null,
       };
+      // 効果音の音量を一度だけ 0 にする（既存の利用者も）。その後の変更は保存されたまま。BGM・元動画の音声は変えない
+      if (this.audioPrefs.sfxReset !== this.ver.sfxResetId) {
+        this.audioPrefs.levels.sfx = 0;
+        this.audioPrefs.sfxReset = this.ver.sfxResetId;
+        store.set(this.keys.audio, JSON.stringify(this.audioPrefs));
+      }
     }
     this.bgmState = null;
     this._bgmToken = 0;
@@ -440,6 +447,8 @@ export class App {
     const peakT = peakCtx != null ? this.clock.timelineAtCtx(peakCtx) : null;
     const t0 = peakT != null && peakT >= this.t && peakT < this.t + 0.2 ? peakT : this.t;
     if (kind === 'breath') this.breathTailUntil = t0;
+    // 判定位置の文字に赤い火を灯す（効果音の音量が 0 でも出す。MISS・早すぎる解除では呼ばれない）
+    this.lanes.ignite(n.button, t0, e.grade, n.input === 'hold');
     this.fx.trigger(kind, {
       t: t0, grade: e.grade, frameIndex, action: src.action, anchor: ef.anchor, direction: ef.direction,
       intensity: ef.intensity ?? 1, seed: this.generation * 101 + this.judge.notes.indexOf(n),
@@ -575,8 +584,10 @@ export class App {
     }
     this.fx.renderOver(ctx, S);
     // レーンの手前側（ラベル・判定線・ノーツ・判定）と HUD
+    const holdNote = this.judge?.notes.find((n) => n.holding);
     const lanesInfo = this.lanes.draw(ctx, L, t, this.judge ? this.judge.notes : [], {
       lead: this.chart.settings.laneLeadSeconds, held, selected: this.editor?.selected,
+      holdFire: holdNote ? { button: holdNote.button, progress: this.judge.holdProgress(holdNote, t) } : null, // 正しく保持している間だけ火が育つ
     });
     for (const b of ['Y', 'X', 'A', 'B']) if (this.padEls[b].classList.contains('down') !== held[b]) this.padEls[b].classList.toggle('down', held[b]);
     this.drawHud(ctx, G, t, fi);

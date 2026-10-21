@@ -1,7 +1,11 @@
 // 背景上部の 4 レーン（上から Y・X・A・B）。ノーツは右から左へ流れ、共通の判定位置で押す。
 // ノーツの位置は「判定時刻までの残り時間 ÷ 先読み時間」だけで決める（縦横でレーンの長さが変わってもタイミングは同じ）。
 
-import { BUTTON_INFO } from './chart.js';
+import { GlyphRenderer } from './glyphfire.js';
+import { GAME } from './config.js';
+
+/** レーンの文字（入力の割り当て Y・X・A・B は変えない） */
+export const GLYPH = GAME.glyphs;
 
 export const LANE_ORDER = ['Y', 'X', 'A', 'B'];
 export const LANE_STYLE = Object.freeze({
@@ -27,9 +31,16 @@ export class LaneRenderer {
   constructor() {
     this.marks = []; // 判定の文字（時間軸の時刻で寿命管理）
     this.pressed = { Y: 0, X: 0, A: 0, B: 0 }; // 押した表示（時刻）
+    this.glyph = new GlyphRenderer();
   }
 
-  clear() { this.marks = []; }
+  clear() { this.marks = []; this.glyph.clear(); }
+
+  /** 成功: 判定位置の文字に火を灯す（t0 = 効果音の最も強い瞬間）。strong: 長押しの完了 */
+  ignite(button, t0, grade, strong = false) {
+    if (strong) this.glyph.holdDone();
+    this.glyph.ignite(button, GLYPH[button], t0, grade, strong);
+  }
 
   mark(grade, t, button, delta) { this.marks.push({ grade, t, button, delta }); if (this.marks.length > 12) this.marks.shift(); }
 
@@ -73,57 +84,53 @@ export class LaneRenderer {
     LANE_ORDER.forEach((b, k) => {
       const y = L.y + k * rowH, st = LANE_STYLE[b];
       const held = o.held?.[b];
-      // ラベル: 丸いボタン文字 ＋ 意味（色だけに頼らない）
-      const r = rowH * 0.36, cx = L.x + 8 + r, cy = y + rowH / 2;
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fillStyle = held ? st.color : `rgba(${st.rgb},0.28)`; ctx.fill();
-      ctx.lineWidth = 2; ctx.strokeStyle = st.color; ctx.stroke();
-      ctx.fillStyle = held ? '#111' : '#fff';
-      ctx.textAlign = 'center';
-      ctx.fillText(b, cx, cy + 1);
-      ctx.textAlign = 'left';
-      ctx.fillStyle = 'rgba(255,255,255,0.86)';
-      if (labelW > 70) ctx.fillText(BUTTON_INFO[b].meaning, cx + r + 6, cy + 1);
+      // 見出し: 漢字（息・構・撃・旋）＋ 小さく入力ボタン（／Y など）
+      const gs = Math.round(rowH * 0.86), cx = L.x + 6 + gs * 0.62, cy = y + rowH / 2;
+      this.glyph.drawNote(ctx, GLYPH[b], cx, cy, gs, st, held ? 1 : 0.92);
+      if (held) { ctx.globalCompositeOperation = 'lighter'; this.glyph.drawNote(ctx, GLYPH[b], cx, cy, gs, st, 0.45); ctx.globalCompositeOperation = 'source-over'; }
+      ctx.font = `800 ${Math.round(rowH * 0.42)}px system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif`;
+      ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = 3;
+      ctx.strokeText(`／${b}`, cx + gs * 0.62, cy + rowH * 0.08);
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.fillText(`／${b}`, cx + gs * 0.62, cy + rowH * 0.08);
     });
     // 判定位置の線
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(jx - 2.5, L.y + 3, 5, L.h - 6);
     ctx.fillStyle = 'rgba(255,240,210,0.95)';
     ctx.fillRect(jx - 1.5, L.y + 3, 3, L.h - 6);
+    // 判定位置の文字の火（ノーツより先に描く。次に流れてくるノーツを覆わない）
+    const S = rowH * 1.08, rowY = (b) => L.y + LANE_ORDER.indexOf(b) * rowH + rowH / 2;
+    this.glyph.setHold(o.holdFire || null, t);
+    if (o.holdFire) this.glyph.hold.progress = o.holdFire.progress;
+    this.glyph.drawFires(ctx, jx, rowY, S, t, (b) => GLYPH[b]);
     ctx.save();
-    ctx.beginPath(); ctx.rect(jx - rowH * 0.5, L.y, right - jx + rowH * 0.5 + 6, L.h); ctx.clip();
-    // ノーツ
+    ctx.beginPath(); ctx.rect(jx - S * 0.7, L.y - rowH * 0.2, right - jx + S * 0.7 + 6, L.h + rowH * 0.4); ctx.clip();
+    // ノーツ: 文字そのもの（息・構・撃・旋）が流れてくる。長押しは「息」に続く細い炎の尾で保持時間を示す
     for (const n of notes) {
       const end = n.time + (n.duration || 0);
       if (end < t - 0.6 || n.time > t + lead + 0.1) continue;
-      const k = LANE_ORDER.indexOf(n.button), st = LANE_STYLE[n.button];
-      const y = L.y + k * rowH + rowH / 2, h = rowH * 0.66;
-      const done = n.result && n.result !== 'SKIP';
+      const st = LANE_STYLE[n.button], y = rowY(n.button);
       const hit = n.result === 'PERFECT' || n.result === 'GOOD';
-      if (hit && n.input !== 'hold') continue; // 成功したノーツは消す（判定位置に文字が出る）
+      if (hit && n.input !== 'hold') continue; // 成功したノーツは消える（判定位置の文字に火が灯る）
       const sel = o.selected?.has(n.id);
       const alpha = n.result === 'MISS' ? 0.35 : n.result === 'SKIP' ? 0.25 : 1;
       ctx.globalAlpha = alpha;
       if (n.input === 'hold') {
         const x0 = Math.max(xAt(n.time), n.holding || hit ? jx : -1e9), x1 = xAt(end);
-        if (!(hit && t > end)) {
-          rr(ctx, x0, y - h * 0.32, Math.max(4, x1 - x0), h * 0.64, h * 0.3);
-          ctx.fillStyle = `rgba(${st.rgb},${n.holding ? 0.75 : 0.42})`; ctx.fill();
-          ctx.lineWidth = 2; ctx.strokeStyle = st.color; ctx.stroke();
-          // 長押しの残り
+        if (!hit) {
+          this.glyph.drawTail(ctx, x0 + (n.holding ? S * 0.45 : S * 0.5), x1, y, S, st, t, !!n.holding);
           if (n.holding) {
-            const prog = Math.max(0, Math.min(1, (t - n.time) / n.duration));
-            ctx.fillStyle = '#fff';
-            ctx.fillText(`HOLD ${(Math.max(0, end - t)).toFixed(1)}s`, Math.min(x1 + 6, right - 80), y + 1);
-            ctx.fillStyle = 'rgba(255,255,255,0.85)';
-            ctx.fillRect(jx, y + h * 0.36, (x1 - jx) * (1 - prog) + 0, 2);
+            ctx.globalAlpha = 1;
+            ctx.font = `800 ${Math.round(rowH * 0.4)}px system-ui, sans-serif`;
+            ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = 3;
+            const txt = `${Math.max(0, end - t).toFixed(1)}s`, tx = Math.min(x1 + S * 0.3, right - rowH * 1.6);
+            ctx.strokeText(txt, tx, y - rowH * 0.32); ctx.fillStyle = '#ffe2b0'; ctx.fillText(txt, tx, y - rowH * 0.32);
           }
-          // 終点
-          ctx.fillStyle = st.color; ctx.fillRect(x1 - 2, y - h * 0.4, 4, h * 0.8);
         }
-        if (!n.holding && !hit) this._head(ctx, xAt(n.time), y, h, n, st, sel, 'HOLD');
+        if (!n.holding && !hit) this.glyph.drawNote(ctx, GLYPH[n.button], xAt(n.time), y, S, st, alpha, sel);
       } else {
-        this._head(ctx, xAt(n.time), y, h, n, st, sel, n.button === 'A' ? (n.action === 'kick' ? '蹴り' : n.action === 'punch' ? '突き' : '打') : null);
+        this.glyph.drawNote(ctx, GLYPH[n.button], xAt(n.time), y, S, st, alpha, sel);
       }
       ctx.globalAlpha = 1;
     }
@@ -139,31 +146,10 @@ export class LaneRenderer {
       ctx.fillStyle = GRADE_COLOR[m.grade] || '#ccc';
       ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 3;
       const txt = GRADE_TEXT[m.grade] || m.grade;
-      ctx.strokeText(txt, jx + rowH * 0.6, y);
-      ctx.fillText(txt, jx + rowH * 0.6, y);
+      ctx.strokeText(txt, jx + rowH * 0.85, y);
+      ctx.fillText(txt, jx + rowH * 0.85, y);
     }
     ctx.restore();
     return { jx, xAt, right };
-  }
-
-  _head(ctx, x, y, h, n, st, sel, sub) {
-    const w = h * 0.95;
-    rr(ctx, x - w / 2, y - h / 2, w, h, h * 0.28);
-    const g = ctx.createLinearGradient(0, y - h / 2, 0, y + h / 2);
-    g.addColorStop(0, '#fff'); g.addColorStop(0.18, st.color); g.addColorStop(1, `rgba(${st.rgb},0.8)`);
-    ctx.fillStyle = g; ctx.fill();
-    ctx.lineWidth = sel ? 3 : 1.5; ctx.strokeStyle = sel ? '#fff' : 'rgba(0,0,0,0.6)'; ctx.stroke();
-    ctx.fillStyle = '#111';
-    ctx.textAlign = 'center';
-    ctx.font = `800 ${Math.round(h * 0.5)}px system-ui, sans-serif`;
-    ctx.fillText(n.button, x, y + 1);
-    if (sub) {
-      ctx.font = `700 ${Math.round(h * 0.34)}px system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif`;
-      ctx.fillStyle = '#fff';
-      ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.lineWidth = 3;
-      ctx.strokeText(sub, x, y + h * 0.78);
-      ctx.fillText(sub, x, y + h * 0.78);
-    }
-    ctx.textAlign = 'left';
   }
 }

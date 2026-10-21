@@ -24,7 +24,7 @@ export function coverRect(areaW, areaH, imgW, imgH) {
 
 /** 背景上部の 4 レーンの領域。o.compact: 横向き（高さが小さい）用に行を低くする */
 export function laneRect(bg, o = {}) {
-  const rowH = o.compact ? Math.max(17, Math.min(34, bg.h * 0.062)) : Math.max(22, Math.min(46, bg.h * 0.058));
+  const rowH = o.compact ? Math.max(20, Math.min(36, bg.h * 0.078)) : Math.max(22, Math.min(46, bg.h * 0.058)); // 横向きは文字のノーツがスマホでも読める高さ（縦向きは従来どおり）
   const pad = Math.max(4, bg.h * 0.012);
   return { x: bg.x + pad, y: bg.y + pad, w: bg.w - pad * 2, h: rowH * 4, rowH };
 }
