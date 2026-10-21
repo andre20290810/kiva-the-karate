@@ -9,13 +9,15 @@ import { FrameStore } from './frames.js';
 import { Effects } from './fx.js';
 import { LaneRenderer, LANE_STYLE } from './lanes.js';
 import { BACKGROUNDS, orientationOf, containRect, coverRect, laneRect, standingHeight, landscapeSubject, subjectTransform } from './layout.js';
-import { normalizeChart, validateChart, BUTTON_INFO } from './chart.js';
+import { normalizeChart, validateChart, exportChart, BUTTON_INFO } from './chart.js';
 import { resolveEffect } from './effects-catalog.js';
 import { Editor } from './editor.js';
 import { GAME } from './config.js';
 
 const $ = (s) => document.querySelector(s);
 const PREFS_KEY = 'kiva2d.prefs.v1';
+/** 文字列の指紋（FNV-1a 32bit。公開版の譜面が変わったかの判定だけに使う） */
+const fingerprint = (text) => { let h = 0x811c9dc5; for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16); };
 // 旧 3D 版の保存設定（表示モード・画質など）。新しい 2D 版では使わないので消す
 const LEGACY_KEYS = ['kiva.quality', 'kiva.displayMode', 'kiva.character', 'kiva.padProfiles.v1', 'kr.inputLatency', 'kr.volume'];
 
@@ -115,6 +117,7 @@ export class App {
       const v0 = validateChart(initial, { gameVersion: this.version });
       if (v0.errors.length) throw new Error('初期譜面にエラーがあります:\n' + v0.errors.join('\n'));
       this.initialChart = normalizeChart(initial);
+      this.distributedFingerprint = fingerprint(exportChart(this.initialChart)); // 公開版の譜面が更新されたかの判定
       const manifestUrl = new URL(this.initialChart.source.frameManifest, location.href).href;
       this.progress(0.02, '画像の一覧を読み込み中…');
       this.manifest = await fetchJson(manifestUrl, '連続画像の一覧（manifest.json）');
@@ -138,6 +141,8 @@ export class App {
       const chart = draft || this.deviceDefault || this.initialChart;
       this.chartSource = draft ? 'draft' : this.deviceDefault ? 'default' : 'distributed';
       const restored = this.chartSource !== 'distributed';
+      // 下書き・デフォルトを保存した後に公開版の譜面が更新されたか（記録のない古い保存も「更新あり」）
+      this.distributedUpdated = restored && store.get(this.keys.chartBase) !== this.distributedFingerprint;
       this.chart = chart;
       this.clock = new TimelineClock({ duration: this.duration, mix: this.mixMode });
       this.clock.volume = this.prefs.volume;
@@ -161,7 +166,7 @@ export class App {
       const stand = this.manifest.standIn ? ' ／ 人物画像はローカル試験用の代用素材です（提供 ZIP が未配置）' : '';
       if (this.mixMode) this.loadBgmTrack(this.audioPrefs.bgm); // 読み込み終わるまで開始ボタンは押せない
       const legacy = /^(ver|v)?\s*1$/i.test(this.legacyVersionParam ?? '') ? 'ver1 は終了しました。正式版で開いています。' : '';
-      this.status(`${legacy}準備完了: ノーツ ${this.chart.notes.length}、画像 ${this.store.count} 枚（0〜${this.duration.toFixed(1)} 秒）。${this.audioNote}${restored ? (this.chartSource === 'draft' ? ' ／ 編集中の下書き（自動保存）で起動しました' : ' ／ この端末のデフォルトの設定で起動しました') : ''}${stand}`, 'ok');
+      this.status(`${legacy}準備完了: ノーツ ${this.chart.notes.length}、画像 ${this.store.count} 枚（0〜${this.duration.toFixed(1)} 秒）。${this.audioNote}${restored ? (this.chartSource === 'draft' ? ' ／ 編集中の下書き（自動保存）で起動しました' : ' ／ この端末のデフォルトの設定で起動しました') : ''}${this.distributedUpdated ? '（公開版の初期設定が更新されています。⚙設定の「公開版の設定に切り替える」で切り替えられます）' : ''}${stand}`, 'ok');
       this.updateUi();
     } catch (e) {
       this.state = 'error';
@@ -234,6 +239,34 @@ export class App {
     }
     this.fx.clear();
     this.lanes.clear();
+  }
+
+  /** この端末の下書き・デフォルトの有無と、公開版の設定へ切り替えるボタン（⚙設定） */
+  refreshChartSource() {
+    const box = $('#chartSrc');
+    if (!box) return;
+    const draft = !!store.get(this.keys.autosave), def = !!store.get(this.keys.deviceDefault);
+    box.hidden = !draft && !def;
+    $('#chartSrcText').textContent = `この端末に保存した${[def && 'デフォルト', draft && '編集中の下書き'].filter(Boolean).join('と')}の譜面で起動しています。`
+      + (this.distributedUpdated ? '公開版の初期設定はその後に更新されています。' : '')
+      + '切り替えても、今の設定は控えとして残ります（編集モードで JSON を書き出すこともできます）。';
+  }
+
+  /** 公開版の初期設定（charts/seipai_v2.json）に切り替える。この端末の下書き・デフォルトは控えに移す（消さない） */
+  useDistributed() {
+    if (!confirm('公開版の初期設定に切り替えますか？\nこの端末の下書き・デフォルトは控えとして保存し、次からは公開版の設定で起動します。')) return;
+    const backup = { at: new Date().toISOString(), draft: store.get(this.keys.autosave), deviceDefault: store.get(this.keys.deviceDefault) };
+    store.set(this.keys.chartBackup, JSON.stringify(backup));
+    store.del(this.keys.autosave); store.del(this.keys.deviceDefault);
+    this.deviceDefault = null;
+    this.chartSource = 'distributed';
+    this.distributedUpdated = false;
+    this.chart = structuredClone(this.initialChart);
+    this.chartChanged();
+    this.editor?.refresh();
+    this.syncSettingsUi?.();
+    this.refreshChartSource();
+    this.status(`公開版の初期設定に切り替えました（ノーツ ${this.chart.notes.length}）。前の設定は控えとして保存しています`, 'ok');
   }
 
   /** 譜面を編集したとき: 現在位置から判定し直す（同じノーツの二重加点なし） */
@@ -710,6 +743,8 @@ export class App {
   savePrefs() { store.set(PREFS_KEY, JSON.stringify(this.prefs)); }
 
   bindUi() {
+    $('#btnUseDistributed').addEventListener('click', () => this.useDistributed());
+    this.refreshChartSource();
     $('#btnPlay').addEventListener('click', () => this.togglePlay());
     $('#btnAudio').addEventListener('click', () => this.retryAudio());
     window.addEventListener('pagehide', () => this.clock?.shutdown());

@@ -84,7 +84,7 @@ export class Editor {
   writeAutosave() {
     clearTimeout(this._saveT);
     this._savePending = false;
-    const ok = (() => { try { localStorage.setItem(this.app.keys.autosave, exportChart(this.chart)); return true; } catch { return false; } })();
+    const ok = (() => { try { localStorage.setItem(this.app.keys.autosave, exportChart(this.chart)); localStorage.setItem(this.app.keys.chartBase, this.app.distributedFingerprint); return true; } catch { return false; } })();
     this.saveFailed = !ok;
     this.root.querySelector('#edSaved').textContent = ok ? `自動保存（下書き） ${new Date().toLocaleTimeString()}` : '自動保存できません（ブラウザの保存領域が使えません。JSON を書き出してください）';
     this.refreshSource();
@@ -98,6 +98,7 @@ export class Editor {
     try {
       localStorage.setItem(this.app.keys.deviceDefault, text);
       localStorage.removeItem(this.app.keys.autosave); // 下書きはデフォルトに入った
+      localStorage.setItem(this.app.keys.chartBase, this.app.distributedFingerprint);
     } catch {
       this.message('保存できませんでした（ブラウザの保存領域が使えません）。JSON を書き出してください', 'error');
       return false;
@@ -122,6 +123,7 @@ export class Editor {
   }
 
   refreshSource() {
+    this.app.refreshChartSource?.();
     const el = this.root.querySelector('#edSource');
     if (!el) return;
     const st = this.sourceState();
@@ -991,7 +993,7 @@ export class Editor {
     const a = document.createElement('a');
     const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 16);
     a.href = URL.createObjectURL(blob);
-    a.download = `seipai-${this.app.ver.label}-chart-${stamp}.json`;
+    a.download = `seipai-${this.app.version}-chart-${stamp}.json`; // 例: seipai-v2-chart-2026-10-21-09-30.json
     document.body.append(a);
     a.click();
     a.remove();

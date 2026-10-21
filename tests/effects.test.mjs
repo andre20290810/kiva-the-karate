@@ -22,7 +22,7 @@ test('未編集の息ノーツは呼吸の気。個別に指定したノーツ�
   assert.equal(effectIdOf(note({ button: 'Y', input: 'hold', duration: 2, effect: { id: 0 } })), 0, '番号で指定済み');
   const by = {};
   for (const n of chart.notes) by[`${n.button}:${resolveEffect(n).key}`] = (by[`${n.button}:${resolveEffect(n).key}`] || 0) + 1;
-  assert.deepEqual(by, { 'Y:breath': 2, 'X:stance': 16, 'A:strike': 13, 'B:turn': 15 });
+  assert.deepEqual(by, { 'Y:breath': 11, 'X:stance': 23, 'A:strike': 10, 'B:turn': 15 });
 });
 
 test('保存済みの No.5 は、息なら No.1、それ以外は No.0 に置き換え、ほかの編集内容は保つ', () => {

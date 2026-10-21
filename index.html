@@ -67,6 +67,10 @@
               <label>許容限界 ± <input id="winMiss" type="number" step="5" min="30" max="400"> ms</label>
               <label>長押しの終了の許容 <input id="winRelease" type="number" step="10" min="0" max="500"> ms</label>
             </fieldset>
+            <div id="chartSrc" class="chartsrc" hidden>
+              <p id="chartSrcText" class="hint"></p>
+              <button type="button" id="btnUseDistributed" class="tbtn">公開版の設定に切り替える</button>
+            </div>
             <p class="hint" id="audioInfo">音声: 読み込み中</p>
             <p class="hint">キーボード: Y X A B ／ Space 開始・一時停止 ／ R リトライ。ゲームパッド（標準配置）: 上 = Y、左 = X、下 = A、右 = B（ボタンの印字ではなく位置で対応）。</p>
           </div>

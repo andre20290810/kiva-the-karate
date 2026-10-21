@@ -112,51 +112,47 @@
   ],
   "notes": [
     {
-      "id": "n001",
-      "time": 5.8,
-      "button": "Y",
-      "action": "breathe",
-      "input": "hold",
-      "duration": 2.6,
-      "label": "呼吸",
-      "sequenceId": "opening",
-      "effect": {
-        "preset": "breath",
-        "intensity": 1
-      }
-    },
-    {
-      "id": "n002",
-      "time": 12.4,
+      "id": "n074",
+      "time": 10.17,
       "button": "X",
       "action": "stance",
       "input": "tap",
       "label": "構え",
-      "sequenceId": "opening",
+      "sequenceId": null
+    },
+    {
+      "id": "n049",
+      "time": 12.03,
+      "button": "Y",
+      "action": "breathe",
+      "input": "hold",
+      "duration": 2,
+      "label": "呼吸",
+      "sequenceId": null,
       "effect": {
-        "preset": "stance",
-        "intensity": 1
+        "id": 1
       }
     },
     {
-      "id": "n003",
-      "time": 15.4,
-      "button": "A",
-      "action": "strike",
+      "id": "n050",
+      "time": 15.45,
+      "button": "X",
+      "action": "stance",
       "input": "tap",
-      "label": "打撃",
-      "sequenceId": "opening",
+      "label": "構え",
+      "sequenceId": null
+    },
+    {
+      "id": "n085",
+      "time": 15.95,
+      "button": "Y",
+      "action": "breathe",
+      "input": "hold",
+      "duration": 2,
+      "label": "呼吸",
+      "sequenceId": null,
       "effect": {
-        "preset": "strike",
-        "anchor": {
-          "x": 0.408,
-          "y": 0.443
-        },
-        "direction": {
-          "x": 0.302,
-          "y": -0.953
-        },
-        "intensity": 1
+        "id": 1
       }
     },
     {
@@ -173,50 +169,88 @@
       }
     },
     {
-      "id": "n005",
-      "time": 20.8,
+      "id": "n051",
+      "time": 20.34,
       "button": "B",
       "action": "turn",
       "input": "tap",
       "label": "旋回",
+      "sequenceId": "opening"
+    },
+    {
+      "id": "n052",
+      "time": 20.8,
+      "button": "A",
+      "action": "punch",
+      "input": "tap",
+      "label": "正拳突き",
       "sequenceId": "opening",
       "effect": {
-        "preset": "turn",
-        "intensity": 1
+        "id": 3,
+        "origin": "point",
+        "anchor": {
+          "x": 0.549,
+          "y": 0.481
+        },
+        "angle": -72
       }
     },
     {
-      "id": "n006",
+      "id": "n075",
+      "time": 21.72,
+      "button": "A",
+      "action": "punch",
+      "input": "tap",
+      "label": "正拳突き",
+      "sequenceId": null,
+      "effect": {
+        "id": 3,
+        "origin": "point",
+        "anchor": {
+          "x": 0.487,
+          "y": 0.41600000000000004
+        },
+        "angle": 90,
+        "offset": {
+          "x": 0.11,
+          "y": 0.18
+        }
+      }
+    },
+    {
+      "id": "n053",
       "time": 21.8,
+      "button": "B",
+      "action": "turn",
+      "input": "tap",
+      "label": "旋回",
+      "sequenceId": "opening"
+    },
+    {
+      "id": "n055",
+      "time": 22.65,
       "button": "X",
       "action": "stance",
       "input": "tap",
       "label": "構え",
-      "sequenceId": "opening",
-      "effect": {
-        "preset": "stance",
-        "intensity": 1
-      }
+      "sequenceId": null
     },
     {
-      "id": "n007",
-      "time": 22.4,
+      "id": "n076",
+      "time": 23.42,
       "button": "A",
-      "action": "strike",
+      "action": "punch",
       "input": "tap",
-      "label": "打撃",
-      "sequenceId": "opening",
+      "label": "正拳突き",
+      "sequenceId": null,
       "effect": {
-        "preset": "strike",
+        "id": 3,
+        "origin": "point",
         "anchor": {
-          "x": 0.603,
-          "y": 0.397
+          "x": 0.46900000000000003,
+          "y": 0.388
         },
-        "direction": {
-          "x": -0.101,
-          "y": -0.995
-        },
-        "intensity": 1
+        "angle": -91
       }
     },
     {
@@ -238,6 +272,19 @@
           "y": -0.999
         },
         "intensity": 1
+      }
+    },
+    {
+      "id": "n059",
+      "time": 25.42,
+      "button": "Y",
+      "action": "breathe",
+      "input": "hold",
+      "duration": 1.24,
+      "label": "呼吸",
+      "sequenceId": null,
+      "effect": {
+        "id": 1
       }
     },
     {
@@ -267,8 +314,39 @@
       }
     },
     {
+      "id": "n061",
+      "time": 29.11,
+      "button": "Y",
+      "action": "breathe",
+      "input": "hold",
+      "duration": 2.65,
+      "label": "呼吸",
+      "sequenceId": null,
+      "effect": {
+        "id": 1
+      }
+    },
+    {
+      "id": "n086",
+      "time": 30.04,
+      "button": "X",
+      "action": "stance",
+      "input": "tap",
+      "label": "構え",
+      "sequenceId": null
+    },
+    {
+      "id": "n062",
+      "time": 31.89,
+      "button": "B",
+      "action": "turn",
+      "input": "tap",
+      "label": "旋回",
+      "sequenceId": null
+    },
+    {
       "id": "n011",
-      "time": 32.2,
+      "time": 33.98,
       "button": "B",
       "action": "turn",
       "input": "tap",
@@ -280,58 +358,25 @@
       }
     },
     {
-      "id": "n012",
-      "time": 32.6,
-      "button": "A",
-      "action": "strike",
+      "id": "n063",
+      "time": 35,
+      "button": "X",
+      "action": "stance",
       "input": "tap",
-      "label": "打撃",
-      "sequenceId": "turn-03",
-      "effect": {
-        "preset": "strike",
-        "anchor": {
-          "x": 0.803,
-          "y": 0.337
-        },
-        "direction": {
-          "x": 0.942,
-          "y": -0.336
-        },
-        "intensity": 1
-      }
+      "label": "構え",
+      "sequenceId": null
     },
     {
-      "id": "n013",
-      "time": 34.4,
-      "button": "B",
-      "action": "turn",
-      "input": "tap",
-      "label": "旋回",
-      "sequenceId": "turn-04",
+      "id": "n064",
+      "time": 35.64,
+      "button": "Y",
+      "action": "breathe",
+      "input": "hold",
+      "duration": 1.22,
+      "label": "呼吸",
+      "sequenceId": null,
       "effect": {
-        "preset": "turn",
-        "intensity": 1
-      }
-    },
-    {
-      "id": "n014",
-      "time": 35.0,
-      "button": "A",
-      "action": "strike",
-      "input": "tap",
-      "label": "打撃",
-      "sequenceId": "turn-04",
-      "effect": {
-        "preset": "strike",
-        "anchor": {
-          "x": 0.729,
-          "y": 0.495
-        },
-        "direction": {
-          "x": -0.897,
-          "y": 0.442
-        },
-        "intensity": 1
+        "id": 1
       }
     },
     {
@@ -358,6 +403,19 @@
       "effect": {
         "preset": "stance",
         "intensity": 1
+      }
+    },
+    {
+      "id": "n077",
+      "time": 37.9,
+      "button": "Y",
+      "action": "breathe",
+      "input": "hold",
+      "duration": 0.74,
+      "label": "呼吸",
+      "sequenceId": null,
+      "effect": {
+        "id": 1
       }
     },
     {
@@ -395,16 +453,13 @@
       "label": "打撃",
       "sequenceId": "turn-06",
       "effect": {
-        "preset": "strike",
+        "id": 3,
         "anchor": {
           "x": 0.293,
           "y": 0.578
         },
-        "direction": {
-          "x": -0.211,
-          "y": 0.977
-        },
-        "intensity": 1
+        "intensity": 1,
+        "angle": 113
       }
     },
     {
@@ -434,6 +489,28 @@
       }
     },
     {
+      "id": "n065",
+      "time": 44.83,
+      "button": "X",
+      "action": "stance",
+      "input": "tap",
+      "label": "構え",
+      "sequenceId": "turn-06"
+    },
+    {
+      "id": "n066",
+      "time": 44.83,
+      "button": "Y",
+      "action": "breathe",
+      "input": "hold",
+      "duration": 2,
+      "label": "呼吸",
+      "sequenceId": "turn-06",
+      "effect": {
+        "id": 1
+      }
+    },
+    {
       "id": "n022",
       "time": 47.2,
       "button": "B",
@@ -447,37 +524,34 @@
       }
     },
     {
-      "id": "n023",
+      "id": "n084",
       "time": 47.6,
       "button": "X",
       "action": "stance",
       "input": "tap",
       "label": "構え",
-      "sequenceId": "turn-08",
-      "effect": {
-        "preset": "stance",
-        "intensity": 1
-      }
+      "sequenceId": null
     },
     {
-      "id": "n024",
-      "time": 49.4,
+      "id": "n069",
+      "time": 49.78,
       "button": "A",
-      "action": "kick",
+      "action": "punch",
       "input": "tap",
-      "label": "打撃",
-      "sequenceId": "turn-08",
+      "label": "正拳突き",
+      "sequenceId": null,
       "effect": {
-        "preset": "strike",
+        "id": 3,
+        "origin": "point",
         "anchor": {
-          "x": 0.935,
-          "y": 0.587
+          "x": 0.9359999999999999,
+          "y": 0.5900000000000001
         },
-        "direction": {
-          "x": 0.854,
-          "y": -0.519
-        },
-        "intensity": 1
+        "angle": 71,
+        "offset": {
+          "x": -0.1,
+          "y": 0
+        }
       }
     },
     {
@@ -541,16 +615,13 @@
       "label": "打撃",
       "sequenceId": "turn-10",
       "effect": {
-        "preset": "strike",
+        "id": 3,
         "anchor": {
           "x": 0.584,
           "y": 0.567
         },
-        "direction": {
-          "x": 0.937,
-          "y": -0.348
-        },
-        "intensity": 1
+        "intensity": 1,
+        "angle": 87
       }
     },
     {
@@ -567,38 +638,22 @@
       }
     },
     {
-      "id": "n031",
-      "time": 54.6,
-      "button": "A",
-      "action": "strike",
+      "id": "n087",
+      "time": 54.87,
+      "button": "X",
+      "action": "stance",
       "input": "tap",
-      "label": "打撃",
-      "sequenceId": "turn-11",
-      "effect": {
-        "preset": "strike",
-        "anchor": {
-          "x": 0.294,
-          "y": 0.336
-        },
-        "direction": {
-          "x": -0.932,
-          "y": -0.363
-        },
-        "intensity": 1
-      }
+      "label": "構え",
+      "sequenceId": "turn-11"
     },
     {
-      "id": "n032",
+      "id": "n088",
       "time": 55.6,
       "button": "X",
       "action": "stance",
       "input": "tap",
-      "label": "構え直し",
-      "sequenceId": "turn-11",
-      "effect": {
-        "preset": "stance",
-        "intensity": 1
-      }
+      "label": "構え",
+      "sequenceId": null
     },
     {
       "id": "n033",
@@ -627,6 +682,19 @@
       }
     },
     {
+      "id": "n079",
+      "time": 57.77,
+      "button": "Y",
+      "action": "breathe",
+      "input": "hold",
+      "duration": 1.39,
+      "label": "呼吸",
+      "sequenceId": null,
+      "effect": {
+        "id": 1
+      }
+    },
+    {
       "id": "n035",
       "time": 59.4,
       "button": "A",
@@ -635,21 +703,22 @@
       "label": "打撃",
       "sequenceId": "kick-02",
       "effect": {
-        "preset": "strike",
+        "id": 3,
         "anchor": {
           "x": 0.387,
           "y": 0.672
         },
-        "direction": {
-          "x": 0.228,
-          "y": 0.974
+        "intensity": 0.2,
+        "offset": {
+          "x": 0,
+          "y": -0.2
         },
-        "intensity": 1
+        "angle": 180
       }
     },
     {
       "id": "n036",
-      "time": 60.0,
+      "time": 60,
       "button": "A",
       "action": "strike",
       "input": "tap",
@@ -695,55 +764,57 @@
       }
     },
     {
-      "id": "n039",
-      "time": 63.8,
-      "button": "B",
-      "action": "turn",
-      "input": "tap",
-      "label": "旋回",
-      "sequenceId": "turn-14",
-      "effect": {
-        "preset": "turn",
-        "intensity": 1
-      }
-    },
-    {
-      "id": "n040",
-      "time": 64.2,
+      "id": "n082",
+      "time": 63.09,
       "button": "X",
       "action": "stance",
       "input": "tap",
       "label": "構え",
-      "sequenceId": "turn-14",
+      "sequenceId": null
+    },
+    {
+      "id": "n071",
+      "time": 63.8,
+      "button": "Y",
+      "action": "breathe",
+      "input": "hold",
+      "duration": 2,
+      "label": "呼吸",
+      "sequenceId": null,
       "effect": {
-        "preset": "stance",
-        "intensity": 1
+        "id": 1
       }
     },
     {
-      "id": "n041",
-      "time": 66.4,
-      "button": "A",
-      "action": "kick",
+      "id": "n081",
+      "time": 64.3,
+      "button": "X",
+      "action": "stance",
       "input": "tap",
-      "label": "打撃",
-      "sequenceId": "kick-03",
+      "label": "構え",
+      "sequenceId": null
+    },
+    {
+      "id": "n072",
+      "time": 66.09,
+      "button": "A",
+      "action": "punch",
+      "input": "tap",
+      "label": "正拳突き",
+      "sequenceId": null,
       "effect": {
-        "preset": "strike",
+        "id": 3,
+        "origin": "point",
         "anchor": {
-          "x": 0.864,
-          "y": 0.565
+          "x": 0.93,
+          "y": 0.442
         },
-        "direction": {
-          "x": 0.931,
-          "y": -0.364
-        },
-        "intensity": 1
+        "angle": 2
       }
     },
     {
       "id": "n042",
-      "time": 67.0,
+      "time": 67,
       "button": "X",
       "action": "stance",
       "input": "tap",
@@ -781,25 +852,26 @@
       }
     },
     {
-      "id": "n045",
-      "time": 72.0,
-      "button": "A",
-      "action": "strike",
-      "input": "tap",
-      "label": "打撃",
-      "sequenceId": "turn-15",
+      "id": "n083",
+      "time": 70.25,
+      "button": "Y",
+      "action": "breathe",
+      "input": "hold",
+      "duration": 2,
+      "label": "呼吸",
+      "sequenceId": null,
       "effect": {
-        "preset": "strike",
-        "anchor": {
-          "x": 0.827,
-          "y": 0.429
-        },
-        "direction": {
-          "x": -0.531,
-          "y": -0.848
-        },
-        "intensity": 1
+        "id": 1
       }
+    },
+    {
+      "id": "n073",
+      "time": 71.64,
+      "button": "X",
+      "action": "stance",
+      "input": "tap",
+      "label": "構え",
+      "sequenceId": null
     },
     {
       "id": "n046",
@@ -811,17 +883,16 @@
       "label": "呼吸",
       "sequenceId": "closing",
       "effect": {
-        "preset": "breath",
-        "intensity": 1
+        "id": 1
       }
     }
   ],
   "memo": [
-    "ver2（2026-10-20 撮影）用。ver1 とは別の撮影（音声・細部の動きが違う）なので、ver2 の 412 枚で各動作の決まるコマを確認して時刻を決めた。同じ型を同じ速さで演じているため、多くは ver1 と同じか 0.2〜0.4 秒の違い。ミリ秒の精度はないので編集モードで合わせてください。",
-    "冒頭は「Y 呼吸（5.8 秒〜2.6 秒間）→ X 構え（12.4）→ A 打撃（15.4）→ X 構え直し（18.4）→ B 旋回（20.8）→ X 構え（21.8）→ A 打撃（22.4）」。",
-    "はっきり蹴りと分かるのは 24.2 秒だけ「蹴り」。49.4・53.8・66.4 秒は膝を上げる動作（打撃点は膝）。59.4 秒は足を前へ上げる動作だが技を特定できないので「打撃」と表記（ver1 の 59.2 秒のような横蹴りは見られない）。",
-    "Y の呼吸は、礼の後の静止（5.8〜8.4 秒）と、両手を交差させて胸元へ上げてから下ろす動作（73.6〜75.4 秒）。その他の静止区間には置いていない。",
-    "62.2〜62.6 秒は両腕を引き寄せる移り、44.4〜46.8 秒は後ろ向きで足を運ぶ区間で、決めの瞬間が読み取れないためノーツなし。12.6〜14.4 秒、28.0〜31.8 秒、76 秒以降（礼）は静止・礼のためノーツなし。",
-    "A の打撃点と方向は ver2 の各コマの関節（MediaPipe の推定）から自動で入れています。"
+    "正式版（2026-10-20 撮影・412 枚）の譜面。2026-10-21 に編集モードで調整した設定を正本として採用（59 ノーツ: 息 11・構 23・撃 10・旋 15）。時刻は編集で合わせた値（0.01 秒単位）で、0.2 秒刻みに丸めない。",
+    "最初は 10.17 秒の 構、最後は 73.6 秒の 息（1.8 秒の長押し）。息の長押しは 12.03（2 秒）・15.95（2 秒）・25.42（1.24 秒）・29.11（2.65 秒）・35.64（1.22 秒）・37.9（0.74 秒）・44.83（2 秒）・57.77（1.39 秒）・63.8（2 秒）・70.25（2 秒）・73.6（1.8 秒）。",
+    "同時入力（意図した設定）: 44.83 秒の n065 構 と n066 息。",
+    "息の長押し中に別のコマンドがある箇所（意図した設定）: n086 構（30.04 秒）が n061 息（29.11〜31.76 秒）の長押し中、n015 旋（36.4 秒）が n064 息（35.64〜36.86 秒）の長押し中、n065 構（44.83 秒）が n066 息（44.83〜46.83 秒）の長押し中、n081 構（64.3 秒）が n071 息（63.8〜65.8 秒）の長押し中、n073 構（71.64 秒）が n083 息（70.25〜72.25 秒）の長押し中。",
+    "エフェクト: 息は No.1 呼吸の気（人物の内側だけ）、構は No.2、撃は No.3（打撃点と向きはノーツごとに指定）、旋は No.4。effect.id 形式と従来の preset・direction 形式が混在しており、どちらも同じ意味で読む。位置の調整・強さを個別に変えたノーツ: n075・n069・n035。",
+    "効果音はなし。音は BGM（3 曲から選択）と元動画の音声。"
   ]
 }

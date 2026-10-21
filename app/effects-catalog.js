@@ -95,7 +95,11 @@ export function resolveEffect(note) {
     anchor: e.anchor || null,
     offset: { x: e.offset?.x ?? 0, y: e.offset?.y ?? 0 },
     angle: ang,
-    direction: ang != null ? { x: Math.cos(ang * Math.PI / 180), y: Math.sin(ang * Math.PI / 180) } : null,
+    // 向き: angle（度）があればそれ、従来の direction（ベクトル）はそのまま使う（角度へ丸めて意味を変えない）
+    direction: !def.directional ? null
+      : isNum(e.angle) ? { x: Math.cos(e.angle * Math.PI / 180), y: Math.sin(e.angle * Math.PI / 180) }
+        : e.direction && Math.hypot(e.direction.x, e.direction.y) > 1e-6 ? { x: e.direction.x / Math.hypot(e.direction.x, e.direction.y), y: e.direction.y / Math.hypot(e.direction.x, e.direction.y) }
+          : null,
     size: e.size ?? 1,
     intensity: e.intensity ?? 1,
     duration: e.duration ?? def.duration,

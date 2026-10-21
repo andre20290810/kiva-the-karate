@@ -26,7 +26,9 @@ for (const [label, vp] of [['縦 393x852', { width: 393, height: 852 }], ['横 8
     const a = window.__app, g = a.lanes.glyph, calls = [], lines = [];
     const dn = g.drawNote.bind(g); g.drawNote = (ctx, ch, x, y, size, ...rest) => { calls.push({ ch, x, y, size }); return dn(ctx, ch, x, y, size, ...rest); };
     const hl = a.lanes._holdLine.bind(a.lanes); a.lanes._holdLine = (ctx, x0, x1, y, S, ...rest) => { lines.push({ x0, x1, y, S }); return hl(ctx, x0, x1, y, S, ...rest); };
-    a.seek(4.6); a.draw(4.6);
+    // 最初の息の長押しの始端と終端が両方レーンに見える時刻
+    const h = a.chart.notes.find((n) => n.button === 'Y'), t = h.time + h.duration - a.chart.settings.laneLeadSeconds + 0.15;
+    a.seek(t); a.draw(t);
     const jx = window.__debug.lanesInfo.jx;
     const head = calls.filter((c) => c.x < jx), flow = calls.filter((c) => c.x > jx);
     return { head: head.map((c) => c.size), flow: flow.map((c) => ({ ch: c.ch, size: c.size, y: c.y, x: c.x })), lines, tail: typeof g.drawTail };
@@ -51,7 +53,7 @@ for (const [label, vp] of [['縦 393x852', { width: 393, height: 852 }], ['横 8
   await p.evaluate(() => localStorage.clear());
   await p.goto(base); await ready(p);
   await p.click('#btnEdit');
-  const target = await p.evaluate(() => window.__app.chart.notes.find((n) => n.button === 'A' && n.time > 15 && n.time < 16));
+  const target = await p.evaluate(() => window.__app.chart.notes.find((n) => n.button === 'A'));
   const othersBefore = await p.evaluate((id) => JSON.stringify(window.__app.chart.notes.filter((n) => n.id !== id)), target.id);
   await p.evaluate((id) => { const e = window.__app.editor; e.selected = new Set([id]); e.refresh(); }, target.id);
   await p.waitForSelector('#nButton');
@@ -188,7 +190,9 @@ for (const [label, vp] of [['縦 393x852', { width: 393, height: 852 }], ['横 8
   p.on('pageerror', (e) => errors.push(e.message));
   await p.goto(`${base}?fresh=1`); await ready(p);
   await p.click('#btnAuto');
-  await p.evaluate(() => { const a = window.__app; a.seek(5.4); a.togglePlay(); });
+  // 2 秒以上の息の長押し（譜面から）
+  const H = await p.evaluate(() => { const n = window.__app.chart.notes.find((x) => x.button === 'Y' && x.duration >= 2); return { t: n.time, d: n.duration }; });
+  await p.evaluate((t) => { const a = window.__app; a.seek(t); a.togglePlay(); }, H.t - 0.4);
   const at = (t) => p.waitForFunction((t) => window.__app.t > t, t, { timeout: 20000 });
   // 実際の画面で: 演出あり／なしの差が人物の外（アルファ 0）に出ていないか（長押し中・成功直後）
   const leak = () => p.evaluate(() => {
@@ -215,19 +219,19 @@ for (const [label, vp] of [['縦 393x852', { width: 393, height: 852 }], ['横 8
     a.play();
     return { inside, outside, key: hold?.key ?? list[0]?.kind };
   });
-  await at(7.4);
+  await at(H.t + H.d * 0.6);
   const l1 = await leak();
-  await at(8.45);
+  await at(H.t + H.d + 0.05);
   const l2 = await leak();
   check(l1.key === 'breath' && l1.inside > 300 && l1.outside === 0 && l2.inside > 300 && l2.outside === 0, `${label}: 呼吸の気は人物の内側だけ（輪郭の外・体の隙間に 0 画素）`,
     `長押し中 内 ${l1.inside} / 外 ${l1.outside}、成功直後 内 ${l2.inside} / 外 ${l2.outside}`);
-  await p.evaluate(() => window.__app.seek(5.4));
-  await at(6.2);
+  await p.evaluate((t) => window.__app.seek(t), H.t - 0.4);
+  await at(H.t + 0.4);
   const h1 = await p.evaluate(() => ({ key: window.__app.fx.hold?.key, progress: window.__app.fx.hold?.progress }));
-  await at(7.6);
+  await at(H.t + H.d * 0.8);
   const h2 = await p.evaluate(() => ({ key: window.__app.fx.hold?.key, progress: window.__app.fx.hold?.progress }));
   check(h1.key === 'breath' && h2.progress > h1.progress + 0.3, `${label}: 長押し中は呼吸の気が育つ`, `${h1.progress?.toFixed(2)} → ${h2.progress?.toFixed(2)}`);
-  await at(8.5);
+  await at(H.t + H.d + 0.1);
   await p.evaluate(() => window.__app.pause());
   await p.waitForTimeout(150);
   const shot = () => p.evaluate(() => { const c = window.__app.canvas; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let h = 0; for (let i = 0; i < d.length; i += 97) h = (h * 31 + d[i]) >>> 0; return h; });
@@ -237,8 +241,8 @@ for (const [label, vp] of [['縦 393x852', { width: 393, height: 852 }], ['横 8
   await p.waitForTimeout(100);
   let r = await p.evaluate(() => ({ list: window.__app.fx.list.length, hold: window.__app.fx.hold }));
   check(r.list === 0 && !r.hold, `${label}: シークで前の演出が残らない`);
-  await p.evaluate(() => { window.__app.seek(6.5); window.__app.play(); });
-  await at(7.0);
+  await p.evaluate((t) => { window.__app.seek(t); window.__app.play(); }, H.t + 0.3);
+  await at(H.t + 0.8);
   await p.click('#btnRetry');
   await p.waitForTimeout(100);
   r = await p.evaluate(() => ({ list: window.__app.fx.list.length, hold: window.__app.fx.hold }));
@@ -286,9 +290,10 @@ for (const [label, vp] of [['縦 393x852', { width: 393, height: 852 }], ['横 8
     return { peak: m, judged: a.log.length - judged0 };
   }, { fn }).then((r) => { check(r.peak < 1e-4 && r.judged > 0, `${label}: 判定があっても効果音は鳴らない（出力が無音）`, `peak ${r.peak.toExponential(1)}、判定 ${r.judged}`); });
   await p.evaluate(() => document.querySelector('#btnAuto').click());
-  await quiet('AUTO（息の長押し・構・撃）', "a.seek(5.6); if (a.state !== 'playing') a.togglePlay();");
+  const H5 = await p.evaluate(() => { const n = window.__app.chart.notes.find((x) => x.button === 'Y' && x.duration >= 2), x = window.__app.chart.notes.find((k) => k.button === 'X'); return { y: n.time, x: x.time }; });
+  await quiet('AUTO（息の長押しなど）', `a.seek(${H5.y - 0.4}); if (a.state !== 'playing') a.togglePlay();`);
   await p.evaluate(() => document.querySelector('#btnAuto').click());
-  await quiet('手動（成功と MISS）', "a.seek(12.0); if (a.state !== 'playing') a.togglePlay(); const hit = () => { if (a.t >= 12.4) { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyX', key: 'x', bubbles: true })); setTimeout(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyX', key: 'x', bubbles: true })), 50); } else requestAnimationFrame(hit); }; hit();");
+  await quiet('手動（成功と MISS）', `a.seek(${H5.x - 0.4}); if (a.state !== 'playing') a.togglePlay(); const hit = () => { if (a.t >= ${H5.x}) { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyX', key: 'x', bubbles: true })); setTimeout(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyX', key: 'x', bubbles: true })), 50); } else requestAnimationFrame(hit); }; hit();`);
   // 編集のプレビュー
   await p.evaluate(() => window.__app.pause());
   await p.click('#btnEdit');

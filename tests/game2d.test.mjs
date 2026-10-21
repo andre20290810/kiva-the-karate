@@ -179,11 +179,13 @@ test('初期譜面ファイルが検証を通る', () => {
   const c = JSON.parse(readFileSync(new URL('../charts/seipai_v2.json', import.meta.url)));
   const r = validateChart(c, { frameCount: 412 });
   assert.deepEqual(r.errors, []);
-  assert.ok(c.notes.length >= 10);
-  // 冒頭: 映像の動作どおり Y 長押し → X → A → X → B → X → A を 1 つの連続コマンドに
+  // 2026-10-21 に採用した正本（編集モードで調整した 59 ノーツ）。自動生成や 0.2 秒への丸めで上書きされていないこと
+  assert.equal(c.notes.length, 59);
   const n = normalizeChart(c).notes;
-  const opening = n.filter((x) => x.sequenceId === 'opening').map((x) => x.button).join('');
-  assert.equal(opening, 'YXAXBXA');
-  assert.equal(n.slice(0, 7).map((x) => x.sequenceId).every((id) => id === 'opening'), true);
-  assert.equal(n.find((x) => x.button === 'Y').input, 'hold');
+  const at = (id) => n.find((x) => x.id === id);
+  assert.deepEqual([at('n074').time, at('n074').button], [10.17, 'X'], '最初のノーツ');
+  assert.deepEqual([at('n061').time, at('n061').duration, at('n086').time], [29.11, 2.65, 30.04], '長押し中の別コマンド');
+  assert.deepEqual([at('n065').time, at('n066').time, at('n066').button], [44.83, 44.83, 'Y'], '同時入力');
+  assert.equal(n.filter((x) => x.sequenceId === 'opening').map((x) => x.button).join(''), 'XBAB');
+  assert.ok(n.some((x) => Math.abs(x.time * 5 - Math.round(x.time * 5)) > 1e-6), '0.2 秒刻みではない時刻がある');
 });

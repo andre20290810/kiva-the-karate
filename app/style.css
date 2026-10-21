@@ -158,3 +158,5 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
 .ed-src[data-state=edited] { background: #3a2410; color: #ffd27a; }
 .ed-note { font-size: 11px; line-height: 1.5; }
 @media (min-width: 900px) { #edNote { grid-column: span 2; } }
+.chartsrc { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; display: grid; gap: 6px; }
+.chartsrc .hint { margin: 0; }

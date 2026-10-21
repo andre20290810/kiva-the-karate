@@ -1,12 +1,16 @@
-"""初期譜面を作る（連続画像を目視して決めた時刻の一覧から）。バージョンごとに別の表（撮影が別なので時刻も別）。
+"""最初の自動生成の譜面を作る（連続画像を目視して決めた時刻の一覧から）。記録用。
+公開版の譜面（charts/seipai_v2.json）は 2026-10-21 に編集モードで調整した 59 ノーツを正本として採用したので、
+このスクリプトでは上書きしない（--out に公開版の譜面を指定すると止まる。比較用に別のファイルへ書き出す）。
 
-  python tools/chart/build_initial_chart.py --manifest assets/seipai_v2/manifest.json --out charts/seipai_v2.json
+  python tools/chart/build_initial_chart.py --manifest assets/seipai_v2/manifest.json --out /tmp/initial_chart.json
 （正式版 = 旧 ver2。ver1 の表はタグ ver1 に残っている）
 
 A（打撃）のエフェクト位置・方向は、そのコマの関節（manifest の joints）から、胴体から最も遠い手首／足首を選んで入れる。
 時刻は 0.2 秒間隔の画像で「動作が止まったコマ」を読んだもので、ミリ秒の精度はない（編集モードで合わせる前提）。
 """
 import argparse
+import os
+import sys
 import json
 
 import numpy as np
@@ -152,6 +156,8 @@ def main():
         'notes': notes,
         'memo': V['memo'],
     }
+    if os.path.abspath(a.out) == os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'charts', 'seipai_v2.json')):
+        sys.exit('charts/seipai_v2.json は正本（編集して採用した譜面）なので上書きしません。別のファイルに書き出してください')
     json.dump(chart, open(a.out, 'w'), ensure_ascii=False, indent=2)
     open(a.out, 'a').write('\n')
     print(len(notes), 'notes ->', a.out)
