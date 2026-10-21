@@ -664,7 +664,7 @@ export class Effects {
     ctx.globalCompositeOperation = 'lighter';
     // 攻撃方向へ伸びるエネルギー（2 層: 外側の色 ＋ 白熱の芯）
     // 衝撃音の最も強い瞬間（t0）でほぼ伸び切る（突き 約 11 ms、蹴り 約 19 ms）
-    const grow = easeOut(clamp01(p / (kick ? 0.035 : 0.02)));
+    const grow = 0.6 + 0.4 * easeOut(clamp01(p / (kick ? 0.035 : 0.02))); // 山（t0）で既に 6 割の長さ（明るさの山を音の山にそろえる）
     const L = H * (0.42 + 0.22 * e.gradeI) * grow, W = H * 0.1 * (1 - p) ** 0.6;
     if (p < 1 && L > 1) {
       ctx.save();
