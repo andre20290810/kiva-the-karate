@@ -1,4 +1,4 @@
-// ver2 の BGM の確認（実素材が必要）: npm start（別ターミナル）→ node tests/bgm-browser.mjs   （BASE=公開 URL でも可）
+// BGM の確認（実素材が必要）: npm start（別ターミナル）→ node tests/bgm-browser.mjs   （BASE=公開 URL でも可）
 // 3 曲それぞれで、開始・一時停止・再開・シーク・速度変更・リトライ・終了時の停止を、実際に鳴っている BGM の波形と
 // 曲のデータの照合（相互相関）でずれを測って確かめる。音割れは最終出力（リミッター後）の最大値で確かめる。
 import { existsSync } from 'node:fs';
@@ -11,7 +11,7 @@ const check = (ok, msg, extra = '') => { console.log(`${ok ? 'ok  ' : 'NG  '} ${
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const browser = await chromium.launch({ ...(exe ? { executablePath: exe } : {}), args: ['--autoplay-policy=no-user-gesture-required'] });
 
-async function open(viewport = { width: 1280, height: 720 }, q = '?v=v2') {
+async function open(viewport = { width: 1280, height: 720 }, q = '') {
   const ctx = await browser.newContext({ viewport, hasTouch: viewport.width < 900 });
   const p = await ctx.newPage();
   const errors = [];
@@ -187,7 +187,7 @@ for (const [id, label] of TRACKS) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const p = await ctx.newPage();
   await p.route('**/bgm/**', (r) => r.abort());
-  await p.goto(base + '?v=v2');
+  await p.goto(base);
   await p.waitForFunction(() => window.__app?.bgmState?.status === 'error', null, { timeout: 120000 });
   let s = await st(p);
   const txt = await p.textContent('#bgmStatus');
@@ -203,21 +203,31 @@ for (const [id, label] of TRACKS) {
   await ctx.close();
 }
 
-// ---------- 5. ver1 へ切り替えると ver2 の BGM を止める。ver1 には BGM なし ----------
+// ---------- 5. 旧 URL（?v=v1 / ?v=v2）でも正式版が開き、保存内容（BGM の選択）はそのまま ----------
 {
-  const { ctx, p } = await open();
-  await waitBgm(p);
-  await p.click('#bgmStart');
-  await p.waitForFunction(() => window.__app.t > 2, null, { timeout: 15000 });
-  await p.evaluate(() => { const c = window.__app.clock, orig = c.shutdown.bind(c); c.shutdown = () => { orig(); sessionStorage.setItem('test.v2shutdown', JSON.stringify({ sources: c.activeSources, ctx: c.ctx.state })); }; });
-  await p.click('#more summary');
-  await Promise.all([p.waitForURL(/v=v1/), p.selectOption('#gameVersion', 'v1')]);
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const p = await ctx.newPage();
+  await p.goto(base);
+  await p.evaluate(() => { localStorage.clear(); localStorage.setItem('kiva2d.v2.audio', JSON.stringify({ bgm: 'spear' })); });
+  for (const q of ['?v=v1', '?v=v2', '?v=ver1', '']) {
+    await p.goto(base + q);
+    await p.waitForFunction(() => document.documentElement.dataset.state === 'ready', null, { timeout: 120000 });
+    const r = await p.evaluate(() => ({ manifest: window.__app.initialChart.source.frameManifest, sel: document.querySelector('#bgmSel').value, url: location.search,
+      status: document.querySelector('#status').textContent, ver: !!document.querySelector('#gameVersion, #verBadge') }));
+    check(r.manifest === 'assets/seipai_v2/manifest.json' && r.sel === 'spear' && !r.ver && !/v=/.test(r.url),
+      `${q || '通常の URL'}: 正式版が開き、BGM の選択を引き継ぐ（バージョンの選択欄・表示なし）`, q === '?v=v1' ? r.status.slice(0, 30) : '');
+  }
+  // 旧 ver2 の自動保存（編集済み譜面・frameOverrides）・プレイ記録が正式版でそのまま使える
+  await p.evaluate(async () => {
+    const c = await (await fetch('charts/seipai_v2.json')).json();
+    c.notes[1].time = 12.5; c.display.frameOverrides = { 7: { dx: 0.02, dy: 0, scale: 1.04 } };
+    localStorage.setItem('kiva2d.v2.chart.autosave', JSON.stringify(c));
+    localStorage.setItem('kiva2d.v2.best.manual', JSON.stringify({ score: 4321, auto: false }));
+  });
+  await p.goto(base + '?v=v2');
   await p.waitForFunction(() => document.documentElement.dataset.state === 'ready', null, { timeout: 120000 });
-  const sd = JSON.parse(await p.evaluate(() => sessionStorage.getItem('test.v2shutdown')));
-  await sleep(300);
-  const v1 = await p.evaluate(() => ({ v: window.__app.version, bgm: window.__app.clock.bgm, mix: window.__app.clock.mix, panel: !document.querySelector('#bgmPanel').hidden }));
-  check(sd && sd.sources === 0 && ['closed', 'closing'].includes(sd.ctx) || sd?.sources === 0, `ver1 へ切り替える前に ver2 の音をすべて止める（${JSON.stringify(sd)}）`);
-  check(v1.v === 'v1' && v1.bgm === null && v1.mix === false && !v1.panel, 'ver1 は BGM なし・従来の音声の経路');
+  const kept = await p.evaluate(() => ({ t: window.__app.chart.notes[1].time, ov: window.__app.chart.display.frameOverrides[7], best: JSON.parse(localStorage.getItem('kiva2d.v2.best.manual')).score, gv: window.__app.chart.gameVersion }));
+  check(kept.t === 12.5 && kept.ov?.scale === 1.04 && kept.best === 4321 && kept.gv === 'v2', '旧 ver2 の編集済み譜面・frameOverrides・プレイ記録を正式版でそのまま復元', JSON.stringify(kept));
   await p.evaluate(() => localStorage.clear());
   await ctx.close();
 }

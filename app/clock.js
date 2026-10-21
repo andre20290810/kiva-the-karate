@@ -36,7 +36,7 @@ export class TimelineClock {
       if (this.mix) {
         // 3 系統を足してもクリップしないよう、最後にリミッター
         this.limiter = this.ctx.createDynamicsCompressor();
-        this.limiter.threshold.value = -6; this.limiter.knee.value = 0; this.limiter.ratio.value = 20;
+        this.limiter.threshold.value = -3; this.limiter.knee.value = 0; this.limiter.ratio.value = 20;
         this.limiter.attack.value = 0.001; this.limiter.release.value = 0.15;
         this.master = this.ctx.createGain();
         this.master.gain.value = 0.85; // リミッターの手前で余裕を取る（打撃音の立ち上がりでも 1.0 を超えないように）
@@ -46,7 +46,8 @@ export class TimelineClock {
         this.limiter.connect(this.outAnalyser);
         this.bgmBus = this.ctx.createGain();
         this.bgmFade = this.ctx.createGain();
-        this.bgmFade.connect(this.bgmBus).connect(this.master);
+        this.bgmDuck = this.ctx.createGain(); // 効果音の瞬間だけ BGM を少し下げる（効果音側が操作）
+        this.bgmFade.connect(this.bgmDuck).connect(this.bgmBus).connect(this.master);
         this.sfxBus = this.ctx.createGain();
         this.sfxBus.connect(this.master);
         this.gain.connect(this.master);
@@ -189,6 +190,12 @@ export class TimelineClock {
     const ts = this.ctx.getOutputTimestamp?.();
     if (ts && ts.performanceTime > 0) return ts.contextTime + (perfMs - ts.performanceTime) / 1000;
     return this.ctx.currentTime - (performance.now() - perfMs) / 1000;
+  }
+
+  /** AudioContext の時刻 ct に鳴る音が、時間軸の何秒に聞こえるか（効果音の最も強い瞬間に画面の演出を合わせる） */
+  timelineAtCtx(ct) {
+    if (this.state !== 'playing' || !this._audioMode) return null;
+    return this.anchorT + (ct - this.anchorBase) * this.rate;
   }
 
   /** 時間軸の位置（秒）。perfMs を渡すとその時点の位置（入力イベントの timeStamp 用） */

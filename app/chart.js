@@ -53,7 +53,9 @@ export function validateChart(chart, { frameCount, durationSeconds, gameVersion 
   }
   if (chart.gameVersion != null && !/^v\d+$/.test(String(chart.gameVersion))) err(`gameVersion が ${JSON.stringify(chart.gameVersion)} です（"v1" や "v2"）`);
   else if (gameVersion != null && chartVersion(chart) !== gameVersion) {
-    err(`この JSON は ${VERSION_LABEL(chartVersion(chart))} 用の譜面です（今は ${VERSION_LABEL(gameVersion)}）。${VERSION_LABEL(chartVersion(chart))} に切り替えてから読み込んでください`);
+    err(chartVersion(chart) === 'v1'
+      ? 'この JSON は終了した ver1 用の譜面です（gameVersion が無いか "v1"）。正式版では読み込めません（正式版で書き出した JSON を使ってください）'
+      : `この JSON は ${VERSION_LABEL(chartVersion(chart))} 用の譜面です（正式版は ${VERSION_LABEL(gameVersion)}）`);
     return { errors, warnings };
   }
   const src = chart.source || {};

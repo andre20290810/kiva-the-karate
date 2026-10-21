@@ -64,7 +64,7 @@ Worker もホスト名が `kiva.world-of-andersen.com` 以外のアクセスを 
 | 確認 | 期待 |
 |---|---|
 | シークレットウィンドウで `https://kiva.world-of-andersen.com/` | ログイン画面へ転送 |
-| 未ログインで `/app/main.js`・`/assets/seipai/audio.m4a`・`/assets/seipai/manifest.json` | ログイン画面 / 401（中身が返らない） |
+| 未ログインで `/app/main.js`・`/assets/seipai_v2/audio.m4a`・`/assets/seipai_v2/manifest.json` | ログイン画面 / 401（中身が返らない） |
 | `http://kiva.world-of-andersen.com/` | `https://` へ転送 |
 | 誤ったパスワード | 「ID またはパスワードが違います」 |
 | 正しいパスワード | ゲームが起動し、設定欄にログアウトが表示 |

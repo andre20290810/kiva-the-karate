@@ -226,7 +226,7 @@ export class Effects {
       if (e.kind === 'stance') this._stance(ctx, S, e, p);
       else if (e.kind === 'strike') this._strike(ctx, S, e, p);
       else if (e.kind === 'turn') this._swirl(ctx, S, e, p, 'front');
-      else if (e.kind === 'breath') this._breath(ctx, S, e.anchorFrame ?? S.frameIndex, 1, 1 - p, e.gradeI);
+      else if (e.kind === 'breath') { this._breath(ctx, S, e.anchorFrame ?? S.frameIndex, 1, 1 - p, e.gradeI); if (p < 0.3) this._breathConverge(ctx, S, e, p / 0.3); }
     }
     this.stats = { active: this.list.length, drawn, cache: this.sil.size };
   }
@@ -247,6 +247,24 @@ export class Effects {
     const T = S.transformFor(g.index);
     const r = T.crop();
     return { bmp: g.bmp, index: g.index, T, r };
+  }
+
+  /** 呼吸の完了: 体の輪郭に沿う光が少し外側から体へ収束して消える（効果音の収束と同じ瞬間 t0 に最も明るい） */
+  _breathConverge(ctx, S, e, q) {
+    const cur = this._cur(S);
+    if (!cur) return;
+    const k = this.strength * e.gradeI;
+    const { r, T } = cur;
+    const rim = this.rim(cur.index, cur.bmp, r.w, r.h, '#d8f6ff', Math.max(1.5, S.standH / 240));
+    const glow = this.low ? null : this.blurred(`${cur.index}|conv|${r.w | 0}`, rim, 2.5);
+    const sc = 1 + 0.07 * (1 - easeOut(q)); // 外側から体へ
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.translate(T.ox, T.oy); ctx.scale(sc, sc); ctx.translate(-T.ox, -T.oy);
+    ctx.globalAlpha = clamp01((1 - q) ** 1.6 * 0.9 * k);
+    if (glow) { const pd = glow.pad; ctx.drawImage(glow, r.x - 4 - pd, r.y - 4 - pd, r.w + 8 + pd * 2, r.h + 8 + pd * 2); }
+    ctx.drawImage(rim, r.x - 4, r.y - 4, r.w + 8, r.h + 8);
+    ctx.restore();
   }
 
   _breath(ctx, S, _fi, progress, fade, gradeI) {
@@ -323,7 +341,8 @@ export class Effects {
       const g = this.tmp.getContext('2d');
       g.globalCompositeOperation = 'source-over';
       g.clearRect(0, 0, this.tmp.width, this.tmp.height);
-      const band = th * 0.16, y = -band + (th + band * 2) * easeOut(p / 0.6);
+      // 決まった瞬間（t0）に胸（体の幅がいちばん広い所）で最も明るく、下へ走りながら弱まる
+      const band = th * 0.16, y0 = th * 0.24, y = y0 + (th - y0) * easeOut(p / 0.6);
       const gr = g.createLinearGradient(0, y - band, 0, y + band);
       gr.addColorStop(0, 'rgba(255,235,190,0)');
       gr.addColorStop(0.5, 'rgba(255,245,220,0.9)');
@@ -332,12 +351,12 @@ export class Effects {
       g.fillRect(0, 0, tw, th);
       g.globalCompositeOperation = 'destination-in';
       g.drawImage(sil, 0, 0, tw, th);
-      ctx.globalAlpha = clamp01(0.55 * k * (1 - p));
+      ctx.globalAlpha = clamp01(0.55 * k * (1 - p / 0.6) ** 2.2); // 走りながら弱まる（明るさの山は t0）
       ctx.drawImage(this.tmp, 0, 0, tw, th, r.x, r.y, tw, th);
     }
     // 胸元の閃光
     if (p < 0.4) {
-      const q = p / 0.4, sz = S.standH * (0.18 + 0.22 * easeOut(q));
+      const q = p / 0.4, sz = S.standH * (0.34 + 0.06 * easeOut(q)); // 最初から大きく、広がりながら消える（明るさの山 = t0）
       const [fx, fy] = [T.ox, T.oy - S.standH * 0.12];
       ctx.globalAlpha = clamp01((1 - q) ** 1.5 * 0.85 * k);
       ctx.translate(fx, fy);
@@ -381,7 +400,7 @@ export class Effects {
     const kick = e.action === 'kick';
     // 打撃点の局所的な歪み（その時点の画面を少し拡大して戻す。低負荷では省略）
     if (!this.low && p < 0.55 && S.canvas) {
-      const q = p / 0.55, R = H * (0.06 + 0.12 * easeOut(q)), dpr = S.dpr;
+      const q = p / 0.55, R = H * (0.12 + 0.06 * easeOut(q)), dpr = S.dpr;
       const sz = Math.ceil(R * 2 * dpr);
       if (this.tmp2.width < sz || this.tmp2.height < sz) { this.tmp2.width = Math.max(this.tmp2.width, sz); this.tmp2.height = Math.max(this.tmp2.height, sz); }
       const g = this.tmp2.getContext('2d');
@@ -405,7 +424,7 @@ export class Effects {
         ctx.arc(px, py, R, 0, TAU);
         ctx.arc(px, py, R * 0.86, 0, TAU, true);
         ctx.clip('evenodd');
-        ctx.globalAlpha = clamp01(0.5 * (1 - q) * k);
+        ctx.globalAlpha = clamp01(0.5 * (1 - q) ** 1.6 * k);
         const nt = kick ? this.tex.noiseCyan : this.tex.noiseWarm;
         ctx.drawImage(nt, px - R, py - R, R * 2, R * 2);
         ctx.restore();
@@ -414,7 +433,8 @@ export class Effects {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     // 攻撃方向へ伸びるエネルギー（2 層: 外側の色 ＋ 白熱の芯）
-    const grow = easeOut(clamp01(p / 0.16));
+    // 衝撃音の最も強い瞬間（t0）でほぼ伸び切る（突き 約 11 ms、蹴り 約 19 ms）
+    const grow = easeOut(clamp01(p / (kick ? 0.035 : 0.02)));
     const L = H * (0.42 + 0.22 * e.gradeI) * grow, W = H * 0.1 * (1 - p) ** 0.6;
     if (p < 1 && L > 1) {
       ctx.save();
@@ -430,7 +450,7 @@ export class Effects {
     }
     // 打撃点の閃光
     if (p < 0.3) {
-      const q = p / 0.3, sz = H * (0.12 + 0.2 * easeOut(q)) * (0.7 + 0.3 * e.gradeI);
+      const q = p / 0.3, sz = H * (0.26 + 0.06 * easeOut(q)) * (0.7 + 0.3 * e.gradeI); // 最初から大きく（明るさの山 = t0）
       ctx.globalAlpha = clamp01((1 - q) * k);
       ctx.save();
       ctx.translate(px, py);

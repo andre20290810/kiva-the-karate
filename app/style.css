@@ -72,20 +72,11 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
 #bgmPanel #bgmStatus[data-kind=error] { color: #ff9a9a; }
 #bgmPanel button { min-height: 36px; }
 #bgmRetry { border: 1px solid #ffcf6a; background: #ffcf6a; color: #1a0f08; border-radius: 10px; padding: 4px 12px; font-weight: 700; }
-.mix-on { display: none; }
-[data-mix=true] .mix-on { display: grid; }
-[data-mix=true] .mix-off { display: none; }
-.mixrow { grid-template-columns: 7.5em 1fr auto; gap: 8px; align-items: center; }
+.mixrow { display: grid; grid-template-columns: 7.5em 1fr auto; gap: 8px; align-items: center; }
 .mixrow label { white-space: nowrap; font-size: 12px; }
-#verDialog { position: absolute; inset: 0; display: grid; place-items: center; background: #000a; z-index: 6; padding: 16px; }
-#verDialog[hidden] { display: none; }
-#verDialog .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; max-width: 460px; width: 100%; }
-#verDialog h2 { font-size: 17px; margin: 0 0 8px; }
-#verDialog button { min-height: 40px; padding: 6px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel2); color: var(--fg); }
 .sum-label { margin-left: 4px; }
 #transport summary { white-space: nowrap; }
 [data-orient=portrait] .sum-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.ver-badge { background: #ffd9b3; color: #1a0f08; border-radius: 6px; padding: 0 6px; margin-right: 6px; font-size: 12px; }
 #result { position: absolute; inset: 0; display: grid; place-items: center; background: #0008; z-index: 4; padding: 16px; }
 #result[hidden] { display: none; }
 #result .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; max-width: 420px; width: 100%; }
@@ -101,8 +92,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
 [data-orient=portrait] #transport { justify-content: center; flex-wrap: wrap; }
 [data-orient=portrait] .tbtn, [data-orient=portrait] #transport summary { padding: 4px 9px; font-size: 13px; white-space: nowrap; }
 [data-orient=portrait] #transport { gap: 5px; }
-[data-orient=portrait] .ver-badge { margin-right: 3px; }
-[data-orient=portrait] #status { -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; }
+[data-orient=portrait] [data-orient=portrait] #status { -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; }
 [data-orient=portrait] .padbtn { min-height: 70px; }
 /* 横向きで高さが小さい画面（スマホ横持ち）: 1 行に収める */
 @media (orientation: landscape) and (max-height: 500px) {

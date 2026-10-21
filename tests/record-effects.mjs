@@ -10,7 +10,7 @@ const base = process.env.BASE || 'http://127.0.0.1:8177/';
 const out = process.argv[2] || 'test-results/effects';
 mkdirSync(out, { recursive: true });
 const exe = process.env.CHROME_PATH || (existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
-const chart = JSON.parse(readFileSync(new URL('../charts/seipai.json', import.meta.url)));
+const chart = JSON.parse(readFileSync(new URL('../charts/seipai_v2.json', import.meta.url)));
 const pick = (f) => chart.notes.find(f);
 const clips = [
   ['breath', pick((n) => n.button === 'Y')],

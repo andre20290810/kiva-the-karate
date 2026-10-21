@@ -17,12 +17,12 @@ const copy = (rel) => cpSync(join(root, rel), join(out, rel), { recursive: true 
 for (const rel of ['index.html', 'app']) copy(rel);
 mkdirSync(join(out, 'charts'), { recursive: true });
 
-// バージョンごとの譜面・人物画像（manifest と cut/）・音声。どれか欠けていれば止める（--allow-missing-assets を除く）
-const { GAME_VERSIONS } = await import(pathToFileURL(join(root, 'app/versions.js')).href);
+// 正式版の譜面・人物画像（manifest と cut/）・音声・BGM だけ（終了した ver1 の素材は含めない）。欠けていれば止める（--allow-missing-assets を除く）
+const { GAME } = await import(pathToFileURL(join(root, 'app/config.js')).href);
 const stage = ['assets/stage/IMG_7441.JPG', 'assets/stage/IMG_7439.JPG'];
 const missing = stage.filter((f) => !existsSync(join(root, f)));
 const plan = [];
-for (const v of Object.values(GAME_VERSIONS)) {
+for (const v of [{ ...GAME, label: '正式版' }]) {
   copy(v.chart);
   const chart = JSON.parse(readFileSync(join(root, v.chart), 'utf8'));
   const man = chart.source.frameManifest, dir = dirname(man);

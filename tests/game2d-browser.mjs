@@ -5,9 +5,7 @@ import { existsSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
 const base = process.env.BASE || 'http://127.0.0.1:8177/';
-// GAME_VERSION=v2 で ver2 を確認（URL に ?v= を付ける）
-const GV = process.env.GAME_VERSION || '';
-const vq = (q) => (GV ? `${q}${q.includes('?') ? '&' : '?'}v=${GV}` : q);
+const vq = (q) => q;
 const out = process.argv[2] || 'test-results/game2d';
 mkdirSync(out, { recursive: true });
 const exe = process.env.CHROME_PATH || (existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
@@ -115,7 +113,7 @@ for (const [name, vp] of Object.entries(VIEWS)) {
   await p.waitForFunction(() => window.__app.state === 'ended', null, { timeout: 120000, polling: 500 });
   const r = await p.evaluate(() => window.__lastResult);
   const shown = await p.evaluate(() => window.__shown);
-  const total = JSON.parse(readFileSync(new URL('../charts/seipai.json', import.meta.url))).notes.length;
+  const total = JSON.parse(readFileSync(new URL('../charts/seipai_v2.json', import.meta.url))).notes.length;
   check(r && r.auto === true, 'AUTO の記録として区別される');
   check(r && r.perfect === total && r.miss === 0 && r.judged === total, `AUTO 全編: PERFECT ${r?.perfect}/${total}、MISS ${r?.miss}`);
   const ids = r.log.map((x) => x.id);
@@ -142,7 +140,7 @@ for (const [name, vp] of Object.entries(VIEWS)) {
 // ---------- 4. 手動: Y 長押し・早すぎる離し・X・A 2 回・自動リピート無視 ----------
 {
   const { ctx, p } = await open(VIEWS['1366x768']);
-  const notes = JSON.parse(readFileSync(new URL('../charts/seipai.json', import.meta.url))).notes;
+  const notes = JSON.parse(readFileSync(new URL('../charts/seipai_v2.json', import.meta.url))).notes;
   const y1 = notes.find((n) => n.button === 'Y');
   await p.click('#btnPlay');
   await p.evaluate((t) => window.__app.seek(t), y1.time - 1.0);

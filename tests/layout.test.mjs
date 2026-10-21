@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { containRect, laneRect, standingHeight, subjectTransform, orientationOf, BACKGROUNDS } from '../app/layout.js';
 import { DEFAULT_DISPLAY } from '../app/chart.js';
 
-const MANIFESTS = { ver1: '../assets/seipai/manifest.json', ver2: '../assets/seipai_v2/manifest.json' };
+const MANIFESTS = { 正式版: '../assets/seipai_v2/manifest.json' };
 const VIEWS = { '390x844': [390, 844 - 190], '844x390': [844, 390 - 76], '1366x768': [1366, 768 - 104] };
 
 test('向き: 表示領域の縦横比で決める', () => {

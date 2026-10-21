@@ -176,7 +176,7 @@ test('AUTO: 長押しの途中でシークしても押しっぱなしが残ら�
 });
 
 test('初期譜面ファイルが検証を通る', () => {
-  const c = JSON.parse(readFileSync(new URL('../charts/seipai.json', import.meta.url)));
+  const c = JSON.parse(readFileSync(new URL('../charts/seipai_v2.json', import.meta.url)));
   const r = validateChart(c, { frameCount: 412 });
   assert.deepEqual(r.errors, []);
   assert.ok(c.notes.length >= 10);

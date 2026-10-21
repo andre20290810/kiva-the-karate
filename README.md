@@ -12,95 +12,45 @@
 npm install            :: playwright-core（ブラウザ確認用）だけ
 npm start              :: http://localhost:8177/
 npm test               :: 判定・長押し・AUTO・JSON 検証・配置の単体テスト
-npm run test:browser   :: 実素材でのブラウザ確認（npm start を別に起動しておく）
+npm run test:browser   :: 実素材でのブラウザ確認（npm start を別に起動しておく）。ほかに test:audio・test:bgm・test:sfx
 ```
 `?fresh=1` を付けると、自動保存した編集内容を使わずに初期譜面で起動します。
 
-## バージョン（ver1／ver2）
+## 正式版（旧 ver2）
 
-ゲームのコードは共通で、バージョンごとに素材・譜面・音声の組を読み込みます（`app/versions.js`）。
+ゲームは 1 つ（旧 ver2、2026-10-20 撮影の素材）。設定・素材・保存先は `app/config.js` にまとめています。
+バージョンの選択欄・表示はありません。古い URL（`?v=v1`・`?v=v2` など）も正式版を開きます（`?v=v1` のときは「ver1 は終了しました」と表示）。
 
-| | ver1 | ver2 |
-|---|---|---|
-| 撮影 | セーパイ_20261010.mp4（576×1024） | セーパイ20261020（Drive ID 1HG7NvuwNuOfX2xmZHOPLTPHVywd7N4p5、720×1280） |
-| 人物画像 | `assets/seipai/`（412 枚、切り抜きを 9 コマ修正） | `assets/seipai_v2/`（提供の完成素材 412 枚をそのまま使用。Drive フォルダ 1TKxb414ovXxV14arbTjB244k1jLKXmq0） |
-| 譜面 | `charts/seipai.json`（gameVersion なし = ver1） | `charts/seipai_v2.json`（gameVersion: "v2"） |
-| 音声 | `assets/seipai/audio.m4a`（AAC）・`audio_opus.m4a` | `assets/seipai_v2/audio.m4a`（AAC）・`audio_opus.m4a` |
-| 自動保存 | `kiva2d.chart.autosave.v1`（従来のキー） | `kiva2d.v2.chart.autosave` |
-| 手動プレイの記録 | `kiva2d.best.manual`（従来のキー） | `kiva2d.v2.best.manual` |
-
-- 切り替え: 設定の「バージョン」（設定ボタンに今のバージョンを表示）。URL の `?v=v2` でも指定でき、最後に選んだものを覚えます。
-  再生中なら止め、未保存の編集（補正欄の未適用の入力など）があれば「保存して切り替え／破棄して切り替え／キャンセル」を選びます。
-  切り替えはページを読み込み直すので、前のバージョンの画像・音声・判定・エフェクトは残りません。先頭（開始前）から始まり、▶ で開始します
-  （音声はタップで始める必要があるため自動では始めません）。
-- JSON: 書き出しに `gameVersion` を入れます。別バージョンの JSON は読み込まず、メッセージを出します。`gameVersion` のない従来の JSON は ver1 です。
-- ver2 の素材の作り方（Git 管理外）:
+- 保存先は旧 ver2 のまま（ブラウザの編集内容・記録・BGM と音量の設定をそのまま引き継ぐ）:
+  自動保存 `kiva2d.v2.chart.autosave`、手動プレイの記録 `kiva2d.v2.best.manual`、BGM と音量 `kiva2d.v2.audio`。
+  旧 ver1 の保存内容（`kiva2d.chart.autosave.v1` など）は消していませんが、正式版では使いません。
+- 譜面 JSON は `gameVersion: "v2"` のまま読み書きします（旧 ver2 で書き出した JSON をそのまま読み込める）。
+  `gameVersion` が無い・`"v1"` の JSON（終了した ver1 用）は、メッセージを出して読み込みません。
+- 公開物（`dist/`）には正式版の人物画像・音声・BGM・譜面だけが入ります（ver1 の素材は入らない）。
+- ver1 の復元: タグ `ver1`（コミット f723a71。ver1 の譜面・初期譜面の表・切り替え前のコード）と、Git 管理外の素材を含めた一式
+  `ver1_snapshot_f723a71/`（そのまま公開できる dist、人物画像・配置・背景・音声・譜面、bundle）。どちらも公開物の外。
+- 素材: 提供の完成素材（Drive フォルダ 1TKxb414ovXxV14arbTjB244k1jLKXmq0、PNG 412 枚・720×1280・0.0〜82.2 秒）をそのまま使用。
+  元動画「セーパイ20261020」（Drive ID 1HG7NvuwNuOfX2xmZHOPLTPHVywd7N4p5）。412 枚すべてが元動画の該当フレームと画素一致（平均差 0.00）。
+  frame_0345 の腰の右に背景（暗い壁）の残りがあります（提供素材のまま。差し替えは提供元で）。
   ```
-  python tools/frames-2d/prepare_frames.py --src <ver2 の PNG フォルダ> --out assets/seipai_v2 --model pose_landmarker_heavy.task --video source/seipai_v2.mp4
+  python tools/frames-2d/prepare_frames.py --src <PNG フォルダ> --out assets/seipai_v2 --model pose_landmarker_heavy.task --video source/seipai_v2.mp4
   ffmpeg -i source/seipai_v2.mp4 -map 0:a:0 -vn -af "aresample=async=1:first_pts=0" -c:a aac -b:a 192k assets/seipai_v2/audio.m4a
   ffmpeg -i source/seipai_v2.mp4 -map 0:a:0 -vn -af "aresample=async=1:first_pts=0" -c:a libopus -b:a 128k -f mp4 assets/seipai_v2/audio_opus.m4a
-  python tools/chart/build_initial_chart.py --version v2 --manifest assets/seipai_v2/manifest.json --out charts/seipai_v2.json
+  python tools/chart/build_initial_chart.py --manifest assets/seipai_v2/manifest.json --out charts/seipai_v2.json
   ```
-  ver2 の動画の音声は映像より 0.023 秒遅れて始まるため、先頭に無音を足して「音声の 0 秒 = 映像の 0 秒」にしています。
-  ver2 の PNG は 412 枚すべてが元動画の該当フレーム（timestamps.csv の source_frame_index）と画素一致（平均差 0.00）。
-- ver2 の BGM（ver2 だけ。ver1 の音声・設定は従来どおり）: 開始前の画面の「BGM」で 3 曲から選びます（初回は Devil In The Fire、
-  最後に選んだ曲を `kiva2d.v2.audio` に保存）。選んだ曲を読み込めるまで開始できず、失敗したら曲名と「再試行」を出します。
-  BGM は元動画の音声と同じ AudioContext・同じ時間軸で鳴らし（時間軸 0 秒 = 曲の先頭、開始前の待ち時間は鳴らない）、一時停止・再開・シーク・
-  リトライ・速度変更に同じ時計で追従します。演武の終わり（82.27 秒）に向けて 1.5 秒でフェードアウトして止め、曲の長さに合わせて演武は延ばしません。
-  再生中は曲を変えられず、一時停止中・終了後に選び直すと先頭（開始前）に戻ります。ver1 へ切り替えるときは音をすべて止めてから読み込み直します。
-  | 表示名 | 原本（Drive フォルダ 1pYQmki-bQQ8Pkd0Qg-fOIiwJ8Zt0i9Ht、`source/bgm_dl/orig/` に保存） | 配信用 | 音量合わせ |
-  |---|---|---|---|
-  | Devil In The Fire（初期） | Devil In The Fire0.0(1).mp3（-13.3 LUFS） | `assets/seipai_v2/bgm/devil.m4a`（AAC）・`devil.opus.m4a` | -4.7 dB |
-  | AUTODRIVING THE SPEAR | AUTODRIVING THE SPEAR 1.1.wav（48 kHz 16 bit、-16.1 LUFS） | `spear.m4a`・`spear.opus.m4a` | -1.9 dB |
-  | UPRISING OVERDRIVE VORTEX | uprising-overdrive-vortex1.0(2).mp3（-13.1 LUFS） | `uprising.m4a`・`uprising.opus.m4a` | -4.9 dB |
-
-  配信用は原本の先頭から 85 秒（演武は 82.3 秒）を AAC 160 kbps と予備の Opus 112 kbps にしたもの（各 1.1〜1.7 MB）。原本の音量は変えず、
-  再生側で -18 LUFS にそろえます（`app/versions.js` の gainDb）。作り直し:
-  `ffmpeg -i <原本> -map 0:a:0 -vn -t 85 -c:a aac -b:a 160k devil.m4a`、`ffmpeg -i <原本> -map 0:a:0 -vn -t 85 -c:a libopus -b:a 112k -f mp4 devil.opus.m4a`。
-  音量: 設定の「BGM」「元動画の音声」「効果音」で個別に調整・ミュート（ver2 用に保存）。初期値は BGM 0.4・音声 0.8・効果音 0.9 で、
-  効果音は BGM の平均より 5〜7 dB 大きく聞こえ、3 つを重ねた最終出力はリミッターで 1.0 未満（確認: `npm run test:bgm`）。
-- ver1 の保存: タグ `ver1`（コミット f723a71）。Git 管理外の素材を含めた一式は引き継ぎの `ver1_snapshot_f723a71/`
-  （ver1_dist = そのまま公開できる dist、ver1_assets = 人物画像・配置・背景・音声・譜面、bundle）。
-
+  元動画の音声は映像より 0.023 秒遅れて始まるため、先頭に無音を足して「音声の 0 秒 = 映像の 0 秒」にしています。
 ## 素材の配置（公開リポジトリには含めない。`assets/` `source/` は Git 管理外）
 
 | 用途 | 置き場所 | 作り方 |
 |---|---|---|
-| 人物 | `assets/seipai/manifest.json`、`assets/seipai/cut/frame_0000.webp`〜`0411.webp` | 提供 ZIP から下のコマンドで作る |
+| 人物 | `assets/seipai_v2/manifest.json`、`assets/seipai_v2/cut/frame_0000.webp`〜`0411.webp` | 提供 PNG から `prepare_frames.py`（上の「正式版」） |
+| 元動画の音声 | `assets/seipai_v2/audio.m4a`（AAC-LC）、`audio_opus.m4a`（予備の Opus） | 上の「正式版」の ffmpeg。譜面の `audio.src` の順に試し、最初にデコードできたものを使う |
+| BGM | `assets/seipai_v2/bgm/{devil,spear,uprising}.m4a`・`.opus.m4a` | 上の「BGM」 |
 | 横向きの背景 | `assets/stage/IMG_7441.JPG`（1792×1008） | 提供画像をそのまま置く |
 | 縦向きの背景 | `assets/stage/IMG_7439.JPG`（784×1168） | 提供画像をそのまま置く |
-| 音声（任意） | `assets/seipai/audio.m4a`（AAC-LC）、`audio_opus.m4a`（予備の Opus） | `sh tools/extract_audio.sh source/seipai.mp4 assets/seipai`（元動画の AAC をそのまま取り出す）。譜面の `audio.src` の順に試し、最初にデコードできたものを使う。無ければ効果音だけで進行 |
 
-```bat
-pip install opencv-python numpy mediapipe
-:: ZIP の検査・展開・素材の作り直し・確認画像（source\ingest_report\）までまとめて行う
-python tools\frames-2d\ingest.py --zip source\seipai_transparent_412frames.zip --video source\seipai.mp4 --model pose_landmarker_heavy.task
-:: （drive.google.com に接続できる環境なら --zip の代わりに --download 1Mt_DYiGNyEWi5bpO2JASFXAEe5r0LSWZ）
-npm start
-node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の確認動画と描画時間（ffmpeg が必要）
-```
-会話に添付できない大きさの ZIP は、PC で `powershell -ExecutionPolicy Bypass -File tools\frames-2d\split_zip.ps1 -Zip <ZIP>` で 20 MB ずつに
-分けて部分と `.sha256.txt` を渡し、受け取り側で `python tools/frames-2d/join_parts.py --list <...>.sha256.txt --out source/seipai_transparent_412frames.zip`
-（SHA-256 と ZIP の整合を確認してから結合）→ `ingest.py --zip` で取り込みます。
-
-`ingest.py` は枚数を決め打ちせず、timestamps.csv の行と PNG の対応・連番・時刻の単調増加・サイズ・アルファを検査してから `prepare_frames.py` を実行し、
-`source/ingest_report/` に中央配置の一覧（centered.jpg）、倍率の表（scale.csv）、譜面の A の打撃点と新しい関節の比較
-（anchors.jpg・anchors.csv）、作り直し前の素材との差（manifest_diff.csv）、打撃点を新しい関節で置き換えた譜面の案（proposed_chart.json）を
-出します。欠落・重複（同じ画素の画像）・時刻の不連続があれば止まります。譜面とブラウザに自動保存された編集内容は書き換えません
-（`--rebuild-chart` のときだけ初期譜面を作り直す）。コマ単位の補正がある場合は見直し対象として一覧に出します。
-- 時刻は `timestamps.csv` を優先。`--model`（MediaPipe Pose、無料・ローカル）があれば胴体の中心と手足の位置を関節から測り、
-  無ければアルファから推定します（その場合、エフェクトの打撃点の自動設定は使えません）。
-- **正式素材**: 提供素材（412 枚 + timestamps.csv）に下の切り抜き修正（9 コマ）を加えたもの（2026-10-18 確定）。欠落・重複なし、時刻は 0.0〜82.2 秒の 0.2 秒間隔。
-  素材の識別: 共有フォルダ 1D4-ek3n0y0Dje3rjIaVyYmvnbTzNgDmY（PNG 412 枚 frame_0000〜0411 + README.txt + timestamps.csv = 414 ファイル、
-  2026-10-18T16:08:53Z 更新）。元動画は「セーパイ_20261010.mp4」（ID 1Rq2eWS914bnmzWwPZXsYQ8rCor5Xe5eY、82.266667 秒・30fps、6 フレームごと）で、
-  412 枚すべてが元動画の source_frame_index のフレームと画素一致（平均差 0.0）。取り込んだ ZIP・PNG の SHA-256 は `source/ingest_report/material.json`。
-- 切り抜きの修正: `python tools/frames-2d/repair_frames.py --src <PNG フォルダ> --video <元動画> --model pose_landmarker_heavy.task --out <修正版>`
-  で全コマを検査し、元動画から背景除去をやり直しました（人物の生成・補完はせず、色は PNG／元動画の元の画素のまま）。
-  修正したコマ: 102・110・340・315・343（脚の間・足元の床）、116・117・126（上半身の欠け）、332（手・頭の欠け）。
-  理由と数値は修正版フォルダの `repair_log.json`、前後の比較は `repair_sheet.jpg`。元動画と画素が合わないコマがあると止まります（別の動画では直さない）。
-- 初期譜面の A の打撃点は提供素材の関節から作り直しました（時刻は変更なし）。素材を差し替えた場合は、
-  `python tools\chart\build_initial_chart.py --manifest assets\seipai\manifest.json --out charts\seipai.json` で作り直せます
-  （編集済みの譜面がある場合は、作り直さずに編集モードで確認してください）。
+`tools/frames-2d/` には、ZIP の検査・取り込み（`ingest.py`）、元動画からの切り抜きのやり直し（`repair_frames.py`）、大きな ZIP の分割と
+結合（`split_zip.ps1`・`join_parts.py`）もあります（ver1 の素材の準備に使ったもの）。
 
 ## 画面
 
@@ -158,16 +108,17 @@ node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の
 シーク・ループ・リトライ・譜面の変更のたびに、その時刻以降のノーツの判定を初期化します（同じノーツを二重に加点しない、
 前回の MISS が残らない）。シークより前の未判定のノーツは「対象外」として成績に数えません。
 
-## 譜面 JSON（`charts/seipai.json`、schemaVersion 1）
+## 譜面 JSON（`charts/seipai_v2.json`、schemaVersion 1）
 
 時間はすべて **連続画像の開始を 0 秒** とする同じ時間軸の秒数です。画像（base64 など）は含めません。
 
 ```jsonc
 {
   "schemaVersion": 1,
+  "gameVersion": "v2",   // 正式版（旧 ver2）。無い・"v1" の JSON は読み込まない
   "title": "セーパイ",
-  "source": { "frameManifest": "assets/seipai/manifest.json", "frameCount": 412, "frameIntervalSeconds": 0.2, "durationSeconds": 82.266667 },
-  "audio": { "src": ["assets/seipai/audio.m4a", "assets/seipai/audio_opus.m4a"], "startAtTimelineSeconds": 0 },   // src は文字列か配列（先頭から順に試す）。null で音源なし
+  "source": { "frameManifest": "assets/seipai_v2/manifest.json", "frameCount": 412, "frameIntervalSeconds": 0.2, "durationSeconds": 82.26839 },
+  "audio": { "src": ["assets/seipai_v2/audio.m4a", "assets/seipai_v2/audio_opus.m4a"], "startAtTimelineSeconds": 0 },   // src は文字列か配列（先頭から順に試す）。null で音源なし
   "settings": {
     "inputOffsetMs": 0, "perfectWindowMs": 60, "goodWindowMs": 120, "missWindowMs": 180,
     "holdReleaseWindowMs": 150,   // 長押しの終了より この分 早く離しても成功
@@ -195,7 +146,7 @@ node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の
 | `button` / `action` / `input` | Y = `breathe`・`hold`（`duration` 必須）、X = `stance`・`tap`、A = `punch`／`kick`／`strike`・`tap`、B = `turn`・`tap` |
 | `id` | ノーツごとに一意で変わらない ID（追加時は `n` + 連番） |
 | `sequenceId` | 連続コマンドのまとまり（`sequences` の id）。各ノーツは個別に判定 |
-| `effect.anchor` | 元の 576×1024 画像内を 0〜1 にした打撃点。中央配置・拡大縮小と同じ変換で画面に置く |
+| `effect.anchor` | 元の 720×1280 画像内を 0〜1 にした打撃点。中央配置・拡大縮小と同じ変換で画面に置く |
 | `effect.direction` | 攻撃の向き（画面の右 = +x、下 = +y） |
 | `effect.intensity` | 0〜2（PERFECT は 1 倍、GOOD は約 0.6 倍で表示） |
 | `display.frameOverrides` | キー = コマ番号（0〜411）。`dx`・`dy` は背景の表示矩形の **高さ** に対する割合のずらし量、`scale` は自動倍率に掛ける倍率（0.2〜5） |
@@ -206,14 +157,12 @@ node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の
 
 ## 初期譜面について
 
-`charts/seipai.json`（46 ノーツ）は、412 枚を目視で確認し、動作が止まった（決まった）コマに置きました
+`charts/seipai_v2.json`（46 ノーツ）は、412 枚を 1 コマずつ確認し、動作が決まったコマに置きました
 （`tools/chart/build_initial_chart.py` に時刻の一覧と根拠のメモ）。0.2 秒間隔の画像から読んだ時刻なので、ミリ秒の精度はありません。
-要調整箇所は譜面の `memo`（編集モードの「編集メモ」）にあります。主なもの:
 
-- 冒頭は映像の動作に合わせた 1 つの連続コマンド: Y 呼吸（5.8 秒〜2.6 秒間）→ X 構え（12.2）→ A 打撃（15.4、片腕の突き上げ）→
-  X 構え直し（18.4、両腕の交差）→ B 旋回（20.8）→ X 構え（21.6）→ A 打撃（22.2）。映像にない突きは加えていません
-- 技名を確定できない打撃は「打撃」と表記（編集モードで変更可）。はっきり蹴りと分かる 24.2・59.2 秒だけ「蹴り」
-- 44.4〜46.8 秒（後ろ向きで足を運ぶ区間）は決めの瞬間が読めないためノーツなし。静止・礼の区間にもなし
+- 冒頭は 1 つの連続コマンド: Y 呼吸（5.8 秒〜2.6 秒間）→ X 構え（12.4）→ A 打撃（15.4）→ X 構え直し（18.4）→ B 旋回（20.8）→ X 構え（21.8）→ A 打撃（22.4）
+- はっきり蹴りと分かるのは 24.2 秒だけ「蹴り」。49.4・53.8・66.4 秒は膝を上げる動作（打撃点は膝）。59.4 秒は技を特定できないので「打撃」
+- 静止・礼の区間にはノーツを置いていません
 
 ## 構成
 
@@ -228,6 +177,8 @@ node tests\record-effects.mjs   :: 呼吸・構え・打ち・蹴り・旋回の
 | `app/lanes.js` / `app/editor.js` / `app/chart.js` | レーン描画 ／ 編集モード ／ 譜面 JSON の検証・書き出し |
 | `tools/frames-2d/` | 素材準備（`prepare_frames.py`、代用素材 `standin_from_video.py`、`landmarks_mp.py`） |
 | `tools/chart/` | 初期譜面の作成 |
+| `tools/sfx/` | 効果音の録音（`render.mjs`）と数値での比較（`analyse.py`） |
+| `app/config.js` | 正式版の素材・譜面・BGM・保存先 |
 | `tools/build-dist.mjs` | 公開用 `dist/`（2D 版のファイルだけ。代用素材では作らない） |
 | `tools/handoff/integrate_bundle.bat` | クラウドで作った git bundle を PC で安全に取り込み、通常 push（確認のみ→ push の 2 段階） |
 | `worker/` | 限定公開の認証ゲート（DEPLOY.md） |
