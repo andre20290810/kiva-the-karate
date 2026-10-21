@@ -8,7 +8,6 @@ import { Input } from './input.js';
 import { FrameStore } from './frames.js';
 import { Effects } from './fx.js';
 import { LaneRenderer, LANE_STYLE } from './lanes.js';
-import { Sfx, SFX_MIX_GAIN } from './sfx.js';
 import { BACKGROUNDS, orientationOf, containRect, coverRect, laneRect, standingHeight, landscapeSubject, subjectTransform } from './layout.js';
 import { normalizeChart, validateChart, BUTTON_INFO } from './chart.js';
 import { resolveEffect } from './effects-catalog.js';
@@ -62,18 +61,14 @@ export class App {
     if (this.mixMode) {
       let saved = {};
       try { saved = JSON.parse(store.get(this.keys.audio) || '{}') || {}; } catch { saved = {}; }
+      // BGM の選択と、元動画の音声・BGM の音量・ミュートだけを読む（効果音は廃止。古い保存内容の効果音の項目は読まずに消す）
+      const pick = (o, def) => ({ voice: o?.voice ?? def.voice, bgm: o?.bgm ?? def.bgm });
       this.audioPrefs = {
         bgm: this.ver.bgm.some((t) => t.id === saved.bgm) ? saved.bgm : this.ver.defaultBgm,
-        levels: { ...this.ver.defaultLevels, ...(saved.levels || {}) },
-        mutes: { voice: false, bgm: false, sfx: false, ...(saved.mutes || {}) },
-        sfxReset: saved.sfxReset ?? null,
+        levels: pick(saved.levels, this.ver.defaultLevels),
+        mutes: pick(saved.mutes, { voice: false, bgm: false }),
       };
-      // 効果音の音量を一度だけ 0 にする（既存の利用者も）。その後の変更は保存されたまま。BGM・元動画の音声は変えない
-      if (this.audioPrefs.sfxReset !== this.ver.sfxResetId) {
-        this.audioPrefs.levels.sfx = 0;
-        this.audioPrefs.sfxReset = this.ver.sfxResetId;
-        store.set(this.keys.audio, JSON.stringify(this.audioPrefs));
-      }
+      if (saved.levels?.sfx != null || saved.mutes?.sfx != null || 'sfxReset' in saved) store.set(this.keys.audio, JSON.stringify(this.audioPrefs));
     }
     this.bgmState = null;
     this._bgmToken = 0;
@@ -83,7 +78,8 @@ export class App {
     this.loop = { a: null, b: null, on: false };
     this.generation = 0;
     this.lastT = 0;
-    this.prefs = { volume: 0.8, sfx: 0.6, fxStrength: 1, lowFx: false, ...JSON.parse(store.get(PREFS_KEY) || '{}') };
+    this.prefs = { volume: 0.8, fxStrength: 1, lowFx: false, ...JSON.parse(store.get(PREFS_KEY) || '{}') };
+    if ('sfx' in this.prefs) { delete this.prefs.sfx; store.set(PREFS_KEY, JSON.stringify(this.prefs)); } // 廃止した効果音の音量
     for (const k of LEGACY_KEYS) store.del(k);
     this.canvas = $('#stage');
     this.ctx = this.canvas.getContext('2d');
@@ -145,12 +141,9 @@ export class App {
       this.chart = chart;
       this.clock = new TimelineClock({ duration: this.duration, mix: this.mixMode });
       this.clock.volume = this.prefs.volume;
-      this.sfx = new Sfx(this.clock);
-      this.sfx.volume = this.prefs.sfx;
       if (this.mixMode) {
         Object.assign(this.clock.levels, this.audioPrefs.levels);
         Object.assign(this.clock.mutes, this.audioPrefs.mutes);
-        this.sfx.volume = SFX_MIX_GAIN; // 効果音の大きさは効果音の系統（音量・ミュート）で決める
       }
       const bgP = Promise.all([loadImage(BACKGROUNDS.landscape.src), loadImage(BACKGROUNDS.portrait.src)]);
       this.store = new FrameStore(this.manifest, manifestUrl);
@@ -183,7 +176,7 @@ export class App {
   async loadAudio() {
     const src = this.chart.audio?.src;
     const list = Array.isArray(src) ? src : src ? [src] : [];
-    if (!list.length) return '音源なし（効果音のみ）';
+    if (!list.length) return '音源なし（画像とノーツだけで進行）';
     const errs = [];
     for (const one of list) {
       try {
@@ -202,7 +195,7 @@ export class App {
     }
     this.audio = { file: null, codec: '', skipped: errs, state: 'none', reason: errs.join(' ／ '), signal: null };
     this.renderAudioInfo();
-    return `音源を使えません（${errs.join(' ／ ')}）。効果音のみで進行します`;
+    return `音源を使えません（${errs.join(' ／ ')}）。音声なしで進行します`;
   }
 
   setup() {
@@ -241,8 +234,6 @@ export class App {
     }
     this.fx.clear();
     this.lanes.clear();
-    this.sfx?.breathStop();
-    this.breathTailUntil = null;
   }
 
   /** 譜面を編集したとき: 現在位置から判定し直す（同じノーツの二重加点なし） */
@@ -340,7 +331,6 @@ export class App {
     if (this.state !== 'playing') return;
     this.clock.pause();
     if (this.audio?.state === 'playing') { this.audio.state = 'paused'; this.renderAudioInfo(); }
-    this.sfx?.breathStop();
     this.state = 'paused';
     this.updateUi();
   }
@@ -381,7 +371,6 @@ export class App {
     if (this.judge) {
       // 切替時: 押しっぱなしの長押しは成績に数えず、過去のノーツはまとめて成立させない
       this.judge.cancelHolds();
-      this.sfx?.breathStop();
       const t = this.t;
       this.auto = on ? new AutoPlayer(this.judge, { generation: ++this.generation }) : null;
       if (this.auto) {
@@ -398,7 +387,6 @@ export class App {
   finish() {
     this.state = 'ended';
     this.clock.pause();
-    this.sfx?.breathStop();
     const s = this.judge.summary();
     const auto = this.autoMode || this.usedAuto;
     const rec = { auto, ...s, gameVersion: this.version, at: new Date().toISOString() };
@@ -439,36 +427,23 @@ export class App {
   onJudge(e) {
     if (e.type === 'stray') { this.lanes.mark('—', this.t, e.button); return; }
     const n = e.note, src = n.src;
-    if (e.type === 'holdStart') { this.sfx.breathStart(); return; }
-    if (n.input === 'hold') this.sfx.breathStop();
+    if (e.type === 'holdStart') return;
     this.log.push({ id: n.id, time: n.time, grade: e.grade, delta: n.delta, source: e.source, reason: e.reason });
     const shownAt = e.grade === 'MISS' ? this.t : Math.min(this.t, e.time ?? this.t);
     this.lanes.mark(e.grade, Math.max(shownAt, this.t - 0.05), n.button, n.delta);
-    if (e.grade === 'MISS') { this.sfx.miss(); return; }
-    // 成功: 効果音はコマンド（ボタン）で、人物のエフェクトはノーツごとに選んだ番号で（app/effects-catalog.js）
-    const kind = { Y: 'breath', X: 'stance', A: 'strike', B: 'turn' }[n.button];
+    if (e.grade === 'MISS') return;
+    // 成功: 人物のエフェクトはノーツごとに選んだ番号で（app/effects-catalog.js）。効果音はない（2026-10-21 に廃止）
     const ef = src.effect || {};
     const fx = resolveEffect(src);
     const frameIndex = this.store.indexAt(Math.max(0, n.time));
-    // 効果音を先に鳴らし、その最も強い瞬間が聞こえる時刻（時間軸）に演出の山を合わせる。判定と画像の再生は止めない
-    const peakCtx = this.sfx.play(src.action === 'kick' ? 'kick' : kind, e.grade, { pan: kind === 'turn' ? this.turnDirection(frameIndex) : 0 });
-    const peakT = peakCtx != null ? this.clock.timelineAtCtx(peakCtx) : null;
-    const t0 = peakT != null && peakT >= this.t && peakT < this.t + 0.2 ? peakT : this.t;
-    if (n.input === 'hold') { this.breathTailUntil = t0; this.fx.holdDone(n.id); }
-    // 判定位置の文字に赤い火を灯す（効果音の音量が 0 でも出す。MISS・早すぎる解除では呼ばれない）
+    const t0 = this.t; // 演出の山 = 判定した瞬間
+    if (n.input === 'hold') this.fx.holdDone(n.id);
+    // 判定位置の文字に赤い火を灯す（MISS・早すぎる解除では呼ばれない）
     this.lanes.ignite(n.button, t0, e.grade, n.input === 'hold');
     this.fx.trigger(fx.key, {
       t: t0, grade: e.grade, frameIndex, action: src.action, fx, hold: n.input === 'hold',
       direction: fx.direction ?? ef.direction, seed: this.generation * 101 + this.judge.notes.indexOf(n),
     });
-  }
-
-  /** 旋回の向き（画面の左へ回る -1 ／ 右へ 1）: 前後のコマで、鼻が肩の中心に対して動く向き */
-  turnDirection(i) {
-    const F = this.store.frames, a = F[Math.max(0, i - 2)]?.joints, b = F[Math.min(F.length - 1, i + 2)]?.joints;
-    if (!a || !b || !a.nose || !b.nose) return 1;
-    const rel = (j) => j.nose[0] - (j.left_shoulder[0] + j.right_shoulder[0]) / 2;
-    return rel(b) - rel(a) < 0 ? -1 : 1;
   }
 
   // ---------- 描画 ----------
@@ -572,13 +547,11 @@ export class App {
     // 人物
     const fi = this.store.indexAt(Math.max(0, t));
     this.store.prefetch(fi);
-    const S = { t, store: this.store, frameIndex: fi, transformFor: (i) => this.transformFor(i, G), standH, canvas: this.canvas, dpr, laneBottom: L.y + L.h };
-    // 長押し中のエフェクト（ノーツで選んだ番号。息の既定は背後にまとう炎）。成功の山（t0）までは完了の大きさで保つ
+    const S = { t, store: this.store, frameIndex: fi, transformFor: (i) => this.transformFor(i, G), standH, canvas: this.canvas, dpr };
+    // 長押し中のエフェクト（ノーツで選んだ番号。息の既定は呼吸の気）
     const holding = this.judge?.notes.find((n) => n.holding);
-    const tail = !holding && this.breathTailUntil != null && t < this.breathTailUntil ? this._tailNote : null;
-    if (holding) this._tailNote = holding;
-    const hn = holding || tail;
-    if (hn) { const r = resolveEffect(hn.src); this.fx.setHold({ id: hn.id, key: r.key, fx: r, progress: holding ? this.judge.holdProgress(holding, t) : 1 }, t); } else this.fx.setHold(null, t);
+    const hn = holding;
+    if (hn) { const r = resolveEffect(hn.src); this.fx.setHold({ id: hn.id, key: r.key, fx: r, progress: this.judge.holdProgress(holding, t) }, t); } else this.fx.setHold(null, t);
     this.fx.renderUnder(ctx, S);
     this.editor?.drawPreview(ctx, S, 'under');
     const g = this.store.get(fi);
@@ -590,7 +563,6 @@ export class App {
     }
     // 長押し中（人物の手前側の光）
     if (hn) this.fx.renderHold(ctx, S);
-    if (holding && this.state === 'playing') this.sfx.breathUpdate(this.judge.holdProgress(holding, t)); // 息の音も進み具合で滑らかに変わる
     this.fx.renderOver(ctx, S);
     this.editor?.drawPreview(ctx, S, 'over');
     // レーンの手前側（ラベル・判定線・ノーツ・判定）と HUD
@@ -748,7 +720,7 @@ export class App {
       $('#bgmRetry').addEventListener('click', () => this.loadBgmTrack(this.audioPrefs.bgm));
       $('#bgmStart').addEventListener('click', () => this.play());
       // 3 系統の音量とミュート
-      for (const [k, id, mute] of [['bgm', '#mixBgm', '#muteBgm'], ['voice', '#mixVoice', '#muteVoice'], ['sfx', '#mixSfx', '#muteSfx']]) {
+      for (const [k, id, mute] of [['bgm', '#mixBgm', '#muteBgm'], ['voice', '#mixVoice', '#muteVoice']]) {
         const el = $(id), m = $(mute);
         el.value = this.audioPrefs.levels[k];
         m.checked = this.audioPrefs.mutes[k];

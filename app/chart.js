@@ -1,7 +1,7 @@
 // 譜面 JSON（schemaVersion 1）の検証・正規化・書き出し。DOM に依存しない純粋ロジック。
 // 時間はすべて「連続画像の開始 = 0 秒」の同じ時間軸の秒数。形式の説明は README「譜面 JSON」。
 
-import { validateEffect } from './effects-catalog.js';
+import { validateEffect, migrateEffect } from './effects-catalog.js';
 
 export const SCHEMA_VERSION = 1;
 export const BUTTONS = ['Y', 'X', 'A', 'B'];
@@ -148,7 +148,7 @@ export function normalizeChart(chart) {
       label: n.label ?? ACTION_LABEL[n.action] ?? n.action, sequenceId: n.sequenceId ?? null,
     };
     if (n.input === 'hold') out.duration = round(n.duration, 4);
-    if (n.effect) out.effect = structuredClone(n.effect);
+    if (n.effect) out.effect = structuredClone(migrateEffect(n)); // 廃止した番号 5 は置き換える
     return out;
   }).sort((a, b) => a.time - b.time || a.id.localeCompare(b.id));
   c.memo = Array.isArray(c.memo) ? c.memo.map(String) : [];

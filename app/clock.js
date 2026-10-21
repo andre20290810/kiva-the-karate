@@ -3,8 +3,8 @@
 // - 音声がないとき / 未許可のとき: performance.now() が基準
 // 描画フレーム数や setInterval の積算では時刻を決めない。
 // 音声は複数のトラック（元動画の音声と BGM）を同じ AudioContext・同じ時間軸に並べて鳴らす（別々の時計は持たない）。
-// mix: true のとき（BGM のあるバージョン）は 音声・BGM・効果音 をそれぞれの音量（ミュート可）→ リミッター → 出力 に通す。
-// mix: false（ver1）は従来どおり 音声の音量 → 出力、効果音 → 出力。
+// mix: true のとき（BGM のあるバージョン）は 元動画の音声・BGM をそれぞれの音量（ミュート可）→ リミッター → 出力 に通す。
+// mix: false は 音声の音量 → 出力。効果音はない（2026-10-21 に廃止）。
 
 const IS_IOS = typeof navigator !== 'undefined' && (/iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
@@ -13,8 +13,8 @@ export class TimelineClock {
     this.duration = duration;
     this.mix = mix;
     this.bgm = null;        // {buffer, gain(倍率), fade(秒), label}。BGM は時間軸の 0 秒から鳴らし、終わり（duration）で消える
-    this.levels = { voice: 0.8, bgm: 0.6, sfx: 0.6 };
-    this.mutes = { voice: false, bgm: false, sfx: false };
+    this.levels = { voice: 0.8, bgm: 0.6 };
+    this.mutes = { voice: false, bgm: false };
     this.sources = [];
     this.ctx = null;
     this.buffer = null;
@@ -34,22 +34,19 @@ export class TimelineClock {
       this.ctx = new AC({ latencyHint: 'interactive' });
       this.gain = this.ctx.createGain(); // 元動画の音声
       if (this.mix) {
-        // 3 系統を足してもクリップしないよう、最後にリミッター
+        // 2 系統を足してもクリップしないよう、最後にリミッター
         this.limiter = this.ctx.createDynamicsCompressor();
         this.limiter.threshold.value = -3; this.limiter.knee.value = 0; this.limiter.ratio.value = 20;
         this.limiter.attack.value = 0.001; this.limiter.release.value = 0.15;
         this.master = this.ctx.createGain();
-        this.master.gain.value = 0.85; // リミッターの手前で余裕を取る（打撃音の立ち上がりでも 1.0 を超えないように）
+        this.master.gain.value = 0.85; // リミッターの手前で余裕を取る
         this.master.connect(this.limiter).connect(this.ctx.destination);
         this.outAnalyser = this.ctx.createAnalyser(); // 最終出力の確認用（音割れの検査）
         this.outAnalyser.fftSize = 2048;
         this.limiter.connect(this.outAnalyser);
         this.bgmBus = this.ctx.createGain();
         this.bgmFade = this.ctx.createGain();
-        this.bgmDuck = this.ctx.createGain(); // 効果音の瞬間だけ BGM を少し下げる（効果音側が操作）
-        this.bgmFade.connect(this.bgmDuck).connect(this.bgmBus).connect(this.master);
-        this.sfxBus = this.ctx.createGain();
-        this.sfxBus.connect(this.master);
+        this.bgmFade.connect(this.bgmBus).connect(this.master);
         this.gain.connect(this.master);
         this.bgmAnalyser = this.ctx.createAnalyser();
         this.bgmAnalyser.fftSize = 2048;
@@ -150,7 +147,6 @@ export class TimelineClock {
     const eff = (k) => (this.mutes[k] ? 0 : this.levels[k]);
     set(this.gain, eff('voice'));
     set(this.bgmBus, eff('bgm') * (this.bgm?.gain ?? 1));
-    set(this.sfxBus, eff('sfx'));
   }
 
   /** BGM を読み込む（時間軸の 0 秒 = 曲の先頭）。gain: 曲ごとの音量合わせ（倍率）、fade: 終わりのフェードアウト（秒） */
@@ -190,12 +186,6 @@ export class TimelineClock {
     const ts = this.ctx.getOutputTimestamp?.();
     if (ts && ts.performanceTime > 0) return ts.contextTime + (perfMs - ts.performanceTime) / 1000;
     return this.ctx.currentTime - (performance.now() - perfMs) / 1000;
-  }
-
-  /** AudioContext の時刻 ct に鳴る音が、時間軸の何秒に聞こえるか（効果音の最も強い瞬間に画面の演出を合わせる） */
-  timelineAtCtx(ct) {
-    if (this.state !== 'playing' || !this._audioMode) return null;
-    return this.anchorT + (ct - this.anchorBase) * this.rate;
   }
 
   /** 時間軸の位置（秒）。perfMs を渡すとその時点の位置（入力イベントの timeStamp 用） */

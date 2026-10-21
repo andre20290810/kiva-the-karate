@@ -175,9 +175,10 @@ for (const [id, label] of TRACKS) {
   // 音量・ミュートを ver2 用に保存
   await p.click('#more summary');
   await p.fill('#mixBgm', '0.3'); await p.dispatchEvent('#mixBgm', 'change');
-  await p.check('#muteSfx');
-  const lv = await p.evaluate(() => ({ prefs: JSON.parse(localStorage.getItem('kiva2d.v2.audio')), bus: window.__app.clock.sfxBus?.gain.value }));
-  check(lv.prefs.levels.bgm === 0.3 && lv.prefs.mutes.sfx === true, 'BGM・元動画・効果音の音量とミュートを ver2 用に保存', JSON.stringify(lv.prefs));
+  await p.check('#muteVoice');
+  const lv = await p.evaluate(() => ({ prefs: JSON.parse(localStorage.getItem('kiva2d.v2.audio')), sfxUi: !!document.querySelector('#mixSfx, #muteSfx') }));
+  check(lv.prefs.levels.bgm === 0.3 && lv.prefs.mutes.voice === true && !('sfx' in lv.prefs.levels) && !lv.sfxUi, 'BGM・元動画の音量とミュートを保存（効果音の設定はない）', JSON.stringify(lv.prefs));
+  await p.uncheck('#muteVoice');
   await p.click('#more summary');
   await ctx.close();
 }

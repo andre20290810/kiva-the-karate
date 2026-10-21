@@ -111,7 +111,7 @@ export class GlyphRenderer {
 
 
   // ---------- 成功の火 ----------
-  /** 成功: 判定位置の文字に火を灯す。t0 = 最も強い瞬間（効果音の山と同じ） */
+  /** 成功: 判定位置の文字に火を灯す。t0 = 判定した瞬間 */
   ignite(button, ch, t0, grade, strong = false) {
     const I = (grade === 'PERFECT' ? 1 : 0.65) * (strong ? 1.25 : 1);
     this.list.push({ button, ch, t0, I, grade, strong, dur: strong ? 1.05 : 0.8, seed: Math.random() * 100 });

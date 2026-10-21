@@ -595,7 +595,7 @@ export class Editor {
       <h4>コマンド</h4>
       <div class="ed-grid">
         <label for="nButton">コマンド種別</label><span><select id="nButton">${BUTTONS.map((b) => `<option value="${b}" ${b === n.button ? 'selected' : ''}>${GLYPH[b]}（${b}・${BUTTON_INFO[b].meaning}）</option>`).join('')}</select>
-          <small class="ed-dim">変えると文字・入力ボタン・効果音がそろって変わり、エフェクトはそのコマンドの既定に戻ります</small></span>
+          <small class="ed-dim">変えると文字・入力ボタンがそろって変わり、エフェクトはそのコマンドの既定に戻ります</small></span>
         <label for="nAction">動作</label><span><select id="nAction">${info.actions.map((a) => `<option value="${a}" ${a === n.action ? 'selected' : ''}>${ACTION_LABEL[a]}（${a}）</option>`).join('')}</select></span>
         <label for="nTime">時刻（秒）</label><span><input id="nTime" type="number" step="0.01" min="0" value="${n.time}"> <button data-n="toHere">現在位置へ</button> <button data-n="seek">ここへ移動</button></span>
         <label for="nLabel">表示名</label><span><input id="nLabel" type="text" value="${esc(n.label)}" maxlength="20"></span>
@@ -621,7 +621,6 @@ export class Editor {
         <label>大きさ</label><span>${rng('eSize', 'size', fx.size, 0.05, '×')}</span>
         <label>強さ</label><span>${rng('eInt', 'intensity', fx.intensity, 0.05)}</span>
         <label>持続時間</label><span>${rng('eDur', 'duration', fx.duration, 0.05, ' 秒')}</span>
-        ${def.fire ? `<label>炎の高さ</label><span>${rng('eH', 'height', fx.height, 0.05, '×')}</span><label>炎の幅</label><span>${rng('eW', 'width', fx.width, 0.05, '×')}</span>` : ''}
       </div>
       ${this.pick ? `<p class="ed-pick">${this.pick === 'anchor' ? 'ステージ上の発生位置（拳・足など）をクリック' : '向きの先をクリック'}（Esc で中止）</p>` : ''}`;
     const q = (s) => box.querySelector(s);
@@ -666,8 +665,6 @@ export class Editor {
     slider('#eSize', '大きさを変更', (ef, v) => { ef.size = v; }, (v) => `${v.toFixed(2)}×`);
     slider('#eInt', '強さを変更', (ef, v) => { ef.intensity = v; });
     slider('#eDur', '持続時間を変更', (ef, v) => { ef.duration = v; }, (v) => `${v.toFixed(2)} 秒`);
-    slider('#eH', '炎の高さを変更', (ef, v) => { ef.height = v; }, (v) => `${v.toFixed(2)}×`);
-    slider('#eW', '炎の幅を変更', (ef, v) => { ef.width = v; }, (v) => `${v.toFixed(2)}×`);
     box.querySelectorAll('[data-n]').forEach((b) => b.addEventListener('click', () => {
       const k = b.dataset.n;
       if (k === 'toHere') upd((x) => { x.time = this.snapT(Math.max(0, this.app.t)); }, '時刻を現在位置へ');
@@ -711,7 +708,7 @@ export class Editor {
       const F = this.thumbFx;
       F.clear();
       const dir = fxv.direction ?? n.effect?.direction ?? (e.key === 'turn' ? { x: 1, y: 0 } : null);
-      if (e.key !== 'none') F.trigger(e.key, { t: 50 - (e.key === 'backFire' ? 0.02 : 0.08) * fxv.duration, grade: 'PERFECT', frameIndex: fi, action: n.action, fx: fxv, direction: dir, seed: 3, hold: true });
+      if (e.key !== 'none') F.trigger(e.key, { t: 50 - (e.key === 'breath' ? 0.15 : 0.08) * fxv.duration, grade: 'PERFECT', frameIndex: fi, action: n.action, fx: fxv, direction: dir, seed: 3, hold: true });
       try {
         F.renderUnder(g, S);
         const b = store.get(fi);
@@ -731,7 +728,7 @@ export class Editor {
     this.previewFx ||= new Effects();
     this.previewFx.clear();
     const fx = resolveEffect(n);
-    this.preview = { id: n.id, fx, key: fx.key, fi: this.app.store.indexAt(n.time), start: performance.now(), grow: n.input === 'hold' && fx.key === 'backFire' ? 0.9 : 0, action: n.action, direction: fx.direction ?? n.effect?.direction ?? null, fired: false };
+    this.preview = { id: n.id, fx, key: fx.key, fi: this.app.store.indexAt(n.time), start: performance.now(), grow: n.input === 'hold' && fx.key === 'breath' ? 0.9 : 0 /* 長押し: 保持中 → 成功（プレイと同じ表現） */, action: n.action, direction: fx.direction ?? n.effect?.direction ?? null, fired: false };
     this.message(`No.${fx.id} ${fx.def.name} を ${n.id}（${n.time.toFixed(2)} 秒）で試しています`);
   }
 

@@ -8,7 +8,6 @@
     "test:browser": "node tests/game2d-browser.mjs",
     "test:audio": "node tests/audio-browser.mjs",
     "test:bgm": "node tests/bgm-browser.mjs",
-    "test:sfx": "node tests/sfx-browser.mjs",
     "test:editor": "node tests/editor-fx-browser.mjs",
     "sfx:render": "node tools/sfx/render.mjs",
     "build:dist": "node tools/build-dist.mjs"

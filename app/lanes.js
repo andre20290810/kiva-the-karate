@@ -36,7 +36,7 @@ export class LaneRenderer {
 
   clear() { this.marks = []; this.glyph.clear(); }
 
-  /** 成功: 判定位置の文字に火を灯す（t0 = 効果音の最も強い瞬間）。strong: 長押しの完了 */
+  /** 成功: 判定位置の文字に火を灯す（t0 = 判定した瞬間）。strong: 長押しの完了 */
   ignite(button, t0, grade, strong = false) {
     if (strong) this.glyph.holdDone();
     this.glyph.ignite(button, GLYPH[button], t0, grade, strong);
