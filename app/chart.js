@@ -1,6 +1,8 @@
 // 譜面 JSON（schemaVersion 1）の検証・正規化・書き出し。DOM に依存しない純粋ロジック。
 // 時間はすべて「連続画像の開始 = 0 秒」の同じ時間軸の秒数。形式の説明は README「譜面 JSON」。
 
+import { validateEffect } from './effects-catalog.js';
+
 export const SCHEMA_VERSION = 1;
 export const BUTTONS = ['Y', 'X', 'A', 'B'];
 
@@ -14,7 +16,6 @@ export const BUTTON_INFO = Object.freeze({
 export const ACTION_LABEL = Object.freeze({
   breathe: '呼吸', stance: '構え', punch: '正拳突き', kick: '蹴り', strike: '打撃', turn: '旋回',
 });
-export const EFFECT_PRESETS = ['breath', 'stance', 'strike', 'turn'];
 
 export const DEFAULT_SETTINGS = Object.freeze({
   inputOffsetMs: 0,        // + にすると入力を遅い側へ補正（入力時刻からこの分を引いて判定）
@@ -100,16 +101,7 @@ export function validateChart(chart, { frameCount, durationSeconds, gameVersion 
       err(`${at}: 単押しノーツに duration は指定できません`);
     }
     if (n.sequenceId != null && !seqIds.has(n.sequenceId)) err(`${at}: 連続コマンド「${n.sequenceId}」が sequences にありません`);
-    const e = n.effect;
-    if (e != null) {
-      if (typeof e !== 'object') err(`${at}: effect の形式が不正です`);
-      else {
-        if (e.preset != null && !EFFECT_PRESETS.includes(e.preset)) err(`${at}: 未知のエフェクト ${e.preset}`);
-        if (e.anchor != null && !(isNum(e.anchor.x) && isNum(e.anchor.y) && e.anchor.x >= 0 && e.anchor.x <= 1 && e.anchor.y >= 0 && e.anchor.y <= 1)) err(`${at}: effect.anchor は 0〜1 の x, y です`);
-        if (e.direction != null && !(isNum(e.direction.x) && isNum(e.direction.y) && Math.hypot(e.direction.x, e.direction.y) > 1e-6)) err(`${at}: effect.direction は 0 でない x, y です`);
-        if (e.intensity != null && !(isNum(e.intensity) && e.intensity >= 0 && e.intensity <= 2)) err(`${at}: effect.intensity は 0〜2 です`);
-      }
-    }
+    if (n.effect != null) errors.push(...validateEffect(n.effect, at));
   });
   // 同じボタンのノーツの重なり
   const sorted = chart.notes.filter((n) => n && BUTTON_INFO[n.button] && isNum(n.time)).sort((a, b) => a.time - b.time);

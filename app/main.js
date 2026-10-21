@@ -11,6 +11,7 @@ import { LaneRenderer, LANE_STYLE } from './lanes.js';
 import { Sfx, SFX_MIX_GAIN } from './sfx.js';
 import { BACKGROUNDS, orientationOf, containRect, coverRect, laneRect, standingHeight, landscapeSubject, subjectTransform } from './layout.js';
 import { normalizeChart, validateChart, BUTTON_INFO } from './chart.js';
+import { resolveEffect } from './effects-catalog.js';
 import { Editor } from './editor.js';
 import { GAME } from './config.js';
 
@@ -125,16 +126,22 @@ export class App {
         throw new Error(`連続画像の枚数が譜面と一致しません（画像 ${this.manifest.frameCount} 枚、譜面 ${this.initialChart.source.frameCount} 枚）`);
       }
       this.duration = this.manifest.durationSeconds || this.initialChart.source.durationSeconds;
-      // 自動保存された編集内容があれば復元（壊れていれば初期譜面）
-      let chart = this.initialChart, restored = false;
-      const saved = store.get(this.keys.autosave);
-      if (saved && !this.params.has('fresh')) {
+      // 起動する譜面: 編集中の下書き（自動保存）→ この端末のデフォルト → 配布時の初期設定（公開版の譜面）。壊れていれば次へ
+      const readSaved = (key) => {
+        if (this.params.has('fresh')) return null;
         try {
-          const obj = JSON.parse(saved);
+          const obj = JSON.parse(store.get(key) || 'null');
+          if (!obj) return null;
           const v = validateChart(obj, { frameCount: this.manifest.frameCount, gameVersion: this.version });
-          if (!v.errors.length) { chart = normalizeChart(obj); restored = true; }
-        } catch { /* 初期譜面を使う */ }
-      }
+          return v.errors.length ? null : normalizeChart(obj);
+        } catch { return null; }
+      };
+      this.deviceDefault = readSaved(this.keys.deviceDefault);
+      this.deviceDefaultSavedAt = this.deviceDefault ? store.get(this.keys.deviceDefault + '.savedAt') : null;
+      const draft = readSaved(this.keys.autosave);
+      const chart = draft || this.deviceDefault || this.initialChart;
+      this.chartSource = draft ? 'draft' : this.deviceDefault ? 'default' : 'distributed';
+      const restored = this.chartSource !== 'distributed';
       this.chart = chart;
       this.clock = new TimelineClock({ duration: this.duration, mix: this.mixMode });
       this.clock.volume = this.prefs.volume;
@@ -161,7 +168,7 @@ export class App {
       const stand = this.manifest.standIn ? ' ／ 人物画像はローカル試験用の代用素材です（提供 ZIP が未配置）' : '';
       if (this.mixMode) this.loadBgmTrack(this.audioPrefs.bgm); // 読み込み終わるまで開始ボタンは押せない
       const legacy = /^(ver|v)?\s*1$/i.test(this.legacyVersionParam ?? '') ? 'ver1 は終了しました。正式版で開いています。' : '';
-      this.status(`${legacy}準備完了: ノーツ ${this.chart.notes.length}、画像 ${this.store.count} 枚（0〜${this.duration.toFixed(1)} 秒）。${this.audioNote}${restored ? ' ／ 自動保存した編集内容を復元しました' : ''}${stand}`, 'ok');
+      this.status(`${legacy}準備完了: ノーツ ${this.chart.notes.length}、画像 ${this.store.count} 枚（0〜${this.duration.toFixed(1)} 秒）。${this.audioNote}${restored ? (this.chartSource === 'draft' ? ' ／ 編集中の下書き（自動保存）で起動しました' : ' ／ この端末のデフォルトの設定で起動しました') : ''}${stand}`, 'ok');
       this.updateUi();
     } catch (e) {
       this.state = 'error';
@@ -438,20 +445,21 @@ export class App {
     const shownAt = e.grade === 'MISS' ? this.t : Math.min(this.t, e.time ?? this.t);
     this.lanes.mark(e.grade, Math.max(shownAt, this.t - 0.05), n.button, n.delta);
     if (e.grade === 'MISS') { this.sfx.miss(); return; }
-    // 成功: エフェクトは「ノーツの時刻のコマ」の拳・足の位置から
+    // 成功: 効果音はコマンド（ボタン）で、人物のエフェクトはノーツごとに選んだ番号で（app/effects-catalog.js）
     const kind = { Y: 'breath', X: 'stance', A: 'strike', B: 'turn' }[n.button];
     const ef = src.effect || {};
+    const fx = resolveEffect(src);
     const frameIndex = this.store.indexAt(Math.max(0, n.time));
     // 効果音を先に鳴らし、その最も強い瞬間が聞こえる時刻（時間軸）に演出の山を合わせる。判定と画像の再生は止めない
     const peakCtx = this.sfx.play(src.action === 'kick' ? 'kick' : kind, e.grade, { pan: kind === 'turn' ? this.turnDirection(frameIndex) : 0 });
     const peakT = peakCtx != null ? this.clock.timelineAtCtx(peakCtx) : null;
     const t0 = peakT != null && peakT >= this.t && peakT < this.t + 0.2 ? peakT : this.t;
-    if (kind === 'breath') this.breathTailUntil = t0;
+    if (n.input === 'hold') { this.breathTailUntil = t0; this.fx.holdDone(n.id); }
     // 判定位置の文字に赤い火を灯す（効果音の音量が 0 でも出す。MISS・早すぎる解除では呼ばれない）
     this.lanes.ignite(n.button, t0, e.grade, n.input === 'hold');
-    this.fx.trigger(kind, {
-      t: t0, grade: e.grade, frameIndex, action: src.action, anchor: ef.anchor, direction: ef.direction,
-      intensity: ef.intensity ?? 1, seed: this.generation * 101 + this.judge.notes.indexOf(n),
+    this.fx.trigger(fx.key, {
+      t: t0, grade: e.grade, frameIndex, action: src.action, fx, hold: n.input === 'hold',
+      direction: fx.direction ?? ef.direction, seed: this.generation * 101 + this.judge.notes.indexOf(n),
     });
   }
 
@@ -564,8 +572,15 @@ export class App {
     // 人物
     const fi = this.store.indexAt(Math.max(0, t));
     this.store.prefetch(fi);
-    const S = { t, store: this.store, frameIndex: fi, transformFor: (i) => this.transformFor(i, G), standH, canvas: this.canvas, dpr };
+    const S = { t, store: this.store, frameIndex: fi, transformFor: (i) => this.transformFor(i, G), standH, canvas: this.canvas, dpr, laneBottom: L.y + L.h };
+    // 長押し中のエフェクト（ノーツで選んだ番号。息の既定は背後にまとう炎）。成功の山（t0）までは完了の大きさで保つ
+    const holding = this.judge?.notes.find((n) => n.holding);
+    const tail = !holding && this.breathTailUntil != null && t < this.breathTailUntil ? this._tailNote : null;
+    if (holding) this._tailNote = holding;
+    const hn = holding || tail;
+    if (hn) { const r = resolveEffect(hn.src); this.fx.setHold({ id: hn.id, key: r.key, fx: r, progress: holding ? this.judge.holdProgress(holding, t) : 1 }, t); } else this.fx.setHold(null, t);
     this.fx.renderUnder(ctx, S);
+    this.editor?.drawPreview(ctx, S, 'under');
     const g = this.store.get(fi);
     let shown = null;
     if (g) {
@@ -573,18 +588,13 @@ export class App {
       ctx.drawImage(g.bmp, r.x, r.y, r.w, r.h);
       shown = g.index;
     }
-    // 長押し中の呼吸
-    const holding = this.judge?.notes.find((n) => n.holding);
-    if (holding) {
-      const hp = this.judge.holdProgress(holding, t);
-      this.fx.renderHold(ctx, S, hp);
-      if (this.state === 'playing') this.sfx.breathUpdate(hp); // 息の音も進み具合で滑らかに変わる
-    } else if (this.breathTailUntil != null && t < this.breathTailUntil) {
-      this.fx.renderHold(ctx, S, 1); // 完了の効果音が最も強くなるまで呼吸の光を保つ（途切れずに収束へつなぐ）
-    }
+    // 長押し中（人物の手前側の光）
+    if (hn) this.fx.renderHold(ctx, S);
+    if (holding && this.state === 'playing') this.sfx.breathUpdate(this.judge.holdProgress(holding, t)); // 息の音も進み具合で滑らかに変わる
     this.fx.renderOver(ctx, S);
+    this.editor?.drawPreview(ctx, S, 'over');
     // レーンの手前側（ラベル・判定線・ノーツ・判定）と HUD
-    const holdNote = this.judge?.notes.find((n) => n.holding);
+    const holdNote = holding;
     const lanesInfo = this.lanes.draw(ctx, L, t, this.judge ? this.judge.notes : [], {
       lead: this.chart.settings.laneLeadSeconds, held, selected: this.editor?.selected,
       holdFire: holdNote ? { button: holdNote.button, progress: this.judge.holdProgress(holdNote, t) } : null, // 正しく保持している間だけ火が育つ

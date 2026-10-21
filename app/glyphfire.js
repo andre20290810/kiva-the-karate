@@ -108,40 +108,7 @@ export class GlyphRenderer {
     ctx.globalAlpha = 1;
   }
 
-  /** 長押しの尾: 文字から終わりの時刻まで伸びる細い炎（揺らぎ、終わりへ向かって細く消える） */
-  drawTail(ctx, x0, x1, y, size, st, t, active) {
-    const len = x1 - x0;
-    if (len < 2) return;
-    const w = size * (active ? 0.16 : 0.12);
-    const steps = Math.max(6, Math.round(len / 4));
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    for (const [lw, a, col] of [[w * 2.6, active ? 0.28 : 0.18, '255,90,30'], [w, active ? 0.95 : 0.7, '255,170,60'], [w * 0.35, active ? 0.9 : 0.6, '255,240,190']]) {
-      ctx.beginPath();
-      for (let i = 0; i <= steps; i++) {
-        const u = i / steps, xx = x0 + len * u;
-        const wob = Math.sin(u * 14 - t * 11) * size * 0.05 * (0.4 + u) + Math.sin(u * 31 + t * 17) * size * 0.02;
-        if (i) ctx.lineTo(xx, y + wob); else ctx.moveTo(xx, y + wob);
-      }
-      const gr = ctx.createLinearGradient(x0, 0, x1, 0);
-      gr.addColorStop(0, `rgba(${col},${a})`); gr.addColorStop(0.75, `rgba(${col},${a * 0.6})`); gr.addColorStop(1, `rgba(${col},0)`);
-      ctx.strokeStyle = gr; ctx.lineWidth = lw; ctx.lineCap = 'round';
-      ctx.stroke();
-    }
-    ctx.restore();
-    // 終わりの印: 小さく立つ炎の先（文字の形と同じ考え方で、細い炎の先を上へ）
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = active ? 0.8 : 0.55;
-    ctx.fillStyle = `rgb(${st.rgb})`;
-    ctx.beginPath();
-    const h = size * 0.45, fl = Math.sin(t * 13) * size * 0.04;
-    ctx.moveTo(x1 - size * 0.08, y + size * 0.12);
-    ctx.quadraticCurveTo(x1 - size * 0.1, y - h * 0.4, x1 + fl, y - h);
-    ctx.quadraticCurveTo(x1 + size * 0.1, y - h * 0.4, x1 + size * 0.08, y + size * 0.12);
-    ctx.fill();
-    ctx.restore();
-  }
+
 
   // ---------- 成功の火 ----------
   /** 成功: 判定位置の文字に火を灯す。t0 = 最も強い瞬間（効果音の山と同じ） */

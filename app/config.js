@@ -5,7 +5,8 @@ export const GAME = Object.freeze({
   gameVersion: 'v2', // 譜面 JSON に書く値（旧 ver2 の JSON をそのまま読み書きできるように）
   name: 'セーパイ（2026-10-20 撮影）',
   chart: 'charts/seipai_v2.json',
-  keys: Object.freeze({ autosave: 'kiva2d.v2.chart.autosave', best: 'kiva2d.v2.best.manual', audio: 'kiva2d.v2.audio' }),
+  // autosave: 編集中の下書き（自動保存）、deviceDefault: 「この端末のデフォルトとして保存」した譜面（このブラウザだけ。公開版は変わらない）
+  keys: Object.freeze({ autosave: 'kiva2d.v2.chart.autosave', deviceDefault: 'kiva2d.v2.chart.default', best: 'kiva2d.v2.best.manual', audio: 'kiva2d.v2.audio' }),
   // BGM（時間軸の 0 秒 = 曲の先頭。演武の終わりで短くフェードアウト）。配信用は 85 秒に切り詰めた AAC と予備の Opus。
   // gainDb: 曲ごとの音量合わせ（原本のラウドネスを -18 LUFS にそろえる。原本は変えない）
   bgm: Object.freeze([

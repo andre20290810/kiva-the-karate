@@ -2,9 +2,12 @@
 // コマンドごとの音（2026-10-21 の仕様）:
 // - Y 呼吸「息」: 炎が燃え盛る音。長押し中は炎のうなり＋はぜる音が進み具合で大きく明るくなり、完了で炎が一気に燃え上がる。
 //                 離す・一時停止・シーク・リトライで必ず止める（ループ音源を止めるのでタイマーに頼らない）
-// - X 構え「構」: 鋭く響く金属音（打った瞬間の硬い音＋非整数倍の倍音が響いて消える）
-// - A 打撃・蹴り「撃」: 銃撃音のような短く強い破裂音（破裂＋胴鳴り＋歪ませた低音＋短い残響）。蹴りは少し重く長い
-// - B 旋回「旋」: 空気を切り裂く鋭い風切り音（回る向きに左右へ流れる）
+// - X 構え「構」: 「キィーン」と鳴る金属音。鋭い立ち上がり（わずかに上から落ち着く音程）と、澄んだ響きの余韻。
+//                 高い倍音は弱く・早く消し、全体を 5.5 kHz 以下に抑えて耳に刺さらないようにする
+// - A 打撃・蹴り「撃」: 「ズドォーン」と響く砲撃・爆発のような重い音。強い最初の衝撃（破裂＋歪ませた低音）と、短い轟き。
+//                 スマホのスピーカーでも重さが分かるよう 400〜900 Hz の胴鳴りを足す。蹴りはさらに低く長い
+// - B 旋回「旋」: 「ズビュン」と空気を切り裂く風切り音。ざらついた立ち上がりから、共鳴の強い帯域が素早く駆け上がって抜ける
+//                 （回る向きに左右へ流れる）
 // PERFECT は明瞭、GOOD は同じ音を約 3 dB 控えめに。連続打撃では前の音の余韻を切る（濁らない）。打撃などの瞬間だけ BGM を少し下げる。
 // 効果音の音量の初期値は 0（設定で上げる）。音量が 0 でも play() は最も強い瞬間（AudioContext の時刻）を返し、画面の演出はそれに合わせる。
 
@@ -12,7 +15,7 @@ const LEAD = 0.004; // 予約の余裕（秒）
 /** 効果音の系統に入れるときの倍率（ゲームと録音ツールで共通）。打撃がリミッターにかからない大きさ（PERFECT と GOOD の差が残る） */
 export const SFX_MIX_GAIN = 0.5;
 // 音の最も強い瞬間（短い窓の音量の最大）までの補正。録音で測った値（tools/sfx/analyse.py）
-const PEAK_AFTER_IMPACT = { shot: 0.0075, kick: 0.0075, metal: 0.0076, turn: 0.005, breath: 0.007 };
+const PEAK_AFTER_IMPACT = { shot: 0.0073, kick: 0.0073, metal: 0.0094, turn: 0.0049, breath: 0.007 };
 
 export class Sfx {
   constructor(clock) {
@@ -34,7 +37,8 @@ export class Sfx {
   _noiseBuf(c) {
     if (this._noise && this._noiseCtx === c) return this._noise;
     const n = c.sampleRate * 2, b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
-    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    let seed = 987654321; // 決まった乱数（毎回同じ音・同じ山の時刻）
+    for (let i = 0; i < n; i++) { seed = (seed * 1664525 + 1013904223) >>> 0; d[i] = seed / 2147483648 - 1; }
     this._noiseCtx = c;
     return (this._noise = b);
   }
@@ -167,60 +171,71 @@ export class Sfx {
     return null;
   }
 
-  /** 撃: 銃撃音のような短く強い破裂音 */
+  /** 撃: 砲撃・爆発のような重い音（強い衝撃 → 短い轟き） */
   _shot(c, w, k, P, heavy) {
     const I = w + 0.002;
     this._chokeAt(I);
-    const out = this._out(c, heavy ? 0.48 : 0.55);
+    const out = this._out(c, heavy ? 0.72 : 0.75);
     const layers = [
-      // 破裂（広い帯域の鋭い立ち上がり）
-      this._noiseLayer(c, out, { at: I, attack: 0.0003, decay: heavy ? 0.03 : 0.022, peak: 3.0 * k, filters: [{ type: 'highpass', f0: 900, q: 0.5 }] }),
-      // 胴鳴り（中域）
-      this._noiseLayer(c, out, { at: I + 0.0005, attack: 0.001, decay: heavy ? 0.1 : 0.07, peak: 1.1 * k, filters: [{ type: 'lowpass', f0: 2200, q: 0.6 }, { type: 'highpass', f0: 180 }] }),
-      // 低音（歪ませて倍音を足す。スマホでも重さが分かる）
-      this._thump(c, out, { at: I + 0.001, f0: heavy ? 95 : 120, f1: heavy ? 38 : 45, glide: 0.09, peak: (heavy ? 0.45 : 0.32) * k, decay: heavy ? 0.2 : 0.14, drive: 4.5, lp: 1800 }),
-      // 短い残響（屋内で鳴った感じ）
-      this._noiseLayer(c, out, { at: I + 0.008, attack: 0.004, decay: P ? 0.32 : 0.2, peak: 0.16 * k, filters: [{ type: 'bandpass', f0: 1100, f2: 500, q: 0.5 }] }),
+      // 最初の衝撃（広い帯域の破裂）
+      this._noiseLayer(c, out, { at: I, attack: 0.0003, decay: 0.02, peak: 3.4 * k, filters: [{ type: 'highpass', f0: 600, q: 0.5 }, { type: 'lowpass', f0: 4200, q: 0.5 }] }),
+      // 爆風の胴（低めのノイズが閉じていく）
+      this._noiseLayer(c, out, { at: I + 0.0005, attack: 0.001, decay: heavy ? 0.26 : 0.2, peak: 1.5 * k, filters: [{ type: 'lowpass', f0: 1700, f2: 300, q: 0.7 }] }),
+      // スマホでも重さが分かる胴鳴り（中低域）
+      this._noiseLayer(c, out, { at: I + 0.001, attack: 0.002, decay: 0.14, peak: 1.3 * k, filters: [{ type: 'bandpass', f0: heavy ? 480 : 560, q: 0.9 }] }),
+      // 低音（音程が下がるサイン波を強く歪ませる）
+      this._thump(c, out, { at: I + 0.001, f0: heavy ? 90 : 110, f1: heavy ? 30 : 36, glide: 0.16, peak: (heavy ? 0.55 : 0.48) * k, decay: heavy ? 0.42 : 0.34, drive: 5, lp: 1200 }),
+      // 轟き「ォーン」（低く広がって消える）
+      this._noiseLayer(c, out, { at: I + 0.025, attack: 0.03, decay: (P ? 0.5 : 0.32) * (heavy ? 1.2 : 1), peak: 0.55 * k, filters: [{ type: 'lowpass', f0: 520, f2: 160, q: 0.6 }] }),
     ];
-    if (P) layers.push(this._noiseLayer(c, out, { at: I + 0.055, attack: 0.0005, decay: 0.03, peak: 0.22, filters: [{ type: 'bandpass', f0: 1800, q: 0.8 }] })); // 跳ね返り
     this._choke.push(...layers);
-    this._duck(c, I, heavy ? 5 : 4, 0.08);
+    this._duck(c, I, heavy ? 6 : 5, 0.12);
     return I + PEAK_AFTER_IMPACT[heavy ? 'kick' : 'shot'];
   }
 
-  /** 構: 鋭く響く金属音 */
+  /** 構: 「キィーン」と響く金属音（鋭い立ち上がり → 澄んだ余韻） */
   _metal(c, w, k, P) {
     const I = w + 0.002;
     for (const g of this._metalVoices || []) { try { g.gain.cancelScheduledValues(I - 0.01); g.gain.setTargetAtTime(0.0001, I - 0.01, 0.01); } catch { /* 済み */ } }
-    const out = this._out(c, 0.85);
+    const out = this._out(c, 0.8);
     this._metalVoices = [out];
-    // 打った瞬間の硬い音
-    this._noiseLayer(c, out, { at: I, attack: 0.0003, decay: 0.012, peak: 0.9 * k, filters: [{ type: 'highpass', f0: 2500, q: 0.7 }] });
-    // 響き: 非整数倍の倍音（高いほど早く消える）。わずかにずらした 2 本でうなりを付ける
-    const f0 = 1180;
-    const parts = [[1, 0.5, 0.9], [1.004, 0.28, 0.9], [2.32, 0.35, 0.55], [3.17, 0.22, 0.4], [4.53, 0.16, 0.28], [6.06, 0.1, 0.18]];
-    for (const [ratio, amp, dec] of parts) {
-      const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = f0 * ratio;
+    // 高音を抑える（耳に刺さらない）
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5500; lp.Q.value = 0.5;
+    lp.connect(out);
+    // 当たった瞬間の明るい音
+    this._noiseLayer(c, lp, { at: I, attack: 0.0003, decay: 0.01, peak: 0.8 * k, filters: [{ type: 'bandpass', f0: 3400, q: 1.1 }] });
+    // 響き: 主音（わずかに上から落ち着く「キィ」→「ーン」）と、2 本のうなり、弱い高めの倍音
+    const f0 = 1520, dec = P ? 1 : 0.7;
+    const parts = [[1, 0.5, 1.15, true], [1.0035, 0.3, 1.1, true], [2.01, 0.13, 0.5, false], [2.76, 0.1, 0.32, false], [4.07, 0.04, 0.16, false]];
+    for (const [ratio, amp, d, glide] of parts) {
+      const o = c.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(f0 * ratio * (glide ? 1.035 : 1), I - 0.001);
+      if (glide) o.frequency.exponentialRampToValueAtTime(f0 * ratio, I + 0.03);
       const g = c.createGain();
-      this._env(g.gain, I, amp * k, 0.001, (P ? dec : dec * 0.7));
-      o.connect(g).connect(out);
-      o.start(I - 0.001); o.stop(I + dec + 0.05);
+      this._env(g.gain, I, amp * k, 0.0015, d * dec);
+      o.connect(g).connect(lp);
+      o.start(I - 0.001); o.stop(I + d * dec + 0.05);
     }
-    this._duck(c, I, 3, 0.12);
+    this._duck(c, I, 3, 0.15);
     return I + PEAK_AFTER_IMPACT.metal;
   }
 
-  /** 旋: 空気を切り裂く鋭い風切り音（回る向きに流れる） */
+  /** 旋: 「ズビュン」と空気を切り裂く風切り音（鋭く始まり、素早く抜ける。回る向きに流れる） */
   _turn(c, w, k, P, dir) {
-    const C = w + 0.07, end = w + 0.18, d = dir < 0 ? -1 : 1;
-    const out = this._out(c, 1.9, true);
+    const C = w + 0.03, end = w + 0.17, d = dir < 0 ? -1 : 1;
+    const out = this._out(c, 1.75, true);
     const pan = this._lastPan;
-    if (pan) { pan.pan.setValueAtTime(-0.8 * d, w); pan.pan.linearRampToValueAtTime(0.8 * d, end); }
-    this._noiseLayer(c, out, { at: C - 0.065, attack: 0.065, decay: 0.11, peak: 1.6 * k, from: w,
-      filters: [{ type: 'bandpass', f0: 700, f1: 3800, f2: 1200, q: 3 }] });
-    this._noiseLayer(c, out, { at: C - 0.03, attack: 0.03, decay: 0.09, peak: 0.35 * k, from: w, filters: [{ type: 'highpass', f0: 4500, q: 0.7 }] });
-    this._noiseLayer(c, out, { at: C - 0.05, attack: 0.05, decay: 0.08, peak: 0.5 * k, from: w, filters: [{ type: 'bandpass', f0: 350, f1: 900, f2: 400, q: 1.2 }] });
-    this._duck(c, C, 3, 0.12);
+    if (pan) { pan.pan.setValueAtTime(-0.85 * d, w); pan.pan.linearRampToValueAtTime(0.85 * d, end); }
+    // 「ズ」: ざらついた立ち上がり
+    this._noiseLayer(c, out, { at: w + 0.002, attack: 0.004, decay: 0.05, peak: 0.7 * k, from: w, filters: [{ type: 'bandpass', f0: 380, f1: 700, q: 1.4 }] });
+    // 「ビュン」: 共鳴の強い帯域が駆け上がり、少し下がって抜ける
+    this._noiseLayer(c, out, { at: C - 0.026, attack: 0.026, decay: P ? 0.12 : 0.09, peak: 3.2 * k, from: w,
+      filters: [{ type: 'bandpass', f0: 800, f1: 3000, f2: 1500, q: 6 }] });
+    this._noiseLayer(c, out, { at: C - 0.026, attack: 0.026, decay: 0.1, peak: 0.9 * k, from: w,
+      filters: [{ type: 'bandpass', f0: 600, f1: 1800, f2: 900, q: 2.5 }] });
+    // 空気の擦れ（控えめ）
+    this._noiseLayer(c, out, { at: C - 0.015, attack: 0.015, decay: 0.06, peak: 0.22 * k, from: w, filters: [{ type: 'highpass', f0: 4500, q: 0.7 }] });
+    this._duck(c, C, 3, 0.1);
     return C + PEAK_AFTER_IMPACT.turn;
   }
 

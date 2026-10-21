@@ -142,3 +142,19 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
 .ed-draft { min-height: 2.9em; margin: 0 0 4px; }
 [data-edit=true] #panel { max-height: 58vh; max-height: 58dvh; }
 [data-edit=true][data-orient=landscape] #panel { max-height: 64vh; max-height: 64dvh; }
+/* 編集: ノーツのコマンドと視覚エフェクト */
+.ed-box h4 { font-size: 12px; margin: 10px 0 4px; color: #ffd9b3; }
+.ed-noteid { margin: 0 0 4px; font-variant-numeric: tabular-nums; }
+.ed-glyph { font-weight: 800; font-size: 18px; }
+.ed-fxlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; margin-bottom: 6px; }
+.ed-fx { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px !important; border: 2px solid var(--line); border-radius: 8px; background: #120c08; min-height: 0 !important; }
+.ed-fx canvas { width: 96px; height: 112px; border-radius: 5px; display: block; }
+.ed-fx span { font-size: 11px; line-height: 1.25; text-align: center; }
+.ed-fx.on { border-color: #ffb347; background: #2b1a0c; }
+.ed-grid output { display: inline-block; min-width: 4.2em; font-variant-numeric: tabular-nums; font-size: 12px; }
+.ed-grid input[type=range] { width: min(150px, 38vw); vertical-align: middle; }
+.ed-primary { border-color: #ffb347 !important; color: #ffd9a0 !important; }
+.ed-src { margin: 6px 0; font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #2b1d12; }
+.ed-src[data-state=edited] { background: #3a2410; color: #ffd27a; }
+.ed-note { font-size: 11px; line-height: 1.5; }
+@media (min-width: 900px) { #edNote { grid-column: span 2; } }

@@ -1,9 +1,12 @@
 // 編集モード: 実写の型を見ながら、ノーツを 1 つずつ直す。
 // 再生・シーク・1 コマ送り・速度・A–B ループ・タイムライン（ドラッグ）・追加／複製／削除・まとめてずらす・
-// 連続コマンドのまとまりと並べ替え・エフェクト位置・人物の位置と倍率の補正・元に戻す／やり直す・自動保存・JSON 書き出し／読み込み。
+// 連続コマンドのまとまりと並べ替え・ノーツごとのコマンド種別と視覚エフェクト（番号・発生位置・向き・大きさ・強さ・持続時間）・
+// 人物の位置と倍率の補正・元に戻す／やり直す・自動保存（下書き）・この端末のデフォルトとして保存・JSON 書き出し／読み込み。
 
-import { BUTTONS, BUTTON_INFO, ACTION_LABEL, EFFECT_PRESETS, exportChart, parseChartText, makeNote, normalizeChart, validateChart } from './chart.js';
-import { LANE_ORDER, LANE_STYLE } from './lanes.js';
+import { BUTTONS, BUTTON_INFO, ACTION_LABEL, exportChart, parseChartText, makeNote, normalizeChart, validateChart } from './chart.js';
+import { LANE_ORDER, LANE_STYLE, GLYPH } from './lanes.js';
+import { EFFECTS, EFFECT_BY_ID, ORIGINS, RANGES, DEFAULT_EFFECT_ID, effectIdOf, resolveEffect, effectForId, angleOf } from './effects-catalog.js';
+import { Effects } from './fx.js';
 
 const FRAME = 0.2;
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -83,8 +86,50 @@ export class Editor {
     this._savePending = false;
     const ok = (() => { try { localStorage.setItem(this.app.keys.autosave, exportChart(this.chart)); return true; } catch { return false; } })();
     this.saveFailed = !ok;
-    this.root.querySelector('#edSaved').textContent = ok ? `自動保存 ${new Date().toLocaleTimeString()}` : '自動保存できません（ブラウザの保存領域が使えません。JSON を書き出してください）';
+    this.root.querySelector('#edSaved').textContent = ok ? `自動保存（下書き） ${new Date().toLocaleTimeString()}` : '自動保存できません（ブラウザの保存領域が使えません。JSON を書き出してください）';
+    this.refreshSource();
     return ok;
+  }
+
+  /** この端末のデフォルトとして保存（通常プレイと AUTO が次からもこの設定で起動する。公開版は変わらない） */
+  saveDefault() {
+    if (this.frameDraft) this.root.querySelector('[data-f=apply]')?.click();
+    const text = exportChart(this.chart);
+    try {
+      localStorage.setItem(this.app.keys.deviceDefault, text);
+      localStorage.removeItem(this.app.keys.autosave); // 下書きはデフォルトに入った
+    } catch {
+      this.message('保存できませんでした（ブラウザの保存領域が使えません）。JSON を書き出してください', 'error');
+      return false;
+    }
+    clearTimeout(this._saveT); this._savePending = false; this.saveFailed = false;
+    this.app.deviceDefault = normalizeChart(JSON.parse(text));
+    this.app.deviceDefaultSavedAt = new Date().toISOString();
+    try { localStorage.setItem(this.app.keys.deviceDefault + '.savedAt', this.app.deviceDefaultSavedAt); } catch { /* 表示用 */ }
+    this.refreshSource();
+    this.message('この端末のデフォルトとして保存しました（通常プレイと AUTO で使われます。公開版は変わりません）');
+    return true;
+  }
+
+  /** 今の設定がどこから来ているか（配布時の初期設定／この端末のデフォルト／未保存の編集） */
+  sourceState() {
+    const cur = exportChart(this.chart);
+    const def = this.app.deviceDefault ? exportChart(this.app.deviceDefault) : null;
+    const init = exportChart(this.app.initialChart);
+    if (def && cur === def) return 'default';
+    if (!def && cur === init) return 'distributed';
+    return 'edited';
+  }
+
+  refreshSource() {
+    const el = this.root.querySelector('#edSource');
+    if (!el) return;
+    const st = this.sourceState();
+    const at = this.app.deviceDefaultSavedAt ? new Date(this.app.deviceDefaultSavedAt).toLocaleString() : '';
+    el.dataset.state = st;
+    el.textContent = st === 'default' ? `使用中: この端末のデフォルト（保存 ${at}）`
+      : st === 'distributed' ? '使用中: 配布時の初期設定（公開版の譜面）'
+        : `使用中: 未保存の編集（下書き）${this.app.deviceDefault ? ' ／ この端末のデフォルトあり' : ''}。「この端末のデフォルトとして保存」で確定します`;
   }
 
   /** 保存されていない編集（補正欄の未適用の入力・自動保存の待ち・保存の失敗） */
@@ -154,11 +199,21 @@ export class Editor {
       <section class="ed-box" id="edFile"><h3>保存・読み込み</h3>
         <div class="ed-row">
           <button data-act="undo">元に戻す</button><button data-act="redo">やり直す</button>
+          <button data-act="saveDefault" class="ed-primary">この端末のデフォルトとして保存</button>
+        </div>
+        <p id="edSource" class="ed-src"></p>
+        <div class="ed-row">
+          <button data-act="revert" title="最後に「この端末のデフォルトとして保存」した状態（保存が無ければ配布時の初期設定）に戻す">編集前に戻す</button>
+          <button data-act="reset" title="公開版に入っている譜面（charts/seipai_v2.json）に戻す">配布時の初期設定に戻す</button>
+          <button data-act="dropDefault">この端末のデフォルトを消す</button>
+        </div>
+        <div class="ed-row">
           <button data-act="export">JSON を書き出す</button>
           <label class="ed-filebtn">JSON を読み込む<input type="file" id="edImport" accept="application/json,.json"></label>
-          <button data-act="reset">初期譜面に戻す</button>
         </div>
-        <p id="edSaved" class="ed-dim">自動保存: まだ変更なし</p>
+        <p class="ed-dim ed-note">「この端末のデフォルト」はこのブラウザにだけ保存され、保存後すぐに通常プレイと AUTO で使われます。<b>公開版は変わりません。</b>
+          ほかの端末でも同じ設定で起動するには、JSON を書き出し、公開版の <code>charts/seipai_v2.json</code> に取り込んで公開し直してください（README「設定を公開版へ反映」）。</p>
+        <p id="edSaved" class="ed-dim">自動保存（下書き）: まだ変更なし</p>
         <h3>編集メモ</h3>
         <textarea id="edMemo" rows="5"></textarea>
       </section>
@@ -247,9 +302,23 @@ export class Editor {
       case 'undo': this.undo(); break;
       case 'redo': this.redo(); break;
       case 'export': this.exportFile(); break;
+      case 'saveDefault': this.saveDefault(); break;
+      case 'revert': {
+        const base = this.app.deviceDefault || this.app.initialChart;
+        this.apply((c) => { const b = structuredClone(base); for (const k of Object.keys(c)) delete c[k]; Object.assign(c, b); }, this.app.deviceDefault ? '編集前（この端末のデフォルト）に戻す' : '編集前（配布時の初期設定）に戻す');
+        break;
+      }
       case 'reset':
-        if (!confirm('初期譜面に戻しますか？（今の編集内容は「元に戻す」で戻せます）')) break;
-        this.apply((c) => { const init = structuredClone(this.app.initialChart); for (const k of Object.keys(c)) delete c[k]; Object.assign(c, init); }, '初期譜面に戻す');
+        if (!confirm('配布時の初期設定（公開版の譜面）に戻しますか？\n今の編集内容は「元に戻す」で戻せます。この端末のデフォルトは、保存し直すまで残ります。')) break;
+        this.apply((c) => { const init = structuredClone(this.app.initialChart); for (const k of Object.keys(c)) delete c[k]; Object.assign(c, init); }, '配布時の初期設定に戻す');
+        break;
+      case 'dropDefault':
+        if (!this.app.deviceDefault) { this.message('この端末のデフォルトはありません'); break; }
+        if (!confirm('この端末のデフォルトを消しますか？（次に開いたときは、下書きが無ければ配布時の初期設定で起動します）')) break;
+        try { localStorage.removeItem(this.app.keys.deviceDefault); } catch { /* 保存領域なし */ }
+        this.app.deviceDefault = null;
+        this.refreshSource();
+        this.message('この端末のデフォルトを消しました');
         break;
       default: break;
     }
@@ -259,8 +328,8 @@ export class Editor {
     const t = this.snapT(Math.max(0, this.app.t));
     let id;
     const ok = this.apply((c) => {
-      const n = makeNote(c.notes, button, t, { effect: { preset: BUTTON_INFO[button].preset, intensity: 1 } });
-      if (button === 'A') n.effect = this.defaultStrikeEffect(t, n.action);
+      const n = makeNote(c.notes, button, t);
+      if (button === 'A') n.effect = this.defaultStrikeEffect(t, n.action); // ほかはコマンドの既定のエフェクト（effect なし）
       // 選択中のノーツと同じ連続コマンドに入れる
       const sel = c.notes.find((x) => this.selected.has(x.id));
       if (sel?.sequenceId) n.sequenceId = sel.sequenceId;
@@ -275,7 +344,7 @@ export class Editor {
   defaultStrikeEffect(t, action) {
     const fr = this.app.store.frames[this.app.store.indexAt(t)];
     const J = fr.joints;
-    if (!J) return { preset: 'strike', intensity: 1 };
+    if (!J) return { id: 3 };
     const [ax, ay] = fr.anchor;
     // 蹴り: 高い方の足首（支持脚は床）／ 突き・打ち: 胴体の中心から最も遠い手首
     const best = action === 'kick'
@@ -286,7 +355,7 @@ export class Editor {
     const n = Math.hypot(dx, dy) || 1;
     dx /= n; dy /= n;
     const W = this.app.manifest.width, H = this.app.manifest.height;
-    return { preset: 'strike', anchor: { x: r2(J[best][0] / W * 10) / 10, y: r2(J[best][1] / H * 10) / 10 }, direction: { x: r2(dx), y: r2(dy) }, intensity: 1 };
+    return { id: 3, origin: 'point', anchor: { x: r2(J[best][0] / W * 10) / 10, y: r2(J[best][1] / H * 10) / 10 }, angle: Math.round(Math.atan2(dy, dx) * 180 / Math.PI) };
   }
 
   duplicate() {
@@ -493,6 +562,7 @@ export class Editor {
     this.renderSeqBox();
     this.renderFrameBox();
     this.refreshLoop();
+    this.refreshSource();
     const memo = this.root.querySelector('#edMemo');
     if (document.activeElement !== memo) memo.value = (this.chart.memo || []).join('\n');
     this.drawTimeline();
@@ -516,34 +586,56 @@ export class Editor {
     }
     const n = sel[0];
     const info = BUTTON_INFO[n.button];
-    const ef = n.effect || {};
+    const fx = resolveEffect(n), def = fx.def;
+    const fi = this.app.store.indexAt(n.time);
+    const custom = n.effect?.id != null;
+    const rng = (id, k, v, step, unit = '') => `<input id="${id}" type="range" min="${RANGES[k][0]}" max="${RANGES[k][1]}" step="${step}" value="${v}"><output for="${id}">${(+v).toFixed(2)}${unit}</output>`;
     box.innerHTML = `
+      <p class="ed-noteid"><b>${esc(n.id)}</b>　${n.time.toFixed(2)} 秒${n.input === 'hold' ? `〜${(n.time + n.duration).toFixed(2)} 秒` : ''}　コマ ${fi}　<span class="ed-glyph" style="color:${LANE_STYLE[n.button].color}">${GLYPH[n.button]}</span>／${n.button}</p>
+      <h4>コマンド</h4>
       <div class="ed-grid">
-        <label>ID</label><span>${esc(n.id)}</span>
-        <label for="nTime">時刻（秒）</label><span><input id="nTime" type="number" step="0.01" min="0" value="${n.time}"> <button data-n="toHere">現在位置へ</button> <button data-n="seek">ここへ移動</button></span>
-        <label for="nButton">ボタン</label><span><select id="nButton">${BUTTONS.map((b) => `<option value="${b}" ${b === n.button ? 'selected' : ''}>${b}（${BUTTON_INFO[b].meaning}）</option>`).join('')}</select></span>
+        <label for="nButton">コマンド種別</label><span><select id="nButton">${BUTTONS.map((b) => `<option value="${b}" ${b === n.button ? 'selected' : ''}>${GLYPH[b]}（${b}・${BUTTON_INFO[b].meaning}）</option>`).join('')}</select>
+          <small class="ed-dim">変えると文字・入力ボタン・効果音がそろって変わり、エフェクトはそのコマンドの既定に戻ります</small></span>
         <label for="nAction">動作</label><span><select id="nAction">${info.actions.map((a) => `<option value="${a}" ${a === n.action ? 'selected' : ''}>${ACTION_LABEL[a]}（${a}）</option>`).join('')}</select></span>
+        <label for="nTime">時刻（秒）</label><span><input id="nTime" type="number" step="0.01" min="0" value="${n.time}"> <button data-n="toHere">現在位置へ</button> <button data-n="seek">ここへ移動</button></span>
         <label for="nLabel">表示名</label><span><input id="nLabel" type="text" value="${esc(n.label)}" maxlength="20"></span>
-        ${n.input === 'hold' ? `<label for="nDur">長押し時間（秒）</label><span><input id="nDur" type="number" step="0.01" min="0.2" value="${n.duration}"> 開始〜${(n.time + n.duration).toFixed(2)} 秒</span>` : ''}
+        ${n.input === 'hold' ? `<label for="nDur">長押し時間（秒）</label><span><input id="nDur" type="number" step="0.01" min="0.2" value="${n.duration}"></span>` : ''}
         <label for="nSeq">連続コマンド</label><span><select id="nSeq"><option value="">（なし）</option>${this.chart.sequences.map((s) => `<option value="${esc(s.id)}" ${s.id === n.sequenceId ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}</select>
           <button data-n="earlier" title="同じまとまりの前のノーツとコマンドを入れ替え（時刻はそのまま）">◀ 順番</button><button data-n="later" title="同じまとまりの次のノーツとコマンドを入れ替え">順番 ▶</button></span>
-        <label>エフェクト</label><span><select id="eff">${EFFECT_PRESETS.map((p) => `<option ${p === (ef.preset || info.preset) ? 'selected' : ''}>${p}</option>`).join('')}</select>
-          強さ <input id="effI" type="range" min="0" max="2" step="0.05" value="${ef.intensity ?? 1}"></span>
-        ${n.button === 'A' ? `<label>打撃点（元画像 0〜1）</label><span>x <input id="effX" type="number" step="0.005" min="0" max="1" value="${ef.anchor?.x ?? ''}"> y <input id="effY" type="number" step="0.005" min="0" max="1" value="${ef.anchor?.y ?? ''}">
-          <button data-n="pickAnchor">画面で指定</button></span>
-        <label>方向</label><span>x <input id="effDX" type="number" step="0.05" value="${ef.direction?.x ?? ''}"> y <input id="effDY" type="number" step="0.05" value="${ef.direction?.y ?? ''}">
-          <button data-n="pickDir">画面で指定</button> <button data-n="autoFx">関節から自動</button></span>` : ''}
       </div>
-      ${this.pick ? `<p class="ed-pick">${this.pick === 'anchor' ? 'ステージ上の拳・足の位置をクリック' : '攻撃方向の先をクリック'}（Esc で中止）</p>` : ''}`;
+      <h4>視覚エフェクト <small class="ed-dim">${custom ? 'このノーツで個別に指定' : `コマンドの既定（No.${fx.id}）`}</small></h4>
+      <div class="ed-fxlist" role="listbox" aria-label="エフェクト（番号＋名称＋プレビュー）">${EFFECTS.map((e) => `
+        <button class="ed-fx ${e.id === fx.id ? 'on' : ''}" data-fx="${e.id}" role="option" aria-selected="${e.id === fx.id}" title="${esc(e.desc)}">
+          <canvas width="96" height="112" data-pv="${e.id}"></canvas><span>No.${e.id} ${esc(e.name)}</span></button>`).join('')}
+      </div>
+      <div class="ed-row"><button data-n="try" class="ed-primary">この動作で試す</button><button data-n="loop">前後を繰り返し再生</button>
+        <button data-n="fxDefault" ${custom ? '' : 'disabled'}>このノーツのエフェクトを既定に戻す</button></div>
+      <div class="ed-grid">
+        <label for="eOrigin">発生位置</label><span><select id="eOrigin" ${fx.id === 0 ? 'disabled' : ''}>${ORIGINS.map((o) => `<option value="${o.key}" ${o.key === fx.origin ? 'selected' : ''} ${o.key === 'point' && !fx.anchor ? 'disabled' : ''}>${esc(o.name)}</option>`).join('')}</select>
+          <button data-n="pickAnchor" ${fx.id === 0 ? 'disabled' : ''}>画面で指定</button></span>
+        <label>位置の調整</label><span>左右 ${rng('eOx', 'offset', fx.offset.x, 0.01)}　上下 ${rng('eOy', 'offset', fx.offset.y, 0.01)}</span>
+        <label for="eAng">方向・角度</label><span>${def.directional
+          ? `<input id="eAng" type="range" min="-180" max="180" step="1" value="${fx.angle ?? 0}"><output for="eAng">${fx.angle != null ? `${fx.angle}°` : '自動'}</output>
+             <button data-n="pickDir">画面で指定</button>${def.key === 'strike' ? '<button data-n="autoFx">関節から自動</button>' : ''}<button data-n="angAuto">自動に戻す</button>`
+          : '<span class="ed-dim">このエフェクトは向きを使いません</span>'}</span>
+        <label>大きさ</label><span>${rng('eSize', 'size', fx.size, 0.05, '×')}</span>
+        <label>強さ</label><span>${rng('eInt', 'intensity', fx.intensity, 0.05)}</span>
+        <label>持続時間</label><span>${rng('eDur', 'duration', fx.duration, 0.05, ' 秒')}</span>
+        ${def.fire ? `<label>炎の高さ</label><span>${rng('eH', 'height', fx.height, 0.05, '×')}</span><label>炎の幅</label><span>${rng('eW', 'width', fx.width, 0.05, '×')}</span>` : ''}
+      </div>
+      ${this.pick ? `<p class="ed-pick">${this.pick === 'anchor' ? 'ステージ上の発生位置（拳・足など）をクリック' : '向きの先をクリック'}（Esc で中止）</p>` : ''}`;
     const q = (s) => box.querySelector(s);
     const upd = (fn, label) => this.apply((c) => fn(c.notes.find((x) => x.id === n.id), c), label);
+    /** effect を変える（保存値に番号を入れて「個別に指定」にする）。変更後に試す */
+    const setFx = (fn, label) => { if (upd((x) => { x.effect = { id: effectIdOf(x), ...(x.effect || {}) }; delete x.effect.preset; fn(x.effect, x); }, label)) this.tryEffect(); };
     q('#nTime').addEventListener('change', (e) => upd((x) => { x.time = this.snapT(Number(e.target.value)); }, '時刻を変更'));
     q('#nButton').addEventListener('change', (e) => upd((x) => {
       const b = e.target.value, bi = BUTTON_INFO[b];
       x.button = b; x.action = bi.defaultAction; x.input = bi.input; x.label = ACTION_LABEL[x.action];
       if (bi.input === 'hold') x.duration = x.duration || 2; else delete x.duration;
-      x.effect = b === 'A' ? this.defaultStrikeEffect(x.time, x.action) : { preset: bi.preset, intensity: 1 };
-    }, 'ボタンを変更'));
+      // 前のコマンドの方向・打撃点などを残さない（撃は関節から打撃点を作る。ほかはコマンドの既定）
+      if (b === 'A') x.effect = this.defaultStrikeEffect(x.time, x.action); else delete x.effect;
+    }, `コマンドを ${GLYPH[e.target.value]} に変更`));
     q('#nAction').addEventListener('change', (e) => upd((x) => {
       const wasDefault = x.label === ACTION_LABEL[x.action];
       x.action = e.target.value;
@@ -552,27 +644,126 @@ export class Editor {
     q('#nLabel').addEventListener('change', (e) => upd((x) => { x.label = e.target.value.trim() || ACTION_LABEL[x.action]; }, '表示名を変更'));
     q('#nDur')?.addEventListener('change', (e) => upd((x) => { x.duration = Math.max(0.2, r2(Number(e.target.value))); }, '長押し時間を変更'));
     q('#nSeq').addEventListener('change', (e) => upd((x) => { x.sequenceId = e.target.value || null; }, '連続コマンドを変更'));
-    q('#eff').addEventListener('change', (e) => upd((x) => { x.effect = { ...(x.effect || {}), preset: e.target.value }; }, 'エフェクトを変更'));
-    q('#effI').addEventListener('change', (e) => upd((x) => { x.effect = { ...(x.effect || {}), intensity: Number(e.target.value) }; }, 'エフェクトの強さを変更'));
-    const num = (id) => { const v = q(id)?.value; return v === '' || v == null ? null : Number(v); };
-    for (const id of ['#effX', '#effY']) q(id)?.addEventListener('change', () => upd((x) => {
-      const ax = num('#effX'), ay = num('#effY');
-      if (ax == null || ay == null) return;
-      x.effect = { ...(x.effect || {}), anchor: { x: Math.max(0, Math.min(1, ax)), y: Math.max(0, Math.min(1, ay)) } };
-    }, '打撃点を変更'));
-    for (const id of ['#effDX', '#effDY']) q(id)?.addEventListener('change', () => upd((x) => {
-      const dx = num('#effDX'), dy = num('#effDY');
-      if (dx == null || dy == null || Math.hypot(dx, dy) < 1e-6) return;
-      x.effect = { ...(x.effect || {}), direction: { x: dx, y: dy } };
-    }, '方向を変更'));
+    box.querySelectorAll('[data-fx]').forEach((b) => b.addEventListener('click', () => {
+      const id = Number(b.dataset.fx);
+      if (upd((x) => {
+        // 種類を変えたら、前の種類の方向・位置・大きさなどは残さない（打撃へ変えたときは関節から打撃点を作る）
+        const keep = EFFECT_BY_ID.get(id).key === 'strike' ? (x.effect?.anchor ? { anchor: x.effect.anchor, angle: angleOf(x.effect) } : this.defaultStrikeEffect(x.time, x.action)) : {};
+        x.effect = effectForId(id, keep);
+      }, `エフェクトを No.${id} ${EFFECT_BY_ID.get(id).name} に変更`)) this.tryEffect();
+    }));
+    q('#eOrigin').addEventListener('change', (e) => setFx((ef) => { ef.origin = e.target.value; }, '発生位置を変更'));
+    const slider = (id, label, fn, fmt = (v) => v.toFixed(2)) => {
+      const el = q(id);
+      if (!el) return;
+      const out = el.nextElementSibling;
+      el.addEventListener('input', () => { if (out) out.textContent = fmt(Number(el.value)); });
+      el.addEventListener('change', () => setFx((ef) => fn(ef, Number(el.value)), label));
+    };
+    slider('#eOx', '位置（左右）を調整', (ef, v) => { ef.offset = { x: v, y: ef.offset?.y ?? 0 }; });
+    slider('#eOy', '位置（上下）を調整', (ef, v) => { ef.offset = { x: ef.offset?.x ?? 0, y: v }; });
+    slider('#eAng', '向きを変更', (ef, v) => { ef.angle = v; delete ef.direction; }, (v) => `${v}°`);
+    slider('#eSize', '大きさを変更', (ef, v) => { ef.size = v; }, (v) => `${v.toFixed(2)}×`);
+    slider('#eInt', '強さを変更', (ef, v) => { ef.intensity = v; });
+    slider('#eDur', '持続時間を変更', (ef, v) => { ef.duration = v; }, (v) => `${v.toFixed(2)} 秒`);
+    slider('#eH', '炎の高さを変更', (ef, v) => { ef.height = v; }, (v) => `${v.toFixed(2)}×`);
+    slider('#eW', '炎の幅を変更', (ef, v) => { ef.width = v; }, (v) => `${v.toFixed(2)}×`);
     box.querySelectorAll('[data-n]').forEach((b) => b.addEventListener('click', () => {
       const k = b.dataset.n;
       if (k === 'toHere') upd((x) => { x.time = this.snapT(Math.max(0, this.app.t)); }, '時刻を現在位置へ');
       else if (k === 'seek') { this.app.pause(); this.app.seek(n.time); }
+      else if (k === 'try') this.tryEffect();
+      else if (k === 'loop') this.loopAround(n);
+      else if (k === 'fxDefault') upd((x) => { if (x.button === 'A') x.effect = this.defaultStrikeEffect(x.time, x.action); else delete x.effect; }, 'エフェクトを既定に戻す');
       else if (k === 'pickAnchor' || k === 'pickDir') { this.app.pause(); this.app.seek(n.time); this.pick = k === 'pickAnchor' ? 'anchor' : 'direction'; this.renderNoteBox(); }
-      else if (k === 'autoFx') upd((x) => { x.effect = { ...this.defaultStrikeEffect(x.time, x.action), intensity: x.effect?.intensity ?? 1 }; }, '打撃点を関節から設定');
+      else if (k === 'autoFx') setFx((ef, x) => { const d = this.defaultStrikeEffect(x.time, x.action); ef.origin = d.origin; ef.anchor = d.anchor; ef.angle = d.angle; delete ef.direction; }, '打撃点と向きを関節から設定');
+      else if (k === 'angAuto') setFx((ef) => { delete ef.angle; delete ef.direction; }, '向きを自動に戻す');
       else if (k === 'earlier' || k === 'later') this.reorder(n, k === 'earlier' ? -1 : 1);
     }));
+    this.drawThumbs(n);
+  }
+
+  // ---------- エフェクトのプレビュー ----------
+  /** 一覧の小さなプレビュー: このノーツのコマに、各エフェクトの見え方（最も強い頃）を重ねる */
+  async drawThumbs(n) {
+    const fi = this.app.store.indexAt(n.time);
+    const token = (this._thumbToken = (this._thumbToken || 0) + 1);
+    await this.app.store.warm(fi);
+    if (token !== this._thumbToken) return;
+    this.thumbFx ||= new Effects();
+    const store = this.app.store, fr = store.frames[fi];
+    for (const cv of this.root.querySelectorAll('canvas[data-pv]')) {
+      const id = Number(cv.dataset.pv), e = EFFECT_BY_ID.get(id);
+      const W = cv.width, H = cv.height, standH = H * 0.62;
+      const s = standH * fr.k, ox = W / 2, oy = H * 0.52;
+      const T = (f) => ({
+        s, ox, oy, toScreen: (x, y) => [ox + (x - f.anchor[0]) * s, oy + (y - f.anchor[1]) * s], toSource: (X, Y) => [f.anchor[0] + (X - ox) / s, f.anchor[1] + (Y - oy) / s],
+        crop() { const [x, y, w, h] = f.crop; const [X, Y] = this.toScreen(x, y); return { x: X, y: Y, w: w * s, h: h * s }; },
+      });
+      const fxv = resolveEffect({ ...n, effect: { ...(n.effect || {}), id } });
+      if (id !== effectIdOf(n)) { fxv.offset = { x: 0, y: 0 }; fxv.size = 1; fxv.origin = e.key === 'strike' && n.effect?.anchor ? 'point' : 'auto'; }
+      const S = { t: 50, store, frameIndex: fi, transformFor: (i) => T(store.frames[i]), standH, canvas: null, dpr: 1 };
+      const g = cv.getContext('2d');
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+      const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#3a2a1c'); bg.addColorStop(1, '#1a120c');
+      g.fillStyle = bg; g.fillRect(0, 0, W, H);
+      const F = this.thumbFx;
+      F.clear();
+      const dir = fxv.direction ?? n.effect?.direction ?? (e.key === 'turn' ? { x: 1, y: 0 } : null);
+      if (e.key !== 'none') F.trigger(e.key, { t: 50 - (e.key === 'backFire' ? 0.02 : 0.08) * fxv.duration, grade: 'PERFECT', frameIndex: fi, action: n.action, fx: fxv, direction: dir, seed: 3, hold: true });
+      try {
+        F.renderUnder(g, S);
+        const b = store.get(fi);
+        if (b) { const r = T(store.frames[b.index]).crop(); g.drawImage(b.bmp, r.x, r.y, r.w, r.h); }
+        F.renderOver(g, S);
+      } catch (err) { console.warn('preview', err); }
+      F.clear();
+    }
+  }
+
+  /** 選んだエフェクトを、そのノーツの動作の画像に重ねてすぐ試す（一時停止のまま、そのコマで演出だけ動かす） */
+  tryEffect() {
+    const n = this.selNotes()[0];
+    if (!n) return;
+    this.app.pause();
+    if (Math.abs(this.app.t - n.time) > 0.01) this.app.seek(n.time);
+    this.previewFx ||= new Effects();
+    this.previewFx.clear();
+    const fx = resolveEffect(n);
+    this.preview = { id: n.id, fx, key: fx.key, fi: this.app.store.indexAt(n.time), start: performance.now(), grow: n.input === 'hold' && fx.key === 'backFire' ? 0.9 : 0, action: n.action, direction: fx.direction ?? n.effect?.direction ?? null, fired: false };
+    this.message(`No.${fx.id} ${fx.def.name} を ${n.id}（${n.time.toFixed(2)} 秒）で試しています`);
+  }
+
+  /** ノーツの前後の短い区間を繰り返し再生（A–B ループを使う） */
+  loopAround(n) {
+    const a = Math.max(0, n.time - 1.0), b = Math.min(this.app.duration, n.time + (n.duration || 0) + 1.2);
+    this.app.loop.a = r2(a); this.app.loop.b = r2(b); this.app.loop.on = true;
+    this.refreshLoop();
+    this.app.seek(a);
+    if (this.app.state !== 'playing') this.app.togglePlay();
+    this.message(`${n.id} の前後（${a.toFixed(2)}〜${b.toFixed(2)} 秒）を繰り返し再生中（区間ループを外すと止まります）`);
+  }
+
+  /** ステージにプレビューを描く（main の draw から。人物の前後） */
+  drawPreview(ctx, S, side) {
+    const pv = this.preview;
+    if (!pv || !this.app.editMode) return;
+    if (this.app.state === 'playing') { this.preview = null; this.previewFx?.clear(); return; }
+    const el = (performance.now() - pv.start) / 1000;
+    if (el > pv.grow + pv.fx.duration + 0.4) { this.preview = null; this.previewFx.clear(); return; }
+    const F = this.previewFx, T0 = 1000, t = T0 + el;
+    if (side === 'under') {
+      if (pv.grow && el < pv.grow) F.setHold({ id: 'pv', key: pv.key, fx: pv.fx, progress: el / pv.grow }, t);
+      else {
+        if (pv.grow) F.holdDone('pv');
+        F.setHold(null, t);
+        if (!pv.fired && pv.key !== 'none') { pv.fired = true; F.trigger(pv.key, { t: T0 + pv.grow, grade: 'PERFECT', frameIndex: pv.fi, action: pv.action, fx: pv.fx, direction: pv.direction, seed: 5, hold: !!pv.grow }); }
+      }
+    }
+    const S2 = { ...S, t };
+    if (side === 'under') F.renderUnder(ctx, S2);
+    else { F.renderHold(ctx, S2); F.renderOver(ctx, S2); }
   }
 
   /** 同じ連続コマンドの隣のノーツとコマンドの内容を入れ替える（時刻の並びはそのまま） */
@@ -726,44 +917,57 @@ export class Editor {
       const T = this.app.transformFor(fi);
       const [sx, sy] = T.toSource(X, Y);
       const W = this.app.manifest.width, H = this.app.manifest.height;
+      const fixed = (x) => { x.effect = { id: effectIdOf(x), ...(x.effect || {}) }; delete x.effect.preset; return x.effect; };
       if (this.pick === 'anchor') {
-        this.apply((c) => { const x = c.notes.find((k) => k.id === n.id); x.effect = { ...(x.effect || { preset: 'strike' }), anchor: { x: r2(Math.max(0, Math.min(1, sx / W)) * 1000) / 1000, y: r2(Math.max(0, Math.min(1, sy / H)) * 1000) / 1000 } }; }, '打撃点を画面で指定');
-        this.pick = 'direction';
-        this.message('続けて、攻撃方向の先をクリックしてください（Esc で中止）');
+        this.apply((c) => { const ef = fixed(c.notes.find((k) => k.id === n.id)); ef.origin = 'point'; ef.anchor = { x: r2(Math.max(0, Math.min(1, sx / W)) * 1000) / 1000, y: r2(Math.max(0, Math.min(1, sy / H)) * 1000) / 1000 }; delete ef.offset; }, '発生位置を画面で指定');
+        const directional = resolveEffect(this.chart.notes.find((k) => k.id === n.id)).def.directional;
+        this.pick = directional ? 'direction' : null;
+        if (directional) this.message('続けて、向きの先をクリックしてください（Esc で中止）');
       } else {
-        const a = n.effect?.anchor;
-        if (a) {
-          const dx = sx / W - a.x, dy = sy / H - a.y;
-          const len = Math.hypot(dx * W, dy * H) || 1;
-          this.apply((c) => { const x = c.notes.find((k) => k.id === n.id); x.effect = { ...x.effect, direction: { x: r2(dx * W / len), y: r2(dy * H / len) } }; }, '方向を画面で指定');
-        }
+        // 向き: 発生位置（画面上）からクリックした点へ
+        const [ox, oy] = this.originScreen(n);
+        const ang = Math.round(Math.atan2(Y - oy, X - ox) * 180 / Math.PI);
+        this.apply((c) => { const ef = fixed(c.notes.find((k) => k.id === n.id)); ef.angle = ang; delete ef.direction; }, '向きを画面で指定');
         this.pick = null;
       }
+      this.tryEffect();
       this.renderNoteBox();
     });
     window.addEventListener('keydown', (e) => { if (e.code === 'Escape' && this.pick) { this.pick = null; this.renderNoteBox(); } });
   }
 
-  /** ステージ上の編集用の表示（選択中ノーツの打撃点と方向） */
+  /** 選択中ノーツのエフェクトの発生位置（画面上。ノーツの時刻のコマで） */
+  originScreen(n, G) {
+    const fx = resolveEffect(n), fi = this.app.store.indexAt(n.time);
+    const T = this.app.transformFor(fi, G), fr = this.app.store.frames[fi], m = this.app.manifest;
+    const J = { head: 'nose', left_wrist: 'left_wrist', right_wrist: 'right_wrist', left_ankle: 'left_ankle', right_ankle: 'right_ankle' }[fx.origin];
+    let p = [T.ox, T.oy];
+    if (J && fr.joints?.[J]) p = T.toScreen(fr.joints[J][0], fr.joints[J][1]);
+    else if ((fx.origin === 'point' || (fx.origin === 'auto' && fx.key === 'strike')) && fx.anchor) p = T.toScreen(fx.anchor.x * m.width, fx.anchor.y * m.height);
+    const standH = (G || this.app.geometry()).standH;
+    return [p[0] + fx.offset.x * standH, p[1] + fx.offset.y * standH];
+  }
+
+  /** ステージ上の編集用の表示（選択中ノーツの ID・エフェクト番号・発生位置と向き） */
   drawOverlay(ctx, G, t, fi) {
     if (!this.app.editMode) return;
     const sel = this.selNotes();
-    if (sel.length !== 1 || sel[0].button !== 'A') return;
-    const n = sel[0], ef = n.effect;
-    if (!ef?.anchor) return;
-    const T = this.app.transformFor(this.app.store.indexAt(n.time), G);
-    const [x, y] = T.toScreen(ef.anchor.x * this.app.manifest.width, ef.anchor.y * this.app.manifest.height);
+    if (sel.length !== 1) return;
+    const n = sel[0], fx = resolveEffect(n);
+    const [x, y] = this.originScreen(n, G);
     ctx.save();
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x - 14, y); ctx.lineTo(x + 14, y); ctx.moveTo(x, y - 14); ctx.lineTo(x, y + 14); ctx.stroke();
-    if (ef.direction) {
-      const d = Math.hypot(ef.direction.x, ef.direction.y) || 1;
+    if (fx.def.directional && fx.direction) {
       ctx.strokeStyle = '#ffcf6a';
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + ef.direction.x / d * 60, y + ef.direction.y / d * 60); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + fx.direction.x * 60, y + fx.direction.y * 60); ctx.stroke();
     }
-    ctx.fillStyle = '#fff'; ctx.font = '12px system-ui, sans-serif';
-    ctx.fillText(`${n.id} 打撃点（コマ ${this.app.store.indexAt(n.time)}）`, x + 12, y - 12);
+    ctx.font = '600 12px system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.fillStyle = '#fff';
+    const label = `${n.id}（${n.time.toFixed(2)} 秒・コマ ${this.app.store.indexAt(n.time)}）No.${fx.id} ${fx.def.name}`;
+    const lw = ctx.measureText(label).width, lx = Math.max(4, Math.min(x + 12, this.app.cssW - lw - 4)), ly = Math.max(14, y - 12);
+    ctx.strokeText(label, lx, ly); ctx.fillText(label, lx, ly);
     ctx.restore();
     void t; void fi;
   }
