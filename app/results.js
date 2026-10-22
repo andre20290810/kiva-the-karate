@@ -119,8 +119,8 @@ export class ResultsView {
   conditionsHtml(r) {
     const s = r.settings;
     return `<dl class="res-cond">
-      <dt>日時</dt><dd>${esc(when(r.at))}</dd>
-      <dt>区分</dt><dd>${r.mode === 'auto' ? 'AUTO' : '手動'}・${KIND_LABEL[r.kind]}${r.practiceReasons?.length ? `（${r.practiceReasons.map((x) => PRACTICE[x] || x).join('・')}）` : ''}</dd>
+      <dt>${r.mode === 'demo' ? '作成日時' : '日時'}</dt><dd>${esc(when(r.at))}${r.mode === 'demo' ? '（公式デモの作成日。実際のプレイ日時ではありません）' : ''}</dd>
+      <dt>区分</dt><dd>${r.mode === 'demo' ? '公式デモ／シミュレーション（通し）' : `${r.mode === 'auto' ? 'AUTO' : '手動'}・${KIND_LABEL[r.kind]}`}${r.practiceReasons?.length ? `（${r.practiceReasons.map((x) => PRACTICE[x] || x).join('・')}）` : ''}</dd>
       <dt>入力方法</dt><dd>${r.devices.length ? r.devices.map((d) => DEVICE_LABEL[d] || d).join('・') : '—'}</dd>
       <dt>判定幅</dt><dd>PERFECT ±${s.perfectWindowMs} ／ GOOD ±${s.goodWindowMs} ／ 許容限界 ±${s.missWindowMs} ／ 息の押し始め ±${s.holdStartWindowMs} ／ 早離しの許容 ${s.holdReleaseWindowMs} ms</dd>
       <dt>入力補正</dt><dd>${s.inputOffsetMs} ms</dd>

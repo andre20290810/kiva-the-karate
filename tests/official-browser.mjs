@@ -144,7 +144,7 @@ else {
   check(!!personal && (await api('api/official')).body.version === v0.version, '「個人用に保存」はパスワードなしでこの端末にだけ保存（公式データは変わらない）');
   // 公式データの画面: キャンセル・誤ったパスワード・正しいパスワード
   await p.click('[data-act=official]');
-  await p.waitForFunction(() => document.querySelector('#officialDlg')?.open && /今の公式データ: /.test(document.querySelector('.off-cur')?.textContent || ''), null, { timeout: 10000 });
+  await p.waitForFunction(() => document.querySelector('#officialDlg')?.open && /今の公式データ: 版 \d+/.test(document.querySelector('.off-cur')?.textContent || '') && /変更概要|公開できない/.test(document.querySelector('.off-preview')?.textContent || ''), null, { timeout: 20000 });
   let dlg = await p.evaluate(() => ({ cur: document.querySelector('.off-cur').textContent, prev: document.querySelector('.off-preview').textContent, type: document.querySelector('#offPass').type }));
   check(dlg.type === 'password' && new RegExp(`版 ${v0.version}`).test(dlg.cur) && /個別エフェクト: 1 ノーツ/.test(dlg.prev) && /版 \d+ になります/.test(dlg.prev), '公開前に対象・変更概要（個別エフェクト 1 ノーツ）・今の版を表示。パスワード欄は伏字', dlg.prev.slice(0, 60));
   await p.fill('#offPass', PASS); await p.click('[data-off=cancel]');
