@@ -671,7 +671,7 @@ export class App {
   onJudge(e) {
     if (e.type === 'stray') { this.lanes.mark('—', this.t, e.button); return; }
     const n = e.note, src = n.src;
-    if (e.type === 'holdStart') return;
+    if (e.type === 'holdStart' || e.type === 'holdRelease') return; // 押し始め・完了後に離した記録は判定ではない
     this.log.push({ id: n.id, time: n.time, grade: e.grade, delta: n.delta, source: e.source, reason: e.reason });
     const shownAt = e.grade === 'MISS' ? this.t : Math.min(this.t, e.time ?? this.t);
     this.lanes.mark(e.grade, Math.max(shownAt, this.t - 0.05), n.button, n.delta);
