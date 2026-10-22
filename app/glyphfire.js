@@ -5,7 +5,67 @@
 // - 呼吸の長押し: 正しく保持している間は火が育ち、完了で強く灯る。早すぎる解除・MISS では発火せず、育った火は静かに消える
 // 時刻は時間軸の秒（一時停止で止まり、シーク・リトライで clear()）。
 
-const FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "IPAGothic", sans-serif';
+// 文字のノーツは太字の行書体（Yuji Mai、SIL OFL。app/fonts/ に「息構撃旋」だけを切り出して同梱。iPhone・PC で同じ字形）。
+// 読み込み前・失敗時は端末の字体で描き、読み込み後に寸法を測り直してキャッシュを作り直す。
+export const BRUSH_FONT = { family: 'KivaBrush', url: 'app/fonts/yuji-mai-kiva.woff2' };
+const SANS = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "IPAGothic", sans-serif';
+let FONT = SANS;
+let fontReady = false;
+const PAD = 0.5;       // 文字の画像の余白（文字の大きさに対する比。筆のはみ出し・縁取り・影・発光が切れない）
+const BOLD = 0.05;     // 太字: 同じ色の線で太らせる（文字の大きさに対する比）
+const VIS = 0.9;       // 4 文字の外形の大きい方の辺 = 文字の大きさ × VIS（読み込み後に実測して合わせる）
+let metrics = null;    // { k: フォント px / 文字の大きさ, off: {ch: [dx, dy]}（外形の中心を描く位置に合わせる） }
+
+/** 行書体を読み込む（失敗しても遊べる）。読み込めたら true */
+export async function loadBrushFont(base = '') {
+  try {
+    if (typeof FontFace === 'undefined' || typeof document === 'undefined') return false;
+    const f = new FontFace(BRUSH_FONT.family, `url(${base}${BRUSH_FONT.url}) format("woff2")`, { display: 'block' });
+    await f.load();
+    document.fonts.add(f);
+    FONT = `"${BRUSH_FONT.family}", ${SANS}`;
+    fontReady = true;
+    metrics = null;
+    return true;
+  } catch (e) {
+    console.warn('行書体を読み込めませんでした。端末の字体で表示します', e);
+    return false;
+  }
+}
+export const brushFontReady = () => fontReady;
+
+/** 文字の外形を測る（フォントの読み込み後に 1 回）。字ごとの中心のずれと、4 文字共通の倍率 */
+function measure(chars) {
+  const c = canvas(8, 8), g = c.getContext('2d');
+  const R = 200;
+  g.font = `400 ${R}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  let big = 0;
+  const off = {}, box = {};
+  for (const ch of chars) {
+    const m = g.measureText(ch);
+    const l = m.actualBoundingBoxLeft ?? R / 2, r = m.actualBoundingBoxRight ?? R / 2;
+    const a = m.actualBoundingBoxAscent ?? R / 2, d = m.actualBoundingBoxDescent ?? R / 2;
+    off[ch] = [(l - r) / 2 / R, (a - d) / 2 / R];
+    box[ch] = [(l + r) / R, (a + d) / R];
+    big = Math.max(big, (l + r) / R, (a + d) / R);
+  }
+  return { k: big > 0 ? VIS / big : 1, off, box, font: FONT };
+}
+const GLYPH_CHARS = '息構撃旋';
+/** 文字を描く位置とフォント（外形の中心が (x, y) に来る） */
+function place(g, ch, x, y, size) {
+  if (!metrics || metrics.font !== FONT) metrics = measure(GLYPH_CHARS.includes(ch) ? GLYPH_CHARS : ch);
+  const k = metrics.off[ch] ? metrics.k : 1, o = metrics.off[ch] || [0, 0];
+  const px = size * k;
+  g.font = `400 ${px}px ${FONT}`;
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+  return { x: x + o[0] * px, y: y + o[1] * px, px };
+}
+/** 文字の外形（測定値。テスト・配置用）: 文字の大きさに対する幅・高さ */
+export function glyphBox(ch) {
+  if (!metrics || metrics.font !== FONT) metrics = measure(GLYPH_CHARS);
+  const b = metrics.box[ch]; return b ? { w: b[0] * metrics.k, h: b[1] * metrics.k } : null;
+}
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const hash = (n) => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
 
@@ -26,19 +86,23 @@ export class GlyphRenderer {
 
   clear() { this.list = []; this.hold = null; this.smother = []; }
 
+  /** フォントの読み込み後: 文字の画像を作り直す（寸法は次に描くときに測り直す） */
+  resetFont() { this.cache.clear(); }
+  fontKey() { return fontReady ? 'brush' : 'sans'; }
+
   // ---------- 文字の画像（キャッシュ） ----------
   /** 文字だけの形（白、余白つき）。炎・赤熱の元 */
   mask(ch, size) {
     const key = `m|${ch}|${size}`;
     let c = this.cache.get(key);
     if (!c) {
-      const pad = Math.ceil(size * 0.35);
+      const pad = Math.ceil(size * PAD);
       c = canvas(size + pad * 2, size + pad * 2);
       const g = c.getContext('2d');
-      g.font = `700 ${size}px ${FONT}`;
-      g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillStyle = '#fff';
-      g.fillText(ch, c.width / 2, c.height / 2 + size * 0.04);
+      const p = place(g, ch, c.width / 2, c.height / 2, size);
+      g.fillStyle = '#fff'; g.strokeStyle = '#fff'; g.lineWidth = size * BOLD;
+      g.strokeText(ch, p.x, p.y);
+      g.fillText(ch, p.x, p.y);
       c.pad = pad;
       this._put(key, c);
     }
@@ -50,20 +114,19 @@ export class GlyphRenderer {
     const key = `n|${ch}|${size}|${color}`;
     let c = this.cache.get(key);
     if (!c) {
-      const pad = Math.ceil(size * 0.35);
+      const pad = Math.ceil(size * PAD);
       c = canvas(size + pad * 2, size + pad * 2);
       const g = c.getContext('2d');
-      const x = c.width / 2, y = c.height / 2 + size * 0.04;
-      g.font = `700 ${size}px ${FONT}`;
-      g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
-      // 影（背景から浮かせる）→ 黒い縁取り（細め。画数の多い字でも潰れない）→ 色の文字（上をわずかに明るく）
+      const { x, y } = place(g, ch, c.width / 2, c.height / 2, size);
+      // 影（背景から浮かせる）→ 黒い縁取り → 同じ色の線で太らせた色の文字（太字の行書。上をわずかに明るく）
       g.shadowColor = 'rgba(0,0,0,0.8)'; g.shadowBlur = Math.max(2, size * 0.1); g.shadowOffsetY = Math.max(1, size * 0.03);
-      g.strokeStyle = 'rgba(6,3,1,0.95)'; g.lineWidth = Math.max(2.5, size * 0.13);
+      g.strokeStyle = 'rgba(6,3,1,0.95)'; g.lineWidth = Math.max(2.5, size * (0.1 + BOLD));
       g.strokeText(ch, x, y);
       g.shadowColor = 'transparent';
       const gr = g.createLinearGradient(0, y - size / 2, 0, y + size / 2);
       gr.addColorStop(0, `rgb(${rgb.split(',').map((v) => Math.round(+v + (255 - v) * 0.45)).join(',')})`); gr.addColorStop(0.45, `rgb(${rgb})`); gr.addColorStop(1, `rgb(${rgb})`);
-      g.fillStyle = gr;
+      g.fillStyle = gr; g.strokeStyle = gr; g.lineWidth = size * BOLD;
+      g.strokeText(ch, x, y);
       g.fillText(ch, x, y);
       c.pad = pad;
       this._put(key, c);
@@ -256,15 +319,13 @@ export class GlyphRenderer {
     const key = `h|${ch}|${size}`;
     let c = this.cache.get(key);
     if (!c) {
-      const pad = Math.ceil(size * 0.35);
+      const pad = Math.ceil(size * PAD);
       c = canvas(size + pad * 2, size + pad * 2);
       const g = c.getContext('2d');
-      const x = c.width / 2, y = c.height / 2 + size * 0.04;
-      g.font = `700 ${size}px ${FONT}`;
-      g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
-      g.strokeStyle = 'rgba(40,4,0,0.92)'; g.lineWidth = Math.max(2.5, size * 0.13);
+      const { x, y } = place(g, ch, c.width / 2, c.height / 2, size);
+      g.strokeStyle = 'rgba(40,4,0,0.92)'; g.lineWidth = Math.max(2.5, size * (0.13 + BOLD));
       g.strokeText(ch, x, y);
-      g.strokeStyle = 'rgb(255,60,20)'; g.lineWidth = Math.max(1, size * 0.04);
+      g.strokeStyle = 'rgb(255,60,20)'; g.lineWidth = Math.max(1, size * (0.04 + BOLD));
       g.strokeText(ch, x, y);
       const gr = g.createLinearGradient(0, y - size / 2, 0, y + size / 2);
       gr.addColorStop(0, '#fff6c8'); gr.addColorStop(0.45, '#ffb040'); gr.addColorStop(1, '#ff3a10');

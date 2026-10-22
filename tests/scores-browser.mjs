@@ -176,6 +176,107 @@ const startPlay = (p) => p.evaluate(async () => { const a = window.__app; a.stat
   check(/早離し あり（途中解除）/.test(ch0.text) && /解除 13\.030 秒/.test(ch0.text) && /保持時間 必要 1\.85 秒 ／ 実際 0\.98 秒/.test(ch0.text) && /正解の開始・終了 12\.030 〜 14\.030 秒/.test(ch0.text),
     '長押し（早離し）: 正解の開始・終了、押下・解除、保持時間、早離し', ch0.text.slice(-260));
   check(/早離し なし/.test(ch1.text) && /保持して成功/.test(ch1.text) && /解除 18\.250 秒（終了から \+300\.0ms）/.test(ch1.text), '長押し（完了後に離した）: 解除の時刻と成功の時刻を分けて表示');
+  // ---------- 照合タイムライン（編集画面と同じ時間軸） ----------
+  const tl = await p.evaluate(() => {
+    const a = window.__app, r = window.__lastRecord, T = window.__tl;
+    const X = (t) => T.pad + t * T.pps;
+    const svg = document.querySelector('.tl-scroll svg');
+    const marks = Object.fromEntries([...svg.querySelectorAll('g.tl-item[data-sel^="note:"]')].map((g) => {
+      const m = g.querySelector('.tl-nmark');
+      const adopted = g.querySelector('g.cur');
+      const shape = adopted?.firstElementChild;
+      const sx = shape ? (() => { const b = shape.getBBox(); return b.x + b.width / 2; })() : null;
+      return [g.dataset.sel.slice(5), { nx: +m.getAttribute('x') + 4, ny: +m.getAttribute('y'), shapeX: sx, shapeY: shape ? +(shape.getAttribute('cy') ?? 0) : null, held: g.querySelector('.tl-held') ? { x: +g.querySelector('.tl-held').getAttribute('x'), w: +g.querySelector('.tl-held').getAttribute('width') } : null, nomiss: !!g.querySelector('.tl-nomiss') }];
+    }));
+    const ticks = [...svg.querySelectorAll('line.tl-tick1')].map((l) => +l.getAttribute('x1'));
+    const extras = [...svg.querySelectorAll('g.tl-item[data-sel^="extra:"] circle')].map((c) => ({ x: +c.getAttribute('cx'), y: +c.getAttribute('cy') }));
+    const xRow = T.rows.find((x) => x.key === 'x');
+    return { T, dur: a.duration, recDur: r.chart.duration, marks, ticks: ticks.slice(0, 6), X5: X(5), X10: X(10), extras, xRow,
+      notes: r.notes.map((n) => ({ id: n.id, b: n.button, t: n.time, it: n.input?.time ?? null, miss: n.result === 'MISS' && !n.input, hold: n.hold ? { p: n.hold.pressedAt, r: n.hold.releasedAt ?? n.hold.completedAt ?? n.hold.end } : null })),
+      ex: r.extras.map((x) => x.time), chartTimes: a.chart.notes.map((n) => [n.id, n.time]) };
+  });
+  const X = (t) => tl.T.pad + t * tl.T.pps;
+  const posOk = tl.notes.every((n) => Math.abs(tl.marks[n.id].nx - X(n.t)) < 0.6 && (n.it == null ? tl.marks[n.id].shapeX == null : Math.abs(tl.marks[n.id].shapeX - X(n.it)) < 0.6));
+  const sameAsEditor = tl.chartTimes.every(([id, t]) => Math.abs(tl.marks[id].nx - X(t)) < 0.6);
+  check(Math.abs(tl.T.dur - tl.dur) < 0.001 && tl.recDur === Math.round(tl.dur * 1000) / 1000 && tl.T.rows[0].key === 'n:Y' && tl.T.rows[1].key === 'i:Y' && tl.T.rows.at(-1).key === 'x',
+    '照合タイムライン: 0 秒〜演武の終わり（82.3 秒）、技ごとに「正解」と「入力」の段（上から Y・X・A・B）、最後に不採用の段', `${tl.T.dur} 秒 記録 ${tl.recDur} rows ${tl.T.rows.map((x) => x.key)}`);
+  const badPos = tl.notes.filter((n) => !(Math.abs(tl.marks[n.id].nx - X(n.t)) < 0.6 && (n.it == null ? tl.marks[n.id].shapeX == null : Math.abs(tl.marks[n.id].shapeX - X(n.it)) < 0.6))).map((n) => `${n.id}:${tl.marks[n.id].nx}/${X(n.t)}:${tl.marks[n.id].shapeX}/${n.it == null ? '-' : X(n.it)}`);
+  check(posOk && sameAsEditor, `正解のノーツは譜面の時刻、採用した入力は入力時刻の横位置（同じ時刻 = 同じ横位置。編集画面の譜面と一致）`, badPos.slice(0, 4).join(' '));
+  check(Math.abs(tl.ticks[5] - tl.X5) < 0.6 && tl.ticks.length === 6, '目盛りは 1 秒ごと（編集画面と同じ timeline.js の目盛り）', tl.ticks.join(','));
+  const noIn = tl.notes.filter((n) => n.miss);
+  check(noIn.length > 0 && noIn.every((n) => tl.marks[n.id].nomiss && tl.marks[n.id].shapeX == null), '入力なしの MISS は正解の段に ✕、入力の段には何も描かない（架空の入力位置を作らない）', `${noIn.length} 件`);
+  check(tl.extras.length === tl.ex.length && tl.extras.every((e, i) => Math.abs(e.x - X(tl.ex[i])) < 0.6 && e.y > tl.xRow.y && e.y < tl.xRow.y + tl.xRow.h), '不採用・余分な入力は専用の段に入力時刻の位置で表示', `${tl.extras.length} 件`);
+  const hn = tl.notes.filter((n) => n.hold && n.hold.p != null);
+  check(hn.length >= 2 && hn.every((n) => tl.marks[n.id].held && Math.abs(tl.marks[n.id].held.x - X(n.hold.p)) < 0.6 && Math.abs(tl.marks[n.id].held.x + tl.marks[n.id].held.w - X(n.hold.r)) < 0.8), '長押し: 実際に押していた区間（押下〜解除）を入力の段に表示');
+  // 文字が重ならない（拡大率を変えても）
+  const textOverlap = () => p.evaluate(() => {
+    const ts = [...document.querySelectorAll('.tl-scroll svg text')].map((t) => t.getBBox());
+    let bad = 0;
+    for (let i = 0; i < ts.length; i++) for (let j = i + 1; j < ts.length; j++) { const a = ts[i], b = ts[j]; if (a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5) bad++; }
+    return { n: ts.length, bad, pps: window.__tl.pps };
+  });
+  const ov = [await textOverlap()];
+  await p.click('[data-zoom=fit]'); ov.push(await textOverlap());
+  for (let i = 0; i < 12; i++) await p.click('[data-zoom="1"]');
+  ov.push(await textOverlap());
+  check(ov.every((o) => o.bad === 0) && ov[2].pps === 1000, '照合タイムラインの文字は重ならない（初期・全体・最大拡大 1 秒 = 1000px）', ov.map((o) => `${o.pps}px/s 文字${o.n} 重なり${o.bad}`).join(' / '));
+  // 拡大・縮小で中央の時刻を保つ。最大拡大では 10ms = 10px
+  await p.evaluate(() => window.__app.results.select('note', 'n075', 'card'));
+  const zc = await p.evaluate(() => { const sc = document.querySelector('.tl-scroll'), T = window.__tl; return (sc.scrollLeft + sc.clientWidth / 2 - T.pad) / T.pps; });
+  await p.click('[data-zoom="-1"]');
+  const zc2 = await p.evaluate(() => { const sc = document.querySelector('.tl-scroll'), T = window.__tl; return { t: (sc.scrollLeft + sc.clientWidth / 2 - T.pad) / T.pps, pps: T.pps }; });
+  check(Math.abs(zc - 21.7) < 0.1 && Math.abs(zc2.t - zc) < 0.05 && zc2.pps === 640, '拡大・縮小しても中央の時刻（選んだノーツ）を保つ', `${zc.toFixed(3)} → ${zc2.t.toFixed(3)} 秒`);
+  // 選択の連動: タイムライン → 画像・カード、カード → タイムライン
+  await p.click('[data-zoom=fit]');
+  await p.click('.tl-scroll [data-sel="note:n050"] .tl-nmark', { force: true });
+  await p.waitForTimeout(800);
+  const sel = await p.evaluate(() => {
+    const c = document.querySelector('.nc.is-sel'), sc = document.querySelector('.nc-scroller');
+    const cr = c?.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+    return { card: c?.dataset.note, visible: !!c && cr.left >= sr.left - 2 && cr.right <= sr.right + 2, txt: document.querySelector('.tl-sel').textContent.replace(/\s+/g, ' '), imgs: [...document.querySelectorAll('.tl-sel canvas')].map((x) => x.dataset.frame) };
+  });
+  await p.waitForFunction(() => [...document.querySelectorAll('.tl-sel canvas')].every((c) => c.dataset.ready), null, { timeout: 5000 }).catch(() => {});
+  const selReady = await p.evaluate(() => [...document.querySelectorAll('.tl-sel canvas')].every((c) => c.dataset.ready));
+  const f50 = await p.evaluate(() => { const n = window.__lastRecord.notes.find((x) => x.id === 'n050'); return [window.__app.store.indexAt(n.time), window.__app.store.indexAt(n.input.time)].map(String); });
+  check(sel.card === 'n050' && sel.visible && /選択: n050/.test(sel.txt) && sel.imgs.join() === f50.join() && selReady, 'タイムラインで選ぶと、その時刻の主人公の画像（正解時・入力時）と詳細カードへ連動', JSON.stringify(sel).slice(0, 140));
+  await p.click('.nc[data-note="n052"] header');
+  await p.waitForTimeout(400);
+  const back = await p.evaluate(() => { const g = document.querySelector('.tl-scroll .tl-item.is-sel'), sc = document.querySelector('.tl-scroll'), T = window.__tl; const n = window.__lastRecord.notes.find((x) => x.id === 'n052'); const x = T.pad + n.time * T.pps; return { sel: g?.dataset.sel, inView: x >= sc.scrollLeft && x <= sc.scrollLeft + sc.clientWidth }; });
+  check(back.sel === 'note:n052' && back.inView, 'カードを押すとタイムラインのその位置を選択・表示', JSON.stringify(back));
+  await p.evaluate(() => window.__app.results.select('extra', '0', 'tl'));
+  await p.waitForTimeout(300);
+  const exSel = await p.evaluate(() => document.querySelector('.tl-sel').textContent.replace(/\s+/g, ' '));
+  const ex0 = await p.evaluate(() => { const x = window.__lastRecord.extras[0]; return `${x.cmd}／${x.button} を ${x.time.toFixed(3)} 秒`; });
+  check(/不採用の入力/.test(exSel) && exSel.includes(ex0) && /判定にも使っていません/.test(exSel), '不採用の入力を選ぶと、その時刻と画像（判定に使っていないことを明示）', exSel.slice(0, 80));
+  // カード: 同じ行のカードの高さと項目の位置がそろう・文字が重ならない・表示枚数
+  const al = await p.evaluate(() => {
+    const sc = document.querySelector('.nc-scroller'), cs = [...sc.querySelectorAll('.nc')];
+    const hs = new Set(cs.map((c) => Math.round(c.getBoundingClientRect().height)));
+    const rowTops = (c) => [...c.children].map((e) => Math.round(e.getBoundingClientRect().top - c.getBoundingClientRect().top));
+    const t0 = JSON.stringify(rowTops(cs[0]));
+    const same = cs.every((c) => JSON.stringify(rowTops(c)) === t0);
+    let bad = 0;
+    for (const svg of sc.querySelectorAll('.nc-axis')) {
+      const ts = [...svg.querySelectorAll('text')].map((t) => t.getBBox());
+      for (let i = 0; i < ts.length; i++) for (let j = i + 1; j < ts.length; j++) { const a = ts[i], b = ts[j]; if (a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5) bad++; }
+    }
+    const clip = cs.filter((c) => c.scrollHeight > c.clientHeight + 1 || c.scrollWidth > c.clientWidth + 1).length;
+    return { heights: [...hs], same, children: cs[0].children.length, bad, clip, perView: Math.round(sc.clientWidth / cs[0].getBoundingClientRect().width * 10) / 10 };
+  });
+  check(al.heights.length === 1 && al.same && al.children === 11, 'カード: 高さがそろい、見出し・画像・正解・入力・判定の位置がすべてのカードで同じ', JSON.stringify(al));
+  check(al.bad === 0 && al.clip === 0, 'カード: 小さな時間軸の「正解」「採用」「不採用」の文字が重ならない・内容が切れない', `重なり ${al.bad}・はみ出し ${al.clip}`);
+  check(al.perView >= 2.9 && al.perView < 3.3, 'PC では最大 3 枚が並ぶ', `${al.perView} 枚分`);
+  // 過去の譜面（今と違う譜面・長さの記録なし）: 記録のノーツの時刻で表示（今の譜面から計算し直さない）
+  const pastTl = await p.evaluate(() => {
+    const r = structuredClone(window.__lastRecord); r.id = 'past-chart'; delete r.chart.duration; r.chart.hash = 'deadbeef';
+    for (const n of r.notes) { n.time = Math.round((n.time + 0.5) * 1000) / 1000; if (n.hold) n.hold.end += 0.5; }
+    window.__app.results.show(r, { tab: 'detail' });
+    const T = window.__tl, g = document.querySelector('.tl-scroll [data-sel="note:n074"] .tl-nmark');
+    return { x: +g.getAttribute('x') + 4, want: T.pad + r.notes.find((n) => n.id === 'n074').time * T.pps, dur: T.dur };
+  });
+  check(Math.abs(pastTl.x - pastTl.want) < 0.6 && pastTl.dur >= 80, '過去の記録はその記録の譜面の時刻で表示（今の譜面で計算し直さない）', JSON.stringify(pastTl));
+  await p.evaluate((id) => window.__app.results.show(window.__app.history.get(id), { tab: 'detail' }), R.id);
+  await p.waitForTimeout(400);
   await p.click('[data-grade=MISS]');
   const nm = await p.evaluate(() => ({ n: document.querySelectorAll('.nc').length, pos: document.querySelector('.nc-pos').textContent, all: [...document.querySelectorAll('.nc')].every((c) => c.dataset.grade === 'MISS') }));
   check(nm.n === s.miss && nm.all && nm.pos === `1／${s.miss}件`, '判定で絞り込み（MISS）', JSON.stringify(nm));
@@ -307,6 +408,10 @@ const startPlay = (p) => p.evaluate(async () => { const a = window.__app; a.stat
   await p.waitForTimeout(300);
   const ex = await p.evaluate(() => JSON.parse(window.__lastScoreExport || 'null'));
   check(/保存できませんでした/.test(w) && /いっぱい/.test(w) && ex?.records?.length === 1 && ex.records[0].notes.length === 59 && /^seipai-v2-score-/.test(saved || ''), '保存できないときは表示し、成績を JSON で退避できる', saved || '');
+  // スマホ縦: カードは 1 枚ずつ（横にスクロール）、照合タイムラインはページを横にはみ出さない
+  await p.click('[data-tab=detail]'); await p.waitForTimeout(800);
+  const ph = await p.evaluate(() => { const sc = document.querySelector('.nc-scroller'), c = sc.querySelector('.nc'); return { per: Math.round(sc.clientWidth / c.getBoundingClientRect().width * 10) / 10, over: document.scrollingElement.scrollWidth - window.innerWidth, inner: (() => { const k = document.querySelector('.card.results'); return k.scrollWidth - k.clientWidth; })(), tl: document.querySelector('.tl-scroll').scrollWidth > document.querySelector('.tl-scroll').clientWidth }; });
+  check(ph.per < 1.3 && ph.over <= 0 && ph.inner <= 0 && ph.tl, 'スマホ縦: カードは 1 枚ずつ表示して横にスクロール、照合タイムラインは枠の中で横スクロール（ページははみ出さない）', JSON.stringify(ph));
   await ctx.close();
 }
 

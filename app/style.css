@@ -280,3 +280,63 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
 .nc-inputs li.adopted { color: #ffe9b0; }
 .nc-fig { flex: 0 1 calc(50% - 3px); }
 .nc-none > div { aspect-ratio: 3 / 4; border: 2px dashed var(--line); border-radius: 6px; display: grid; place-items: center; color: var(--dim); font-weight: 700; }
+
+/* ---------- 照合タイムライン（成績画面の主表示。編集画面と同じ時間軸） ---------- */
+.res-h3 { font-size: 15px; margin: 10px 0 0; }
+.tl { display: grid; gap: 6px; min-width: 0; }
+.tl-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tl-zoom { display: inline-flex; gap: 4px; }
+#result .tl-zoom button { min-width: 44px; min-height: 36px; padding: 4px 10px; font-size: 16px; font-weight: 700; }
+.tl-scale { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.tl-wrap { display: grid; grid-template-columns: 92px minmax(0, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #120c08; }
+.tl-labels { border-right: 1px solid var(--line); }
+.tl-scroll { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-color: #ffb347 #2b1d12; }
+.tl-scroll::-webkit-scrollbar { height: 10px; } .tl-scroll::-webkit-scrollbar-thumb { background: #ffb347; border-radius: 6px; } .tl-scroll::-webkit-scrollbar-track { background: #2b1d12; }
+.res-graph.tl-svg { border-radius: 0; display: block; max-width: none; }
+.tl-svg .tl-row-note { fill: rgba(255, 255, 255, 0.06); }
+.tl-svg .tl-row-input { fill: rgba(255, 255, 255, 0.02); }
+.tl-svg .tl-row-extra { fill: rgba(255, 140, 140, 0.06); }
+.tl-svg .tl-tick1 { stroke: rgba(255, 255, 255, 0.3); }
+.tl-svg .tl-tick02 { stroke: rgba(255, 255, 255, 0.08); }
+.tl-svg .tl-sec { fill: #cbb9a3; font-size: 11px; }
+.tl-svg .tl-target { stroke: rgba(255, 255, 255, 0.4); stroke-dasharray: 2 2; }
+.tl-svg .tl-link, .res-graph .tl-link { stroke: rgba(255, 255, 255, 0.6); stroke-width: 1.2; }
+.tl-svg .tl-dist { stroke: #ffd27a; stroke-width: 2; }
+.tl-svg .tl-held, .res-graph .tl-held { fill: rgba(255, 210, 122, 0.45); stroke: #ffd27a; stroke-width: 1; }
+.tl-svg .tl-held.early { fill: rgba(255, 122, 122, 0.45); stroke: #ff7a7a; }
+.tl-svg .tl-release { stroke: #ff9a8a; stroke-width: 2; }
+.tl-svg .tl-selband { fill: rgba(255, 179, 71, 0.16); stroke: #ffb347; stroke-width: 1.5; }
+.tl-svg .tl-item { cursor: pointer; }
+.tl-svg .tl-item.is-sel .tl-nmark { stroke: #fff; stroke-width: 2; }
+.tl-svg .tl-t { font-size: 11px; fill: #f2e6d8; cursor: pointer; }
+.tl-svg .tl-t-miss { fill: #ff9a8a; font-weight: 700; }
+.tl-svg text.g-perfect { fill: #ffe17a; } .tl-svg text.g-good { fill: #9fe7ff; } .tl-svg text.g-miss { fill: #ff9a8a; }
+.tl-svg .b-Y { fill: var(--Y); } .tl-svg .b-X { fill: var(--X); } .tl-svg .b-A { fill: var(--A); } .tl-svg .b-B { fill: var(--B); }
+.tl-svg .tl-rl { font-size: 13px; font-weight: 800; }
+.tl-svg .tl-rs { font-size: 11px; fill: #a8957f; }
+.tl-sel { display: flex; gap: 10px; align-items: flex-start; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px; min-height: 40px; }
+.tl-sel > .hint { margin: 0; }
+.tl-sel-imgs { display: flex; gap: 6px; flex: 0 0 auto; width: min(260px, 52%); }
+.tl-sel-imgs .nc-fig { flex: 1 1 0; }
+.tl-sel-txt { font-size: 13px; line-height: 1.6; min-width: 0; overflow-wrap: anywhere; }
+
+/* ---------- ノーツのカード: 行をそろえる（subgrid）。画面の幅に合わせて 1〜3 枚 ---------- */
+.nc-scroller { --nc-w: 86%; display: grid; grid-auto-flow: column; grid-auto-columns: var(--nc-w); grid-template-rows: repeat(11, auto); column-gap: 10px; row-gap: 0; }
+@media (min-width: 620px) { .nc-scroller { --nc-w: calc((100% - 10px) / 2); } }
+@media (min-width: 1000px) { .nc-scroller { --nc-w: calc((100% - 20px) / 3); } }
+.nc { flex: none; grid-row: span 11; grid-template-rows: subgrid; row-gap: 5px; align-content: stretch; }
+.nc > * { min-width: 0; }
+.nc-empty { min-height: 0; }
+.nc.is-sel { outline: 3px solid #ffb347; outline-offset: -1px; }
+.nc { cursor: pointer; }
+.nc-line, .nc-verdict, .nc-small, .nc-inputs li, .nc-hold dd { overflow-wrap: anywhere; }
+.res-graph .nc-lead { stroke: rgba(255, 255, 255, 0.35); stroke-width: 1; }
+@supports not (grid-template-rows: subgrid) {
+  .nc-scroller { display: flex; }
+  .nc { flex: 0 0 var(--nc-w); display: grid; align-content: start; }
+}
+.tl-sel-imgs { width: auto; }
+.tl-sel-imgs .nc-fig { flex: 0 0 auto; width: clamp(96px, 22vw, 128px); }
+.nc-imgs { justify-content: center; }
+.nc .nc-imgs .nc-fig { flex: 0 1 150px; }
+.tl-svg .tl-hit { fill: transparent; }

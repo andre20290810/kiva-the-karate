@@ -36,6 +36,7 @@ export function buildRecord(judge, ctx) {
   const s = ctx.settings;
   const notes = judge.notes.filter((n) => n.result && (ctx.includeSkip || n.result !== 'SKIP')).map((n) => {
     const o = { id: n.id, button: n.button, cmd: CMD[n.button], time: r3(n.time), result: n.result, reason: n.reason ?? null, points: n.points };
+    if (n.label != null) o.label = n.label;
     o.input = n.hit ? { time: r6(n.hit.time), raw: r6(n.hit.raw), button: n.hit.button, device: n.hit.device, deltaMs: r1(n.hit.deltaMs), rawDeltaMs: r1(n.hit.rawDeltaMs) } : null;
     // その時刻に画面に出ていたコマ（フレーム時刻表から。入力時刻とコマの時刻は別の値）
     if (ctx.frameAt) o.frames = { target: ctx.frameAt(n.time), input: n.hit ? ctx.frameAt(n.hit.time) : null };
@@ -63,7 +64,7 @@ export function buildRecord(judge, ctx) {
     kind: ctx.kind,                 // full | aborted | practice
     practiceReasons: ctx.practiceReasons ?? [],
     devices,
-    chart: { title: ctx.chart.title ?? '', gameVersion: ctx.chart.gameVersion, notes: ctx.chart.notes.length, hash: chartHash(ctx.chart), source: ctx.chartSource ?? null },
+    chart: { title: ctx.chart.title ?? '', gameVersion: ctx.chart.gameVersion, notes: ctx.chart.notes.length, hash: chartHash(ctx.chart), source: ctx.chartSource ?? null, duration: r3(ctx.duration ?? null) }, // duration: 時間軸の長さ（演武の終わり）
     settings: Object.fromEntries(['perfectWindowMs', 'goodWindowMs', 'missWindowMs', 'holdStartWindowMs', 'holdReleaseWindowMs', 'inputOffsetMs'].map((k) => [k, s[k]])),
     rate: ctx.rate,
     timeBase: 'timeline',            // ずれは譜面の時間軸の ms（判定と同じ基準）

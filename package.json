@@ -11,6 +11,7 @@
     "test:editor": "node tests/editor-fx-browser.mjs",
     "test:chart": "node tests/chart-browser.mjs",
     "test:scores": "node tests/scores-browser.mjs",
+    "test:lanes": "node tests/lanes-browser.mjs",
     "sfx:render": "node tools/sfx/render.mjs",
     "build:dist": "node tools/build-dist.mjs"
   },

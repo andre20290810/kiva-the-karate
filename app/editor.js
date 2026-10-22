@@ -3,12 +3,12 @@
 // 連続コマンドのまとまりと並べ替え・ノーツごとのコマンド種別と視覚エフェクト（番号・発生位置・向き・大きさ・強さ・持続時間）・
 // 人物の位置と倍率の補正・元に戻す／やり直す・自動保存（下書き）・この端末のデフォルトとして保存・JSON 書き出し／読み込み。
 
+import { FRAME, timeTicks } from './timeline.js';
 import { BUTTONS, BUTTON_INFO, ACTION_LABEL, exportChart, parseChartText, makeNote, normalizeChart, validateChart } from './chart.js';
 import { LANE_ORDER, LANE_STYLE, GLYPH } from './lanes.js';
 import { EFFECTS, EFFECT_BY_ID, ORIGINS, RANGES, DEFAULT_EFFECT_ID, effectIdOf, resolveEffect, effectForId, angleOf } from './effects-catalog.js';
 import { Effects } from './fx.js';
 
-const FRAME = 0.2;
 const r2 = (v) => Math.round(v * 100) / 100;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -502,12 +502,11 @@ export class Editor {
     ctx.font = '11px system-ui, sans-serif';
     ctx.textBaseline = 'top';
     const pxPerS = (g.W - g.labelW) / (v.t1 - v.t0);
-    for (let s = Math.ceil(v.t0 / FRAME) * FRAME; s <= v.t1; s += FRAME) {
-      const x = X(s), whole = Math.abs(s - Math.round(s)) < 1e-6;
-      if (!whole && pxPerS * FRAME < 6) continue;
-      ctx.fillStyle = whole ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.08)';
-      ctx.fillRect(x, whole ? 0 : g.head - 4, 1, whole ? g.H : g.H - g.head + 4);
-      if (whole && (pxPerS > 30 || Math.round(s) % 5 === 0)) { ctx.fillStyle = '#cbb9a3'; ctx.fillText(`${Math.round(s)}s`, x + 2, 2); }
+    for (const tk of timeTicks(v.t0, v.t1, pxPerS)) { // 成績画面の照合タイムラインと同じ目盛り（timeline.js）
+      const x = X(tk.t);
+      ctx.fillStyle = tk.whole ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.08)';
+      ctx.fillRect(x, tk.whole ? 0 : g.head - 4, 1, tk.whole ? g.H : g.H - g.head + 4);
+      if (tk.label) { ctx.fillStyle = '#cbb9a3'; ctx.fillText(tk.label, x + 2, 2); }
     }
     LANE_ORDER.forEach((b, k) => {
       const y = g.head + k * g.rowH;

@@ -8,6 +8,7 @@ import { Input } from './input.js';
 import { FrameStore } from './frames.js';
 import { Effects } from './fx.js';
 import { LaneRenderer, LANE_STYLE } from './lanes.js';
+import { loadBrushFont } from './glyphfire.js';
 import { BACKGROUNDS, orientationOf, containRect, coverRect, laneRect, standingHeight, landscapeSubject, subjectTransform } from './layout.js';
 import { normalizeChart, validateChart, exportChart, BUTTON_INFO, TIMING_KEYS, validateTiming, DEFAULT_SETTINGS } from './chart.js';
 import { buildRecord } from './score.js';
@@ -159,7 +160,9 @@ export class App {
       this.store = new FrameStore(this.manifest, manifestUrl);
       const framesP = this.store.fetchAll((d, n) => this.progress(0.05 + 0.85 * d / n, `人物画像を読み込み中… ${d}/${n}`));
       const audioP = this.loadAudio();
-      [this.bgImages] = await Promise.all([bgP, framesP]);
+      // 文字のノーツの行書体（読み込み後に寸法を測り直す。失敗しても端末の字体で遊べる）
+      const fontP = loadBrushFont().then((ok) => { this.brushFont = ok; this.lanes.glyph.resetFont(); return ok; });
+      [this.bgImages] = await Promise.all([bgP, framesP, fontP]);
       this.progress(0.93, '音声を準備中…');
       this.audioNote = await audioP;
       await this.store.warm(0);
@@ -467,7 +470,7 @@ export class App {
     const rec = buildRecord(this.judge, {
       chart: this.chart, settings: s.settings, rate: s.rate, mode: s.autoUsed || this.autoMode ? 'auto' : 'manual', kind,
       practiceReasons: s.practiceReasons, bgm: s.bgm, startedAt: s.startedAt, endedAt: new Date().toISOString(),
-      chartSource: s.chartSource, startT: s.startT, endT: this.t,
+      chartSource: s.chartSource, startT: s.startT, endT: this.t, duration: this.duration,
       frameAt: (t) => { const i = this.store.indexAt(Math.max(0, t)); return { i, t: this.store.frames[i].t }; },
     });
     const saved = this.history.add(rec);
@@ -628,7 +631,7 @@ export class App {
     ctx.fillRect(0, 0, this.cssW, this.cssH);
     const img = this.bgImages[this.orient === 'landscape' ? 0 : 1];
     ctx.drawImage(img, G.bgDraw.x, G.bgDraw.y, G.bgDraw.w, G.bgDraw.h);
-    // 表示順（奥 → 手前）: 背景 → レーンの背景・枠 → 人物（とエフェクト） → ノーツ・判定線
+    // 表示順（奥 → 手前）: 背景 → レーンの背景・枠 → 背面のエフェクト → 流れるノーツ → 人物（と手前のエフェクト） → 見出し・判定線・判定位置の火
     const held = {};
     for (const b of ['Y', 'X', 'A', 'B']) held[b] = this.held[b] || t - this.flash[b] < 0.08;
     this.lanes.drawBack(ctx, L, { held });
@@ -642,6 +645,9 @@ export class App {
     if (hn) { const r = resolveEffect(hn.src); this.fx.setHold({ id: hn.id, key: r.key, fx: r, progress: this.judge.holdProgress(holding, t) }, t); } else this.fx.setHold(null, t);
     this.fx.renderUnder(ctx, S);
     this.editor?.drawPreview(ctx, S, 'under');
+    // 流れるノーツ（文字・長押しの線・終端・光）は人物より奥（人物の透明な部分からは見える）
+    const lead = this.chart.settings.laneLeadSeconds;
+    this.lanes.drawNotes(ctx, L, t, this.judge ? this.judge.notes : [], { lead, selected: this.editor?.selected });
     const g = this.store.get(fi);
     let shown = null;
     if (g) {
@@ -656,7 +662,7 @@ export class App {
     // レーンの手前側（ラベル・判定線・ノーツ・判定）と HUD
     const holdNote = holding;
     const lanesInfo = this.lanes.draw(ctx, L, t, this.judge ? this.judge.notes : [], {
-      lead: this.chart.settings.laneLeadSeconds, held, selected: this.editor?.selected,
+      lead, held, selected: this.editor?.selected,
       holdFire: holdNote ? { button: holdNote.button, progress: this.judge.holdProgress(holdNote, t) } : null, // 正しく保持している間だけ火が育つ
     });
     for (const b of ['Y', 'X', 'A', 'B']) if (this.padEls[b].classList.contains('down') !== held[b]) this.padEls[b].classList.toggle('down', held[b]);
@@ -665,7 +671,7 @@ export class App {
     window.__debug = {
       t, frame: fi, shown, state: this.state, orient: this.orient, bg, lanes: L, standH, lanesInfo: { jx: lanesInfo.jx },
       bgDraw: G.bgDraw, subject: g ? this.transformFor(g.index, G).crop() : null, visible: g ? this.visibleBox(g.index, G) : null, anchor: g ? [this.transformFor(g.index, G).ox, this.transformFor(g.index, G).oy] : null,
-      decoded: this.store.bitmaps.size, fx: this.fx.stats, auto: this.autoMode, rate: this.clock.rate,
+      decoded: this.store.bitmaps.size, brushFont: !!this.brushFont, fx: this.fx.stats, auto: this.autoMode, rate: this.clock.rate,
     };
   }
 

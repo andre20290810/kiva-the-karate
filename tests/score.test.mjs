@@ -186,3 +186,26 @@ test('summarize は記録から再計算しても同じ（表示と記録が一�
   assert.deepEqual(summarize(JSON.parse(JSON.stringify(r))), r.summary);
   assert.equal(r.summary.perfect + r.summary.good + r.summary.miss, r.summary.total);
 });
+
+test('照合タイムラインと編集画面の目盛りは同じ（timeline.js）: 1 秒ごとに太い目盛り、0.2 秒の細い目盛り', async () => {
+  const { timeTicks, FRAME } = await import('../app/timeline.js');
+  assert.equal(FRAME, 0.2);
+  const t = timeTicks(0, 10, 40);
+  assert.deepEqual(t.filter((x) => x.whole).map((x) => x.t), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.equal(t.length, 51); // 0.2 秒ごと
+  assert.deepEqual(t.filter((x) => x.label).map((x) => x.label).slice(0, 3), ['0s', '1s', '2s']);
+  // 狭い（1 秒 = 10px）: 細い目盛りを省き、数字は 5 秒ごと
+  const n = timeTicks(0, 20, 10);
+  assert.equal(n.length, 21);
+  assert.deepEqual(n.filter((x) => x.label).map((x) => x.label), ['0s', '5s', '10s', '15s', '20s']);
+  const { readFileSync } = await import('node:fs');
+  for (const f of ['app/editor.js', 'app/results.js']) assert.match(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8'), /timeTicks\(/, `${f} は共通の目盛りを使う`);
+});
+
+test('記録に時間軸の長さ（演武の終わり）を残す', () => {
+  const chart = { title: 't', notes: [{ id: 'a', time: 1, button: 'X', input: 'tap' }] };
+  const j = new Judge(chart.notes, DEFAULT_SETTINGS);
+  j.update(3);
+  const r = buildRecord(j, { chart, settings: DEFAULT_SETTINGS, rate: 1, mode: 'manual', kind: 'full', duration: 82.2679 });
+  assert.equal(r.chart.duration, 82.268);
+});
