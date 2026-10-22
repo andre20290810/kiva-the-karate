@@ -12,6 +12,8 @@ export const CONDITION_KEYS = Object.freeze(['chartHash', 'perfectWindowMs', 'go
 
 const r1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
 const r3 = (v) => (v == null ? null : Math.round(v * 1000) / 1000);
+/** 時刻（秒）は µs まで残す（ずれの ms を記録から正確に出せるように。表示は ms まで） */
+const r6 = (v) => (v == null ? null : Math.round(v * 1e6) / 1e6);
 
 /** 文字列の指紋（FNV-1a 32bit） */
 export function fingerprint(text) {
@@ -34,21 +36,23 @@ export function buildRecord(judge, ctx) {
   const s = ctx.settings;
   const notes = judge.notes.filter((n) => n.result && (ctx.includeSkip || n.result !== 'SKIP')).map((n) => {
     const o = { id: n.id, button: n.button, cmd: CMD[n.button], time: r3(n.time), result: n.result, reason: n.reason ?? null, points: n.points };
-    o.input = n.hit ? { time: r3(n.hit.time), raw: r3(n.hit.raw), button: n.hit.button, device: n.hit.device, deltaMs: r1(n.hit.deltaMs), rawDeltaMs: r1(n.hit.rawDeltaMs) } : null;
+    o.input = n.hit ? { time: r6(n.hit.time), raw: r6(n.hit.raw), button: n.hit.button, device: n.hit.device, deltaMs: r1(n.hit.deltaMs), rawDeltaMs: r1(n.hit.rawDeltaMs) } : null;
+    // その時刻に画面に出ていたコマ（フレーム時刻表から。入力時刻とコマの時刻は別の値）
+    if (ctx.frameAt) o.frames = { target: ctx.frameAt(n.time), input: n.hit ? ctx.frameAt(n.hit.time) : null };
     if (n.input === 'hold') {
       o.hold = {
         duration: r3(n.duration), requiredSec: r3(Math.max(0, n.duration - s.holdReleaseWindowMs / 1000)), end: r3(n.time + n.duration),
-        pressedAt: n.hit ? r3(n.hit.time) : null,
-        releasedAt: n.release ? r3(n.release.time) : null,               // ユーザーが実際に離した時刻（自動の完了時刻ではない）
+        pressedAt: n.hit ? r6(n.hit.time) : null,
+        releasedAt: n.release ? r6(n.release.time) : null,               // ユーザーが実際に離した時刻（自動の完了時刻ではない）
         releaseDeltaMs: n.release ? r1(n.release.deltaMs) : null,        // 離した時刻 − 終了時刻
-        heldSec: n.hit && n.release ? r3(n.release.time - n.hit.time) : null,
-        completedAt: n.completedAt != null ? r3(n.completedAt) : null,   // 必要な時間を保持して成功が確定した時刻
+        heldSec: n.hit && n.release ? r6(n.release.time - n.hit.time) : null,
+        completedAt: n.completedAt != null ? r6(n.completedAt) : null,   // 必要な時間を保持して成功が確定した時刻
         status: holdStatus(n),
       };
     }
     return o;
   });
-  const extras = judge.strays.map((x) => ({ time: r3(x.time), raw: r3(x.raw), button: x.button, cmd: CMD[x.button], device: x.device }));
+  const extras = judge.strays.map((x) => ({ time: r6(x.time), raw: r6(x.raw), button: x.button, cmd: CMD[x.button], device: x.device }));
   const devices = [...new Set([...notes.map((n) => n.input?.device), ...extras.map((x) => x.device)].filter(Boolean))];
   const rec = {
     schema: RECORD_SCHEMA,

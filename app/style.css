@@ -235,3 +235,48 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
 .res-head-btns { display: flex; gap: 6px; }
 .chartsrc[hidden] { display: none; }
 #timingBox button:disabled { opacity: 0.45; cursor: not-allowed; }
+/* 凡例 */
+.res-legend { list-style: none; margin: 0; padding: 6px 8px; display: flex; flex-wrap: wrap; gap: 4px 14px; background: #120c08; border-radius: 8px; font-size: 12px; }
+.res-legend li { display: inline-flex; align-items: center; gap: 5px; }
+.res-graph.res-legend-icon { width: auto; height: 16px; background: none; border-radius: 0; flex: 0 0 auto; }
+.res-graph .band-miss { fill: rgba(255, 122, 122, 0.08); stroke: rgba(255, 122, 122, 0.35); stroke-dasharray: 3 3; }
+.res-graph g.g-extra { fill: none; stroke: #e0e0e0; stroke-width: 1.6; }
+/* ノーツ詳細のカード（横スクロール） */
+.results { overflow-x: hidden; }
+.nc-nav { display: flex; align-items: center; gap: 8px; }
+.nc-nav button { appearance: none; border: 1px solid var(--line); background: var(--panel2); color: var(--fg); border-radius: 8px; min-width: 44px; min-height: 36px; font: inherit; }
+.nc-pos { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 6em; text-align: center; }
+.nc-scroller { display: flex; gap: 10px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; padding: 4px 2px 12px; max-width: 100%;
+  scrollbar-width: auto; scrollbar-color: #ffb347 #2b1d12; -webkit-overflow-scrolling: touch; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); }
+.nc-scroller::-webkit-scrollbar { height: 10px; }
+.nc-scroller::-webkit-scrollbar-thumb { background: #ffb347; border-radius: 6px; }
+.nc-scroller::-webkit-scrollbar-track { background: #2b1d12; }
+.nc { flex: 0 0 min(300px, 84vw); scroll-snap-align: start; background: var(--panel2); border: 2px solid var(--line); border-radius: 10px; padding: 8px; display: grid; gap: 5px; align-content: start; font-size: 13px; min-width: 0; }
+.nc.g-perfect { border-color: #ffe17a88; } .nc.g-good { border-color: #9fe7ff88; } .nc.g-miss { border-color: #ff7a7a88; }
+.nc header { display: flex; gap: 8px; align-items: baseline; }
+.nc-no { color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+.nc-id { font-weight: 700; }
+.nc-grade { margin-left: auto; font-weight: 800; }
+.nc.g-perfect .nc-grade { color: #ffe17a; } .nc.g-good .nc-grade { color: #9fe7ff; } .nc.g-miss .nc-grade { color: #ff9a8a; }
+.nc p { margin: 0; }
+.nc-line { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; font-variant-numeric: tabular-nums; }
+.nc-k { color: var(--dim); font-size: 11px; min-width: 2.8em; }
+.nc-cmd { font-size: 16px; }
+.nc-cmd[data-b=Y] { color: var(--Y); } .nc-cmd[data-b=X] { color: var(--X); } .nc-cmd[data-b=A] { color: var(--A); } .nc-cmd[data-b=B] { color: var(--B); }
+.nc-wrong { color: #ffcf9a; }
+.nc-verdict { font-weight: 800; font-size: 15px; background: #120c08; border-radius: 6px; padding: 4px 6px; }
+.nc-small { font-size: 11px; color: var(--dim); }
+.nc-imgs { display: flex; gap: 6px; }
+.nc-fig { margin: 0; flex: 1 1 0; min-width: 0; display: grid; gap: 2px; }
+.nc-fig canvas { width: 100%; height: auto; aspect-ratio: 3 / 4; border-radius: 6px; display: block; }
+.nc-fig figcaption { font-size: 11px; line-height: 1.3; }
+.nc-fig figcaption small { color: var(--dim); }
+.res-graph.nc-axis { border-radius: 6px; }
+.res-graph .nc-lab { font-size: 9px; }
+.nc-hold { display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; margin: 0; font-size: 11px; }
+.nc-hold dt { color: var(--dim); } .nc-hold dd { margin: 0; }
+#result .nc-hold { grid-template-columns: auto 1fr; } #result .nc-hold dd { text-align: left; font-weight: 400; }
+.nc-inputs { margin: 0; padding-left: 1.3em; font-size: 11px; display: grid; gap: 2px; }
+.nc-inputs li.adopted { color: #ffe9b0; }
+.nc-fig { flex: 0 1 calc(50% - 3px); }
+.nc-none > div { aspect-ratio: 3 / 4; border: 2px dashed var(--line); border-radius: 6px; display: grid; place-items: center; color: var(--dim); font-weight: 700; }

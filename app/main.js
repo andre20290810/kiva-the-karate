@@ -468,6 +468,7 @@ export class App {
       chart: this.chart, settings: s.settings, rate: s.rate, mode: s.autoUsed || this.autoMode ? 'auto' : 'manual', kind,
       practiceReasons: s.practiceReasons, bgm: s.bgm, startedAt: s.startedAt, endedAt: new Date().toISOString(),
       chartSource: s.chartSource, startT: s.startT, endT: this.t,
+      frameAt: (t) => { const i = this.store.indexAt(Math.max(0, t)); return { i, t: this.store.frames[i].t }; },
     });
     const saved = this.history.add(rec);
     this.lastRecord = rec;

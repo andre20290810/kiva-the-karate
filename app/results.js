@@ -11,8 +11,35 @@ const pct = (v) => (v == null ? '—' : `${(v * 100).toFixed(1)}%`);
 const sec = (v) => (v == null ? '—' : `${v.toFixed(2)} 秒`);
 const sgn = (v, unit = '', digits = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(digits)}${unit}`);
 const when = (iso) => { try { return new Date(iso).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'medium' }); } catch { return iso; } };
-const MARK = { PERFECT: '●', GOOD: '▲', MISS: '✕' };
-const GRADE_CLASS = { PERFECT: 'g-perfect', GOOD: 'g-good', MISS: 'g-miss', SKIP: 'g-skip' };
+const t3 = (v) => (v == null ? '—' : v.toFixed(3));
+
+/**
+ * 表示の約束（グラフ・凡例・カードで共通）。色は CSS のクラス（.g-perfect など）、形は markShape、文字は mark・label。
+ * 凡例もグラフもここから作るので、色・形・意味が食い違わない
+ */
+export const VIS = Object.freeze({
+  grades: Object.freeze({
+    PERFECT: { mark: '●', cls: 'g-perfect', label: 'PERFECT', desc: 'PERFECT の範囲内' },
+    GOOD: { mark: '▲', cls: 'g-good', label: 'GOOD', desc: 'GOOD の範囲内' },
+    MISS: { mark: '✕', cls: 'g-miss', label: 'MISS（入力あり）', desc: '範囲外の入力・息の早離し' },
+  }),
+  bands: Object.freeze({
+    perfect: { cls: 'band-perfect', label: (s) => `PERFECT の範囲（±${s.perfectWindowMs}ms）` },
+    good: { cls: 'band-good', label: (s) => `GOOD の範囲（±${s.goodWindowMs}ms）` },
+  }),
+  series: Object.freeze({ cur: '今回（塗りつぶし）', base: '比較する記録（白抜き）' }),
+});
+const MARK = Object.fromEntries(Object.entries(VIS.grades).map(([k, v]) => [k, v.mark]));
+const GRADE_CLASS = { ...Object.fromEntries(Object.entries(VIS.grades).map(([k, v]) => [k, v.cls])), SKIP: 'g-skip' };
+
+/** 点の形（グラフ・凡例・カードで共通）: PERFECT = 丸、GOOD = 三角、MISS = ×、採用していない入力 = ひし形 */
+export function markShape(grade, x, y, k = 1) {
+  const r = 5 * k;
+  if (grade === 'PERFECT') return `<circle cx="${x}" cy="${y}" r="${r}"/>`;
+  if (grade === 'GOOD') return `<path d="M${x} ${y - r * 1.2}L${x + r * 1.2} ${y + r * 0.9}L${x - r * 1.2} ${y + r * 0.9}Z"/>`;
+  if (grade === 'EXTRA') return `<path d="M${x} ${y - r}L${x + r} ${y}L${x} ${y + r}L${x - r} ${y}Z"/>`;
+  return `<path d="M${x - r} ${y - r}L${x + r} ${y + r}M${x + r} ${y - r}L${x - r} ${y + r}"/>`;
+}
 const BTN = ['Y', 'X', 'A', 'B'];
 const REASON = { early: '早すぎ', late: '遅すぎ', timeout: '入力なし', 'early-release': '早離し', released: '終了の許容内で離した', completed: '保持して完了', skipped: '対象外', cancelled: '取り消し' };
 const PRACTICE = { seek: 'シーク', loop: '区間ループ', 'rate-change': '途中で速度変更', edit: '編集', 'mid-start': '途中から開始' };
@@ -24,6 +51,7 @@ export class ResultsView {
     this.rec = null;
     this.tab = 'summary';
     this.filter = new Set(BTN);
+    this.gradeFilter = 'all';
     this.compareTo = 'previous';
     this.selected = new Set();
     this.root.innerHTML = `
@@ -71,6 +99,7 @@ export class ResultsView {
     if (this.tab === 'history') { this.body.innerHTML = this.historyHtml(); return; }
     if (!r) { this.body.innerHTML = '<p class="hint">まだ記録がありません。プレイを最後まで終えるか、「履歴」から過去の記録を開いてください。</p>'; return; }
     this.body.innerHTML = this.tab === 'summary' ? this.summaryHtml(r) : this.tab === 'timing' ? this.timingHtml(r) : this.tab === 'detail' ? this.detailHtml(r) : this.compareHtml(r);
+    if (this.tab === 'detail') this.afterDetail();
   }
 
   // ---------- 概要 ----------
@@ -134,8 +163,8 @@ export class ResultsView {
     const jit = (i) => ((i * 37) % 9 - 4) * 3.2;
     const step = R > 250 ? 100 : R > 120 ? 50 : 20, every = W < 480 && step === 50 ? 2 : 1; // 狭い画面では目盛りの数字を間引く
     let g = `<svg class="res-graph" viewBox="0 0 ${W} ${H}" role="img" aria-label="入力タイミング（中央が正解 0ms、左が早い、右が遅い）">`;
-    g += `<rect x="${X(-s.goodWindowMs)}" y="${top - 6}" width="${X(s.goodWindowMs) - X(-s.goodWindowMs)}" height="${rows.length * rowH + 6}" class="band-good"/>`;
-    g += `<rect x="${X(-s.perfectWindowMs)}" y="${top - 6}" width="${X(s.perfectWindowMs) - X(-s.perfectWindowMs)}" height="${rows.length * rowH + 6}" class="band-perfect"/>`;
+    g += `<rect x="${X(-s.goodWindowMs)}" y="${top - 6}" width="${X(s.goodWindowMs) - X(-s.goodWindowMs)}" height="${rows.length * rowH + 6}" class="${VIS.bands.good.cls}"/>`;
+    g += `<rect x="${X(-s.perfectWindowMs)}" y="${top - 6}" width="${X(s.perfectWindowMs) - X(-s.perfectWindowMs)}" height="${rows.length * rowH + 6}" class="${VIS.bands.perfect.cls}"/>`;
     for (let v = -Math.floor(R / step) * step; v <= R; v += step) {
       g += `<line x1="${X(v)}" x2="${X(v)}" y1="${top - 6}" y2="${top + rows.length * rowH}" class="${v === 0 ? 'axis0' : 'tick'}"/>`;
       if ((v / step) % every === 0) g += `<text x="${X(v)}" y="${H - 18}" class="tick-l">${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v)}</text>`;
@@ -158,9 +187,7 @@ export class ResultsView {
         if (!rows.includes(n.button) || n.d == null) return;
         const x = X(n.d), y = rowY(n.button) + jit(n.i), cls = `${GRADE_CLASS[n.result]} ${ser.style}`;
         const tip = `${ser.label ? `${ser.label} ` : ''}${n.id} ${CMD[n.button]} ${n.time.toFixed(2)}秒 ${sMs(n.d)} ${n.result}`;
-        const shape = n.result === 'PERFECT' ? `<circle cx="${x}" cy="${y}" r="5"/>`
-          : n.result === 'GOOD' ? `<path d="M${x} ${y - 6}L${x + 6} ${y + 4.5}L${x - 6} ${y + 4.5}Z"/>`
-            : `<path d="M${x - 5} ${y - 5}L${x + 5} ${y + 5}M${x + 5} ${y - 5}L${x - 5} ${y + 5}"/>`;
+        const shape = markShape(n.result, x, y);
         g += `<g class="${cls}" data-note="${esc(n.id)}"><title>${esc(tip)}</title>${shape}</g>`;
       });
     }
@@ -176,39 +203,181 @@ export class ResultsView {
     const pts = this.points(r).filter((p) => this.filter.has(p.button));
     const none = r.notes.filter((n) => n.result === 'MISS' && !n.input && this.filter.has(n.button));
     return `${this.filterHtml()}
-      <p class="hint">中央が正解の時刻（0ms）。左が早い入力、右が遅い入力。点の位置がずれの大きさです。帯: 内側 = PERFECT の範囲、外側 = GOOD の範囲。
-        記号: ${MARK.PERFECT} PERFECT ／ ${MARK.GOOD} GOOD ／ ${MARK.MISS} MISS（入力あり）。息は押し始めのずれで、早離しの ${MARK.MISS} は押し始めが範囲内でも MISS（離した時刻は「ノーツ詳細」）。点にカーソル・長押しで ID と値。</p>
       ${this.rateNote(r)}
+      ${this.legendHtml(r)}
       ${this.graphSvg(r, [{ notes: pts, style: 'cur' }])}
+      <p class="hint">点の位置がずれの大きさです。息は押し始めのずれで、早離しの ${MARK.MISS} は押し始めが範囲内でも MISS（離した時刻は「ノーツ詳細」）。点にカーソル・長押しで ID と値。</p>
       <p>表示中の入力: ${pts.length} 件</p>
       <div class="res-none"><b>入力なしの MISS（0ms には描きません）: ${none.length} 件</b>
         ${none.length ? `<ul>${none.map((n) => `<li>${MARK.MISS} ${esc(n.id)} ${n.cmd}（${sec(n.time)}）</li>`).join('')}</ul>` : ''}</div>`;
   }
 
-  // ---------- ノーツ詳細 ----------
+  /** 凡例（グラフと同じ VIS・markShape・CSS クラスから作る） */
+  legendHtml(r, { compare = false } = {}) {
+    const s = r.settings;
+    const icon = (inner, w = 22) => `<svg class="res-graph res-legend-icon" viewBox="0 0 ${w} 16" width="${w}" height="16" aria-hidden="true">${inner}</svg>`;
+    const item = (svg, text) => `<li>${svg}<span>${text}</span></li>`;
+    const items = [
+      ...Object.entries(VIS.grades).map(([k, v]) => item(icon(`<g class="${v.cls} cur">${markShape(k, 11, 8)}</g>`), `${v.mark} ${v.label}`)),
+      item(icon(`<rect x="1" y="2" width="20" height="12" class="${VIS.bands.perfect.cls}"/>`), VIS.bands.perfect.label(s)),
+      item(icon(`<rect x="1" y="2" width="20" height="12" class="${VIS.bands.good.cls}"/>`), VIS.bands.good.label(s)),
+      item(icon('<line x1="11" x2="11" y1="0" y2="16" class="axis0"/>'), '中央の線 = 正解の時刻（0ms）'),
+      item(icon('<text x="11" y="12" class="dir-l" text-anchor="middle">←</text>'), '左 = 早押し（マイナス）'),
+      item(icon('<text x="11" y="12" class="dir-l" text-anchor="middle">→</text>'), '右 = 遅押し（プラス）'),
+    ];
+    if (compare) {
+      items.push(item(icon(`<g class="g-perfect cur">${markShape('PERFECT', 11, 8)}</g>`), VIS.series.cur));
+      items.push(item(icon(`<g class="g-perfect base">${markShape('PERFECT', 11, 8)}</g>`), VIS.series.base));
+      items.push(item(icon('<line x1="2" x2="20" y1="8" y2="8" class="pair"/>'), '同じノーツを結ぶ線'));
+    } else items.push(item(icon(''), `入力なしの ${MARK.MISS} MISS は点にしない（下の一覧）`));
+    return `<ul class="res-legend" aria-label="凡例">${items.join('')}</ul>`;
+  }
+
+  // ---------- ノーツ詳細（画像つきカード。時間順に横へ並べる） ----------
+  /** 時間軸の時刻 → コマ（実際のフレーム時刻表。その時刻に画面に出ていた画像 = その時刻以前で最も新しいコマ） */
+  frameAt(t) {
+    const st = this.app.store;
+    if (!st || t == null) return null;
+    const i = st.indexAt(Math.max(0, t));
+    return { i, t: st.frames[i].t };
+  }
+
+  /** ノーツに関係する入力（時刻順）: 判定に採用した入力と、近くの余分な入力（採用していない。付け替えない） */
+  relatedInputs(r, n) {
+    const span = (r.settings.missWindowMs * 1.5) / 1000;
+    const out = [];
+    if (n.input) out.push({ ...n.input, adopted: true, note: '判定に採用' });
+    if (Array.isArray(r.extras)) {
+      for (const x of r.extras) {
+        if (Math.abs(x.time - n.time) > span) continue;
+        const d = Math.round((x.time - n.time) * 1e4) / 10;
+        const why = x.button !== n.button ? `ボタン違い（要求は ${CMD[n.button]}／${n.button}）`
+          : Math.abs(d) > r.settings.missWindowMs ? '判定範囲の外' : '判定が済んだ後の入力';
+        out.push({ ...x, deltaMs: d, adopted: false, note: `${why}・判定に使っていない` });
+      }
+    }
+    return out.sort((a, b) => a.time - b.time);
+  }
+
+  cardFilterHtml(r) {
+    const g = this.gradeFilter;
+    const count = (k) => r.notes.filter((n) => (k === 'all' || n.result === k) && this.filter.has(n.button)).length;
+    return `<div class="res-filter" role="group" aria-label="判定で絞り込み">${[['all', 'すべて'], ['PERFECT', `${VIS.grades.PERFECT.mark} PERFECT`], ['GOOD', `${VIS.grades.GOOD.mark} GOOD`], ['MISS', `${VIS.grades.MISS.mark} MISS`]]
+      .map(([k, l]) => `<button type="button" data-grade="${k}" aria-pressed="${g === k}">${l}（${count(k)}）</button>`).join('')}</div>${this.filterHtml()}`;
+  }
+
+  /** 小さな時間軸: 正解（0）・判定の範囲・採用した入力・採用していない入力 */
+  miniTimeline(r, n, inputs) {
+    const s = r.settings, W = 280, H = 58, L = 10, Rm = 10, cy = 26;
+    const R = Math.max(s.missWindowMs * 1.15, ...inputs.map((x) => Math.abs(x.deltaMs ?? 0) + 15));
+    const X = (v) => L + ((v + R) / (2 * R)) * (W - L - Rm);
+    let g = `<svg class="res-graph nc-axis" viewBox="0 0 ${W} ${H}" role="img" aria-label="正解の時刻と入力の位置（ms）">`;
+    g += `<rect x="${X(-s.missWindowMs)}" y="${cy - 12}" width="${X(s.missWindowMs) - X(-s.missWindowMs)}" height="24" class="band-miss"/>`;
+    g += `<rect x="${X(-s.goodWindowMs)}" y="${cy - 12}" width="${X(s.goodWindowMs) - X(-s.goodWindowMs)}" height="24" class="${VIS.bands.good.cls}"/>`;
+    g += `<rect x="${X(-s.perfectWindowMs)}" y="${cy - 12}" width="${X(s.perfectWindowMs) - X(-s.perfectWindowMs)}" height="24" class="${VIS.bands.perfect.cls}"/>`;
+    g += `<line x1="${X(0)}" x2="${X(0)}" y1="${cy - 15}" y2="${cy + 15}" class="axis0"/>`;
+    g += `<text x="${X(0)}" y="${H - 4}" class="tick-l">正解 0</text><text x="${L}" y="${H - 4}" class="tick-l" text-anchor="start">← 早い</text><text x="${W - Rm}" y="${H - 4}" class="tick-l" text-anchor="end">遅い →</text>`;
+    for (const x of inputs) {
+      if (x.deltaMs == null) continue;
+      const px = X(x.deltaMs);
+      g += x.adopted
+        ? `<g class="${VIS.grades[n.result]?.cls || 'g-miss'} cur"><title>採用: ${sMs(x.deltaMs)}</title>${markShape(n.result, px, cy, 1.1)}</g><text x="${px}" y="${cy - 15}" class="tick-l nc-lab">採用</text>`
+        : `<g class="g-extra"><title>不採用: ${sMs(x.deltaMs)} ${x.button}</title>${markShape('EXTRA', px, cy, 1)}</g><text x="${px}" y="${cy + 24}" class="tick-l nc-lab">不採用</text>`;
+    }
+    return `${g}</svg>`;
+  }
+
+  cardHtml(r, n, no) {
+    const v = VIS.grades[n.result] || { mark: '', cls: 'g-skip', label: n.result };
+    const inp = n.input;
+    const inputs = this.relatedInputs(r, n);
+    const wrong = !inp ? inputs.filter((x) => x.button !== n.button) : [];
+    const late = inp && inp.deltaMs > 0, early = inp && inp.deltaMs < 0;
+    const amount = inp ? (inp.deltaMs === 0 ? 'ずれ 0ms（ぴったり）' : `${Math.abs(inp.deltaMs).toFixed(1)}ms ${early ? '早い' : '遅い'}`) : '';
+    const reason = n.reason && REASON[n.reason] ? REASON[n.reason] : null;
+    const verdict = inp ? `${amount} → ${v.mark} ${n.result}${reason && n.result === 'MISS' ? `（${reason}）` : ''}`
+      : `入力なし → ${v.mark} ${n.result}${wrong.length ? '（ボタン違いの入力あり）' : ''}`;
+    const ft = n.frames?.target ?? this.frameAt(n.time), fi = inp ? (n.frames?.input ?? this.frameAt(inp.time)) : null;
+    const fig = (label, t, f, kind) => `<figure class="nc-fig"><canvas width="132" height="176" data-frame="${f ? f.i : ''}" aria-label="${label}の主人公の画像"></canvas>
+      <figcaption><b>${label}</b> ${t3(t)} 秒<br><small>${f ? `コマ ${f.i}（${t3(f.t)} 秒の画像）` : '画像なし'}</small></figcaption></figure>`;
+    const h = n.hold;
+    const holdHtml = !h ? '' : `<dl class="nc-hold">
+      <dt>正解の開始・終了</dt> <dd>${t3(n.time)} 〜 ${h.end != null ? t3(h.end) : '記録なし'} 秒（${h.duration != null ? `${h.duration.toFixed(2)} 秒` : '記録なし'}）</dd> 
+      <dt>押下</dt> <dd>${h.pressedAt === undefined ? '記録なし' : h.pressedAt == null ? '押していない' : `${t3(h.pressedAt)} 秒（${inp ? sMs(inp.deltaMs) : '—'}）`}</dd> 
+      <dt>解除</dt> <dd>${h.releasedAt === undefined ? '記録なし' : h.releasedAt == null ? (h.status === 'completed-held' ? '離す前に終了' : '—') : `${t3(h.releasedAt)} 秒（終了から ${sMs(h.releaseDeltaMs)}）`}</dd> 
+      <dt>保持時間</dt> <dd>必要 ${h.requiredSec != null ? `${h.requiredSec.toFixed(2)} 秒` : '記録なし'} ／ 実際 ${h.heldSec === undefined ? '記録なし' : h.heldSec == null ? '—' : `${h.heldSec.toFixed(2)} 秒`}</dd> 
+      <dt>早離し</dt> <dd>${h.status === undefined ? '記録なし' : h.status === 'early-release' ? 'あり（途中解除）' : 'なし'}${h.completedAt != null ? `（${t3(h.completedAt)} 秒に保持して成功）` : ''}</dd> 
+    </dl>`;
+    return `<article class="nc ${v.cls}" data-note="${esc(n.id)}" data-grade="${n.result}" aria-label="${no} 番目 ${esc(n.id)} ${CMD[n.button]}">
+      <header><span class="nc-no">${no}</span><span class="nc-id">${esc(n.id)}</span><span class="nc-grade">${v.mark} ${n.result}</span></header>
+      <p class="nc-line"><span class="nc-k">正解</span> <b class="nc-cmd" data-b="${n.button}">${CMD[n.button]}／${n.button}</b> <span>${t3(n.time)} 秒</span></p>
+      <p class="nc-line"><span class="nc-k">入力</span> ${inp ? `<b class="nc-cmd" data-b="${inp.button}">${inp.button}</b> を <span>${t3(inp.time)} 秒</span> <small>${DEVICE_LABEL[inp.device] || inp.device || '入力方法の記録なし'}</small>` : '<b>入力なし</b>'}</p>
+      ${wrong.length ? `<p class="nc-line nc-wrong"><span class="nc-k">押したボタン</span> ${wrong.map((x) => `<b class="nc-cmd" data-b="${x.button}">${CMD[x.button]}／${x.button}</b> ${t3(x.time)} 秒`).join('、')}<small>（要求は ${CMD[n.button]}／${n.button}・判定に使っていない）</small></p>` : ''}
+      <p class="nc-verdict">${verdict}</p>
+      ${inp && inp.rawDeltaMs !== undefined && inp.rawDeltaMs !== inp.deltaMs ? `<p class="nc-small">入力補正 ${r.settings.inputOffsetMs}ms の後のずれ。補正前は ${sMs(inp.rawDeltaMs)}</p>` : inp && inp.rawDeltaMs === undefined ? '<p class="nc-small">補正前の時刻: 記録なし</p>' : ''}
+      <div class="nc-imgs">${fig('正解時', n.time, ft, 'target')}${inp ? fig('入力時', inp.time, fi, 'input') : '<figure class="nc-fig nc-none"><div>入力なし</div><figcaption><b>入力時</b> —<br><small>入力がないので画像は作りません</small></figcaption></figure>'}</div>
+      ${inp && ft && fi && ft.i === fi.i ? '<p class="nc-small">2 枚は同じ画像です（素材は 0.2 秒間隔）。ずれは上の数値が正確です。</p>' : ''}
+      ${this.miniTimeline(r, n, inputs)}
+      ${holdHtml}
+      ${inputs.length ? `<ol class="nc-inputs" aria-label="関係する入力（時刻順）">${inputs.map((x) => `<li class="${x.adopted ? 'adopted' : ''}">${t3(x.time)} 秒 <b>${CMD[x.button]}／${x.button}</b> ${sMs(x.deltaMs)} ${DEVICE_LABEL[x.device] || x.device || ''} — ${x.adopted ? '<b>判定に採用</b>' : esc(x.note)}</li>`).join('')}</ol>` : '<p class="nc-small">関係する入力: なし</p>'}
+    </article>`;
+  }
+
   detailHtml(r) {
-    const rows = r.notes.filter((n) => this.filter.has(n.button)).map((n) => {
-      const inp = n.input;
-      const main = `<tr class="${GRADE_CLASS[n.result]}"><td>${esc(n.id)}</td><td>${n.cmd}</td><td>${sec(n.time)}</td><td>${inp ? sec(inp.time) : '—'}</td>
-        <td>${inp ? sMs(inp.deltaMs) : '—'}${inp && inp.rawDeltaMs !== inp.deltaMs ? `<br><small>補正前 ${sMs(inp.rawDeltaMs)}</small>` : ''}</td>
-        <td>${MARK[n.result] || ''} ${n.result}${n.reason && REASON[n.reason] ? `<br><small>${REASON[n.reason]}</small>` : ''}</td><td>${inp ? DEVICE_LABEL[inp.device] || inp.device : '—'}</td></tr>`;
-      if (!n.hold) return main;
-      const h = n.hold;
-      return `${main}<tr class="hold-row"><td></td><td colspan="6">
-        <span>開始のずれ ${inp ? sMs(inp.deltaMs) : '—'}</span>
-        <span>終了の時刻 ${sec(h.end)}</span>
-        <span>離した時刻 ${h.releasedAt != null ? sec(h.releasedAt) : '—'}（終了から ${h.releaseDeltaMs != null ? sMs(h.releaseDeltaMs) : '—'}）</span>
-        <span>必要な保持 ${h.requiredSec.toFixed(2)} 秒（長押し ${h.duration.toFixed(2)} 秒 − 早離しの許容 ${r.settings.holdReleaseWindowMs}ms）</span>
-        <span>実際の保持 ${h.heldSec != null ? `${h.heldSec.toFixed(2)} 秒` : '—'}</span>
-        <span>状況: ${HOLD_STATUS_LABEL[h.status] || h.status}</span></td></tr>`;
-    }).join('');
-    const ex = r.extras.filter((x) => this.filter.has(x.button));
-    return `${this.filterHtml()}${this.rateNote(r)}
-      <div class="res-scroll"><table class="res-table res-detail"><caption>ノーツごとの入力（ずれ = 入力時刻 − 正解時刻）</caption>
-        <thead><tr><th>ID</th><th>技</th><th>正解時刻</th><th>入力時刻</th><th>ずれ</th><th>判定</th><th>入力方法</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <div class="res-scroll"><table class="res-table"><caption>余分な入力（判定範囲外・間違ったボタン。どのノーツにも付けない）: ${ex.length} 件</caption>
+    const list = r.notes.filter((n) => this.filter.has(n.button) && (this.gradeFilter === 'all' || n.result === this.gradeFilter));
+    const total = r.notes.length;
+    const order = new Map(r.notes.map((n, i) => [n.id, i + 1]));
+    const ex = Array.isArray(r.extras) ? r.extras.filter((x) => this.filter.has(x.button)) : null;
+    return `${this.cardFilterHtml(r)}${this.rateNote(r)}
+      <p class="hint">各ノーツを時間順に左から右へ並べています。横にスクロール（スマホはスワイプ、PC は ◀ ▶ かスクロールバー）。時刻・ずれは判定に使った補正後の時間軸（${r.settings.inputOffsetMs ? `入力補正 ${r.settings.inputOffsetMs}ms` : '入力補正なし'}）。</p>
+      <div class="nc-nav"><button type="button" data-nav="-1" aria-label="前のカード">◀</button><span class="nc-pos" aria-live="polite">${list.length ? `1／${list.length}件` : '0 件'}</span><button type="button" data-nav="1" aria-label="次のカード">▶</button>
+        <small>${list.length !== total ? `（全 ${total} ノーツ中）` : ''}</small></div>
+      <div class="nc-scroller" tabindex="0" aria-label="ノーツのカード（横にスクロール）">${list.map((n) => this.cardHtml(r, n, `${order.get(n.id)}／${total}`)).join('') || '<p class="hint">該当するノーツはありません</p>'}</div>
+      <div class="res-scroll"><table class="res-table"><caption>どのノーツにも対応しない入力（判定範囲外・ボタン違い・判定後の入力。ノーツに付け替えない）: ${ex ? `${ex.length} 件` : '記録なし'}</caption>
         <thead><tr><th>入力時刻</th><th>ボタン</th><th>入力方法</th></tr></thead>
-        <tbody>${ex.map((x) => `<tr><td>${sec(x.time)}</td><td>${x.cmd}／${x.button}</td><td>${DEVICE_LABEL[x.device] || x.device}</td></tr>`).join('') || '<tr><td colspan="3">なし</td></tr>'}</tbody></table></div>`;
+        <tbody>${ex ? ex.map((x) => `<tr><td>${t3(x.time)} 秒</td><td>${CMD[x.button]}／${x.button}</td><td>${DEVICE_LABEL[x.device] || x.device || '記録なし'}</td></tr>`).join('') || '<tr><td colspan="3">なし</td></tr>' : '<tr><td colspan="3">記録なし</td></tr>'}</tbody></table></div>`;
+  }
+
+  /** カードの表示後: 位置の表示・◀▶・画像（見えたカードから順に描く） */
+  afterDetail() {
+    const sc = this.body.querySelector('.nc-scroller');
+    if (!sc) return;
+    const cards = [...sc.querySelectorAll('.nc')];
+    const pos = this.body.querySelector('.nc-pos');
+    const update = () => {
+      if (!cards.length) return;
+      const left = sc.getBoundingClientRect().left + 8;
+      let k = cards.findIndex((c) => c.getBoundingClientRect().left + c.offsetWidth / 2 > left);
+      if (sc.scrollLeft + sc.clientWidth >= sc.scrollWidth - 4) k = cards.length - 1;
+      pos.textContent = `${Math.max(0, k) + 1}／${cards.length}件`;
+    };
+    sc.addEventListener('scroll', () => requestAnimationFrame(update), { passive: true });
+    this.navStep = (d) => { const c = cards[0]; if (c) sc.scrollBy({ left: d * (c.offsetWidth + 10), behavior: 'smooth' }); };
+    const draw = (cv) => { if (cv.dataset.drawn) return; cv.dataset.drawn = '1'; this.drawFrame(cv, Number(cv.dataset.frame)); };
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { draw(e.target); io.unobserve(e.target); } }), { root: sc, rootMargin: '0px 600px' });
+      sc.querySelectorAll('canvas[data-frame]').forEach((cv) => io.observe(cv));
+    } else sc.querySelectorAll('canvas[data-frame]').forEach(draw);
+    update();
+  }
+
+  /** 主人公の画像（全身が入るように、見えている人物の範囲で合わせる。背景は透過の人物が見やすい中間色） */
+  async drawFrame(cv, i) {
+    const g = cv.getContext('2d'), W = cv.width, H = cv.height;
+    const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#6b5a4a'); bg.addColorStop(1, '#3d3127');
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    const st = this.app.store;
+    if (!st || !Number.isInteger(i) || !st.frames[i]) return;
+    // 再生用の画像の保持（再生位置の前後だけ）とは別に、その場でデコードする（使い終わったら閉じる）
+    let bmp = st.peek(i), own = false;
+    if (!bmp && st.blobs?.[i]) { try { bmp = await createImageBitmap(st.blobs[i]); own = true; } catch { bmp = null; } }
+    if (!bmp) { cv.dataset.error = '1'; return; }
+    const f = st.frames[i], [cx, cy] = f.crop, [bx, by, bw, bh] = f.bbox || f.crop;
+    const s = Math.min((W * 0.86) / bw, (H * 0.92) / bh);
+    const ox = (W - bw * s) / 2 - (bx - cx) * s, oy = (H - bh * s) / 2 - (by - cy) * s;
+    g.drawImage(bmp, ox, oy, f.crop[2] * s, f.crop[3] * s);
+    if (own) bmp.close?.();
+    cv.dataset.ready = '1';
   }
 
   // ---------- 比較 ----------
@@ -252,7 +421,7 @@ export class ResultsView {
       <div class="res-scroll"><table class="res-table"><caption>技ごとの変化</caption><thead><tr><th>技</th><th>成功率</th><th>差</th><th>平均絶対誤差</th><th>改善量</th><th>平均符号付き</th></tr></thead>
         <tbody>${BTN.map((b) => { const x = c.byCmd[b]; return `<tr><th>${CMD[b]}／${b}</th><td>${pct(x.base.successRate)} → ${pct(x.cur.successRate)}</td><td class="${good(x.successRatePt)}">${sgn(x.successRatePt, ' pt')}</td>
           <td>${aMs(x.base.maeMs)} → ${aMs(x.cur.maeMs)}</td><td class="${good(x.maeImproveMs)}">${x.maeImproveMs == null ? '—' : `${Math.abs(x.maeImproveMs).toFixed(1)}ms ${word(x.maeImproveMs, '改善', '悪化')}`}</td><td>${sMs(x.base.meanMs)} → ${sMs(x.cur.meanMs)}</td></tr>`; }).join('')}</tbody></table></div>
-      ${c.sameChart ? `${this.filterHtml()}<p class="hint">同じノーツの入力位置（同じ目盛り）: 塗りつぶし = 今回、白抜き = 比較する記録。線で同じノーツを結んでいます。</p>
+      ${c.sameChart ? `${this.filterHtml()}<p class="hint">同じノーツの入力位置（同じ目盛り）。線で同じノーツを結んでいます。</p>${this.legendHtml(r, { compare: true })}
         ${this.graphSvg(r, [{ notes: bpts, style: 'base', label: '比較' }, { notes: pts, style: 'cur', label: '今回' }], c.pairs)}` : '<p class="hint">譜面が違うため、ノーツごとの比較はできません。</p>'}`;
   }
 
@@ -299,6 +468,8 @@ export class ResultsView {
       if (this.filter.has(k) && this.filter.size > 1) this.filter.delete(k); else this.filter.add(k);
       this.render(); return;
     }
+    if (b.dataset.grade) { this.gradeFilter = b.dataset.grade; this.render(); return; }
+    if (b.dataset.nav) { this.navStep?.(Number(b.dataset.nav)); return; }
     if (b.dataset.open) { this.rec = this.history.get(b.dataset.open); this.saveState = null; this.tab = 'summary'; this.render(); return; }
     if (b.dataset.cmp) { this.compareTo = b.dataset.cmp; this.tab = 'compare'; this.render(); return; }
     const act = b.dataset.act;

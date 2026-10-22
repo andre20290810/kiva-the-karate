@@ -113,6 +113,7 @@ const startPlay = (p) => p.evaluate(async () => { const a = window.__app; a.stat
   });
   ev.push({ t: 33.5, b: 'A', down: true }, { t: 33.55, b: 'A', down: false }); // 余分な入力
   ev.push({ t: 10.17, b: 'B', down: true }, { t: 10.2, b: 'B', down: false });  // 間違ったボタン（構の時刻に 旋）
+  ev.push({ t: byId.n055.t + 0.03, b: 'B', down: true }, { t: byId.n055.t + 0.08, b: 'B', down: false }); // 入力なしの構の時刻にボタン違い
   await startPlay(p);
   await p.evaluate((ev) => window.__run(90, ev), ev);
   const R = await p.evaluate(() => window.__lastRecord);
@@ -143,15 +144,62 @@ const startPlay = (p) => p.evaluate(async () => { const a = window.__app; a.stat
   check(has(new RegExp(`PERFECT\\s*${s.perfect}$`)) && has(new RegExp(`GOOD\\s*${s.good}$`)) && has(new RegExp(`MISS\\s*${s.miss}\\s*入力なし ${s.missNoInput}・範囲外の入力 ${s.missWithInput}`)) && has(new RegExp(`平均絶対誤差\\s*${s.maeMs.toFixed(1)}ms`)),
     '成績画面の表示が記録の集計と一致', ui.slice(3, 7).join(' | '));
   await p.click('[data-tab=timing]');
-  const g = await p.evaluate(() => ({ pts: document.querySelectorAll('.res-graph g[data-note]').length, none: document.querySelector('.res-none b').textContent, perfect: document.querySelectorAll('.res-graph g.g-perfect').length }));
+  const g = await p.evaluate(() => ({ pts: document.querySelectorAll('.res-graph g[data-note]').length, none: document.querySelector('.res-none b').textContent, perfect: document.querySelectorAll('.res-graph g.g-perfect[data-note]').length }));
   check(g.pts === s.timed && new RegExp(`${s.missNoInput} 件`).test(g.none) && g.perfect === s.perfect, 'グラフ: 入力のあったノーツだけ点で描き、入力なしの MISS は別に表示', `${g.pts} 点 / ${g.none}`);
   await p.click('[data-filter=X]'); await p.click('[data-filter=A]'); await p.click('[data-filter=B]');
   const gy = await p.evaluate(() => document.querySelectorAll('.res-graph g[data-note]').length);
   check(gy === s.byCmd.Y.timed, '技で絞り込み（息だけ）', `${gy}`);
   await p.click('[data-filter=X]'); await p.click('[data-filter=A]'); await p.click('[data-filter=B]');
+  // 凡例（グラフと同じ表示設定から）
+  const lg = await p.evaluate(() => ({ text: document.querySelector('.res-legend')?.textContent || '', cls: [...document.querySelectorAll('.res-legend g')].map((g) => g.getAttribute('class')) }));
+  check(/● PERFECT/.test(lg.text) && /▲ GOOD/.test(lg.text) && /✕ MISS/.test(lg.text) && /PERFECT の範囲（±60ms）/.test(lg.text) && /GOOD の範囲（±120ms）/.test(lg.text) && /正解の時刻（0ms）/.test(lg.text) && /早押し/.test(lg.text) && /遅押し/.test(lg.text)
+    && lg.cls.includes('g-perfect cur') && lg.cls.includes('g-good cur') && lg.cls.includes('g-miss cur'), 'タイミングの凡例: 記号・色（グラフと同じクラス）・判定範囲・0ms・早い／遅い', lg.text.slice(0, 80));
+  // ノーツ詳細（画像つきカード）
   await p.click('[data-tab=detail]');
-  const det = await p.evaluate(() => ({ rows: document.querySelectorAll('.res-detail tbody tr:not(.hold-row)').length, hold: document.querySelectorAll('.res-detail .hold-row').length, text: document.querySelector('.res-detail').textContent }));
-  check(det.rows === 59 && det.hold === holds.length && /早離し/.test(det.text) && /離した時刻/.test(det.text), '詳細: 59 ノーツの ID・技・正解時刻・入力時刻・ずれ・判定。長押しは開始・終了・保持状況を別の行に');
+  await p.waitForTimeout(1500);
+  const card = (id) => p.evaluate((id) => { const c = document.querySelector(`.nc[data-note="${id}"]`); return c ? { text: c.textContent.replace(/\s+/g, ' '), frames: [...c.querySelectorAll('canvas')].map((x) => Number(x.dataset.frame)), none: !!c.querySelector('.nc-none') } : null; }, id);
+  const det = await p.evaluate(() => ({ n: document.querySelectorAll('.nc').length, pos: document.querySelector('.nc-pos').textContent, ready: [...document.querySelectorAll('.nc canvas')].filter((c) => c.dataset.ready).length,
+    over: document.scrollingElement.scrollWidth - window.innerWidth, inner: (() => { const c = document.querySelector('.card.results'); return c.scrollWidth - c.clientWidth; })() }));
+  check(det.n === 59 && det.pos === '1／59件' && det.ready >= 4 && det.over <= 0 && det.inner <= 0, 'カード 59 枚を時間順に横並び、位置「1／59件」、画像を描画、ページの横はみ出しなし', JSON.stringify(det));
+  await p.click('[data-nav="1"]'); await p.waitForTimeout(700);
+  check(await p.textContent('.nc-pos') === '2／59件', '▶ で次のカード（2／59件）');
+  const c75 = await card('n075'), c53 = await card('n053'), c50 = await card('n050'), c52 = await card('n052'), c55 = await card('n055');
+  const fr = await p.evaluate((ids) => ids.map(([id, t]) => window.__app.store.indexAt(t)), [['n075', byId.n075.t], ['n075i', byId.n075.t - 0.025]]);
+  check(/正解 撃／A 21\.720 秒/.test(c75.text) && /入力 A を 21\.695 秒/.test(c75.text) && /25\.0ms 早い → ● PERFECT/.test(c75.text) && c75.frames[0] === fr[0] && c75.frames[1] === fr[1] && /正解時 21\.720 秒/.test(c75.text) && /入力時 21\.695 秒/.test(c75.text),
+    '早押し: 正解（撃／A 21.720 秒）・入力（A 21.695 秒）・25.0ms 早い → PERFECT。正解時と入力時の画像はフレーム時刻表のコマ', c75.text.slice(0, 120));
+  check(/33\.0ms 遅い → ● PERFECT/.test(c53.text) && /60\.1ms 遅い → ▲ GOOD/.test(c50.text), '遅押しの表示（33.0ms 遅い → PERFECT、60.1ms 遅い → GOOD）');
+  check(/入力なし → ✕ MISS/.test(c52.text) && c52.frames.length === 1 && c52.none && /判定範囲の外・判定に使っていない/.test(c52.text), '判定範囲の外の入力: ノーツは入力なし（入力時の画像は作らない）、近くの入力は「判定に使っていない」と表示');
+  check(/入力なし → ✕ MISS（ボタン違いの入力あり）/.test(c55.text) && /押したボタン 旋／B/.test(c55.text) && /要求は 構／X/.test(c55.text), 'ボタン違い: 要求されたボタン（構／X）と押したボタン（旋／B）を区別');
+  const c65 = await card('n065'), c66 = await card('n066');
+  check(/判定に採用/.test(c65.text) && /判定に採用/.test(c66.text) && /入力 X を/.test(c65.text) && /入力 Y を/.test(c66.text), '同時入力: それぞれのカードに採用した入力');
+  const ch0 = await card(holds[0].id), ch1 = await card(holds[1].id);
+  check(/早離し あり（途中解除）/.test(ch0.text) && /解除 13\.030 秒/.test(ch0.text) && /保持時間 必要 1\.85 秒 ／ 実際 0\.98 秒/.test(ch0.text) && /正解の開始・終了 12\.030 〜 14\.030 秒/.test(ch0.text),
+    '長押し（早離し）: 正解の開始・終了、押下・解除、保持時間、早離し', ch0.text.slice(-260));
+  check(/早離し なし/.test(ch1.text) && /保持して成功/.test(ch1.text) && /解除 18\.250 秒（終了から \+300\.0ms）/.test(ch1.text), '長押し（完了後に離した）: 解除の時刻と成功の時刻を分けて表示');
+  await p.click('[data-grade=MISS]');
+  const nm = await p.evaluate(() => ({ n: document.querySelectorAll('.nc').length, pos: document.querySelector('.nc-pos').textContent, all: [...document.querySelectorAll('.nc')].every((c) => c.dataset.grade === 'MISS') }));
+  check(nm.n === s.miss && nm.all && nm.pos === `1／${s.miss}件`, '判定で絞り込み（MISS）', JSON.stringify(nm));
+  await p.click('[data-filter=X]'); await p.click('[data-filter=A]'); await p.click('[data-filter=B]');
+  const ny = await p.evaluate(() => document.querySelectorAll('.nc').length);
+  check(ny === R.notes.filter((n) => n.result === 'MISS' && n.button === 'Y').length, '判定と技で絞り込み（MISS × 息）', `${ny}`);
+  await p.click('[data-filter=X]'); await p.click('[data-filter=A]'); await p.click('[data-filter=B]'); await p.click('[data-grade=all]');
+  // 古い成績（必要な記録がない）: 推測で補わず「記録なし」
+  const old = await p.evaluate(() => {
+    const r = structuredClone(window.__lastRecord);
+    r.id = 'old-test'; delete r.extras;
+    for (const n of r.notes) { delete n.frames; if (n.input) { delete n.input.raw; delete n.input.rawDeltaMs; delete n.input.device; } if (n.hold) { delete n.hold.releasedAt; delete n.hold.heldSec; delete n.hold.status; } }
+    window.__app.results.show(r, { tab: 'detail' });
+    return new Promise((res) => setTimeout(() => { const c = document.querySelector('.nc[data-note="n049"]').textContent; res({ c, ex: document.querySelector('.nc-scroller ~ .res-scroll caption').textContent }); }, 300));
+  });
+  check(/補正前の時刻: 記録なし/.test(old.c) && /入力方法の記録なし/.test(old.c) && /解除記録なし/.test(old.c.replace(/\s/g, '')) && /早離し 記録なし/.test(old.c) && /記録なし/.test(old.ex), '古い成績で記録がない項目は「記録なし」（推測で補わない）');
+  // 過去の成績は、その時の判定条件で表示（今の設定から再計算しない）
+  const past = await p.evaluate(() => {
+    const r = structuredClone(window.__lastRecord); r.id = 'past-cond'; r.settings = { ...r.settings, perfectWindowMs: 45, goodWindowMs: 90 };
+    window.__app.results.show(r, { tab: 'timing' });
+    return document.querySelector('.res-legend').textContent;
+  });
+  check(/PERFECT の範囲（±45ms）/.test(past) && /GOOD の範囲（±90ms）/.test(past), '過去の成績はその時の判定条件（±45／±90ms）で表示', past.slice(0, 60));
+  await p.evaluate((id) => window.__app.results.show(window.__app.history.get(id)), R.id);
   const best1 = R;
 
   // 2 回目: 少し上達（同条件）→ 前回との比較
