@@ -16,7 +16,30 @@ const types = {
   '.wav': 'audio/wav', '.mp4': 'video/mp4', '.webm': 'video/webm', '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2',
 };
 
-http.createServer((req, res) => {
+// 公式データ API の試験（任意）: OFFICIAL_DEV_PASSWORD を指定したときだけ、worker/official.js をメモリ上の保存先で動かす。
+// 本番のパスワードはここに書かない（試験用の値を環境変数で渡す）。指定しなければ /api/official は 404（画面は同梱の初期データを使う）。
+let dev = null;
+if (process.env.OFFICIAL_DEV_PASSWORD) {
+  const { handleOfficial } = await import('../worker/official.js');
+  const { hashPassword } = await import('../worker/index.js');
+  const m = new Map();
+  dev = { handleOfficial, env: {
+    OFFICIAL: { async get(k, type) { const v = m.get(k); return v == null ? null : type === 'json' ? JSON.parse(v) : v; }, async put(k, v) { m.set(k, String(v)); }, async delete(k) { m.delete(k); } },
+    OFFICIAL_PASSWORD_HASH: await hashPassword(process.env.OFFICIAL_DEV_PASSWORD, { iterations: 20000 }),
+    ASSETS: { fetch: async (r) => { try { return new Response(fs.readFileSync(path.resolve(root, '.' + new URL(r.url).pathname))); } catch { return new Response('not found', { status: 404 }); } } },
+  } };
+  console.log('公式データ API（試験用・メモリ保存）を有効にしました');
+}
+
+http.createServer(async (req, res) => {
+  if (dev && /^\/api\/official(\/|$)/.test(req.url)) {
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const u = new URL(req.url, `http://${req.headers.host}`);
+    const r = await dev.handleOfficial(new Request(u, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) }), dev.env, u);
+    res.writeHead(r.status, Object.fromEntries(r.headers)).end(Buffer.from(await r.arrayBuffer()));
+    return;
+  }
   let url, decoded;
   try {
     url = new URL(req.url, 'http://x');

@@ -444,3 +444,35 @@ td.k-na { background: repeating-linear-gradient(45deg, rgba(255,255,255,0.04) 0 
 .per-range input[type=date] { min-width: 0; flex: 1 1 130px; }
 .cmp-mode button { white-space: normal; text-align: left; }
 .res-body { grid-template-columns: minmax(0, 1fr); } /* 中の表の最小幅で本文が広がらない（表は枠の中でスクロール） */
+
+/* ---------- リプレイ（公式デモ・履歴の再現） ---------- */
+#replayBanner { position: absolute; left: calc(8px + var(--safe-l)); right: calc(8px + var(--safe-r)); bottom: 8px; z-index: 6; display: flex; gap: 10px; align-items: center; justify-content: space-between;
+  background: rgba(30, 14, 50, 0.88); border: 2px solid #b28cff; border-radius: 10px; padding: 6px 10px; color: #f0e6ff; font-size: 13px; }
+#replayBanner[hidden] { display: none; }
+#replayBanner b { display: block; font-size: 14px; }
+#replayBanner small { display: block; color: #d4c4f0; font-size: 11px; line-height: 1.35; }
+#replayBanner .rp-btns { display: flex; gap: 6px; flex: 0 0 auto; }
+#replayBanner .tbtn { min-height: 34px; padding: 4px 10px; }
+@media (max-width: 520px) { #replayBanner { flex-direction: column; align-items: stretch; } #replayBanner .rp-btns { justify-content: flex-end; } }
+/* 公式データの画面 */
+.off-dlg { max-width: min(760px, calc(100vw - 24px)); width: 100%; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.off-dlg::backdrop { background: #000a; }
+.off-form { display: grid; gap: 8px; }
+.off-form h2 { font-size: 17px; margin: 0; }
+.off-cur { margin: 0; background: var(--panel2); border-radius: 8px; padding: 6px 10px; }
+.off-targets { border: 1px solid var(--line); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.off-targets .hint, .off-demo { flex-basis: 100%; }
+.off-demo { display: grid; gap: 4px; }
+.off-preview .err { margin: 0; padding-left: 1.2em; color: #ff9a9a; font-size: 12px; }
+.off-pass { display: flex; gap: 8px; align-items: center; }
+.off-pass input { font: inherit; color: var(--fg); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; min-height: 38px; padding: 4px 10px; flex: 1 1 200px; max-width: 320px; }
+.off-msg { margin: 0; min-height: 1.3em; font-weight: 700; }
+.off-msg[data-kind=error] { color: #ff9a9a; } .off-msg[data-kind=ok] { color: #9be8a8; } .off-msg[data-kind=info] { color: var(--dim); }
+.off-act { display: flex; gap: 8px; flex-wrap: wrap; }
+.off-versions ul { margin: 6px 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.off-versions summary { cursor: pointer; font-weight: 700; }
+.ed-official { border: 1px dashed #b28cff; border-radius: 8px; padding: 6px 8px; margin: 6px 0; }
+.ed-official h4 { margin: 0 0 4px !important; color: #d4c4f0 !important; }
+#editor .ed-official-btn { border-color: #b28cff; }
+.rec-demo-tag { font-style: normal; background: #b28cff; color: #120c08; border-radius: 4px; padding: 0 6px; font-size: 11px; font-weight: 800; margin-right: 4px; white-space: nowrap; }
+.cmp-cond { display: block; color: var(--dim); font-size: 11px; } .res-demo { margin: 0 0 6px; } .res-replay { display: grid; gap: 4px; background: var(--panel2); border: 1px solid #b28cff55; border-radius: 8px; padding: 8px 10px; } .res-replay button { justify-self: start; }

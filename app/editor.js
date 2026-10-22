@@ -124,6 +124,8 @@ export class Editor {
 
   refreshSource() {
     this.app.refreshChartSource?.();
+    const ov = this.root.querySelector('#edOfficialVer'), o = this.app.official;
+    if (ov) ov.textContent = o?.version != null ? `今の公式データ: 版 ${o.version}${o.updatedAt ? `（${new Date(o.updatedAt).toLocaleString()}）` : '（公開ビルドの初期データ）'}` : '公式データのサーバーに接続できません（公開ビルドの初期データを使用中）';
     const el = this.root.querySelector('#edSource');
     if (!el) return;
     const st = this.sourceState();
@@ -201,20 +203,26 @@ export class Editor {
       <section class="ed-box" id="edFile"><h3>保存・読み込み</h3>
         <div class="ed-row">
           <button data-act="undo">元に戻す</button><button data-act="redo">やり直す</button>
-          <button data-act="saveDefault" class="ed-primary">この端末のデフォルトとして保存</button>
+          <button data-act="saveDefault" class="ed-primary">個人用に保存（この端末のデフォルト）</button>
         </div>
         <p id="edSource" class="ed-src"></p>
         <div class="ed-row">
           <button data-act="revert" title="最後に「この端末のデフォルトとして保存」した状態（保存が無ければ配布時の初期設定）に戻す">編集前に戻す</button>
-          <button data-act="reset" title="公開版に入っている譜面（charts/seipai_v2.json）に戻す">配布時の初期設定に戻す</button>
+          <button data-act="reset" title="公式データ（公開版の初期設定）に戻す">配布時の初期設定に戻す</button>
           <button data-act="dropDefault">この端末のデフォルトを消す</button>
         </div>
         <div class="ed-row">
           <button data-act="export">JSON を書き出す</button>
           <label class="ed-filebtn">JSON を読み込む<input type="file" id="edImport" accept="application/json,.json"></label>
         </div>
-        <p class="ed-dim ed-note">「この端末のデフォルト」はこのブラウザにだけ保存され、保存後すぐに通常プレイと AUTO で使われます。<b>公開版は変わりません。</b>
-          ほかの端末でも同じ設定で起動するには、JSON を書き出し、公開版の <code>charts/seipai_v2.json</code> に取り込んで公開し直してください（README「設定を公開版へ反映」）。</p>
+        <p class="ed-dim ed-note"><b>個人用に保存</b>: このブラウザにだけ保存し、保存後すぐに通常プレイと AUTO で使います（パスワード不要）。<b>公式データ（ほかの利用者）は変わりません。</b>
+          JSON の書き出し・読み込みもパスワード不要です。</p>
+        <div class="ed-official">
+          <h4>公式データ（全利用者に配布）</h4>
+          <p class="ed-dim ed-note">公開版の初期譜面・判定設定・個別エフェクト・公式デモ履歴を、対象を選んで更新します。保存のたびにパスワードが必要です（サーバーで照合）。
+            新しい利用者と「配布時の初期設定に戻す」「公開版の設定に切り替える」を選んだ利用者に反映し、各利用者が個人用に保存した内容は上書きしません。</p>
+          <div class="ed-row"><button data-act="official" class="ed-official-btn">公式データとして保存・公開…</button><span id="edOfficialVer" class="ed-dim"></span></div>
+        </div>
         <p id="edSaved" class="ed-dim">自動保存（下書き）: まだ変更なし</p>
         <h3>編集メモ</h3>
         <textarea id="edMemo" rows="5"></textarea>
@@ -305,6 +313,7 @@ export class Editor {
       case 'redo': this.redo(); break;
       case 'export': this.exportFile(); break;
       case 'saveDefault': this.saveDefault(); break;
+      case 'official': this.app.openOfficial(); break;
       case 'revert': {
         const base = this.app.deviceDefault || this.app.initialChart;
         this.apply((c) => { const b = structuredClone(base); for (const k of Object.keys(c)) delete c[k]; Object.assign(c, b); }, this.app.deviceDefault ? '編集前（この端末のデフォルト）に戻す' : '編集前（配布時の初期設定）に戻す');

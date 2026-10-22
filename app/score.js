@@ -5,7 +5,7 @@
 
 export const RECORD_SCHEMA = 'kiva-score/1';
 export const CMD = Object.freeze({ Y: '息', X: '構', A: '撃', B: '旋' });
-export const DEVICE_LABEL = Object.freeze({ keyboard: 'キーボード', touch: 'タッチ', mouse: 'マウス', pen: 'ペン', gamepad: 'ゲームパッド', auto: 'AUTO' });
+export const DEVICE_LABEL = Object.freeze({ keyboard: 'キーボード', touch: 'タッチ', mouse: 'マウス', pen: 'ペン', gamepad: 'ゲームパッド', auto: 'AUTO', demo: 'デモの入力ログ' });
 export const KIND_LABEL = Object.freeze({ full: '通しプレイ', aborted: '途中終了', practice: '練習' });
 /** 比較の条件（同じなら同条件） */
 export const CONDITION_KEYS = Object.freeze(['chartHash', 'perfectWindowMs', 'goodWindowMs', 'missWindowMs', 'holdStartWindowMs', 'holdReleaseWindowMs', 'inputOffsetMs', 'rate']);
@@ -60,7 +60,7 @@ export function buildRecord(judge, ctx) {
     id: ctx.id ?? `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
     at: ctx.endedAt ?? new Date().toISOString(),
     startedAt: ctx.startedAt ?? null,
-    mode: ctx.mode,                 // manual | auto
+    mode: ctx.mode,                 // manual | auto | demo（公式デモ／シミュレーション）
     kind: ctx.kind,                 // full | aborted | practice
     practiceReasons: ctx.practiceReasons ?? [],
     devices,
@@ -75,6 +75,8 @@ export function buildRecord(judge, ctx) {
   };
   rec.judge.score = notes.reduce((a, n) => a + (n.points || 0), 0);
   rec.summary = summarize(rec);
+  // 再現に必要な記録（入力ログ・譜面のノーツの写し・判定ロジックの版・開始と終了の時刻）。ないときは再現しない
+  if (ctx.replay) rec.replay = ctx.replay;
   return rec;
 }
 
@@ -176,7 +178,7 @@ export function compareRecords(cur, base) {
 export function recordError(r) {
   if (!r || typeof r !== 'object') return '記録の形式が不正です';
   if (r.schema !== RECORD_SCHEMA) return r.schemaVersion != null && Array.isArray(r.notes) ? '譜面 JSON です（成績 JSON ではありません）' : `未知の形式です（${r.schema}）`;
-  if (typeof r.id !== 'string' || typeof r.at !== 'string' || !['manual', 'auto'].includes(r.mode) || !['full', 'aborted', 'practice'].includes(r.kind)) return '記録の項目が不足しています';
+  if (typeof r.id !== 'string' || typeof r.at !== 'string' || !['manual', 'auto', 'demo'].includes(r.mode) || !['full', 'aborted', 'practice'].includes(r.kind)) return '記録の項目が不足しています';
   if (!Array.isArray(r.notes) || !Array.isArray(r.extras) || !r.settings || !r.chart?.hash) return '記録の項目が不足しています';
   return null;
 }

@@ -131,12 +131,18 @@ test('シーク・ループで判定状態を初期化し、二重加点しな�
   const s = j.summary();
   assert.equal(j.byId.get('n003').result, null);
   assert.equal(j.byId.get('n002').result, GRADE.PERFECT);
-  assert.equal(j.byId.get('n001').result, GRADE.SKIP);
+  // 4.0 秒の入力の前に期限（1.18 秒）を過ぎた n001 は、その入力より前に MISS として確定している（時刻の順に処理。判定ロジックの版 2）
+  assert.equal(j.byId.get('n001').result, GRADE.MISS);
   j.press('A', 5.0);
   j.resetFrom(4.5);
   j.press('A', 5.0);
   assert.equal(j.summary().perfect, 2); // n002 + n003（n003 は 1 回分だけ）
-  assert.equal(s.skip, 1);
+  assert.equal(s.skip, 0);
+  // まだ判定していないノーツ（時刻を進める前にシーク）は SKIP（成績に数えない）
+  const k = new Judge(normalizeChart(base()).notes, S);
+  k.resetFrom(4.5);
+  assert.equal(k.byId.get('n001').result, GRADE.SKIP); assert.equal(k.byId.get('n002').result, GRADE.SKIP);
+  assert.equal(k.summary().skip, 2);
 });
 
 test('AUTO: 全ノーツを 1 回ずつ、長押しは保持して離す。フレーム落ちでも取りこぼさない', () => {

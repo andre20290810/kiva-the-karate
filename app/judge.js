@@ -3,6 +3,10 @@
 // ずれ = 入力時刻 − 正解時刻（マイナス = 早い、プラス = 遅い）。境界は ms で比べ、境界ちょうどは内側（|ずれ| ≤ 幅）。
 // 記録: ノーツに当たった入力（hit）、長押しの離した時刻（release）、どのノーツにも当たらなかった入力（strays）。
 // 判定は確定したら変えない（後からの入力を別のノーツへ付け替えない）。入力のない MISS には入力時刻・ずれを入れない。
+// 入力ログ（log）: press・release・cancelHolds の呼び出しを順に記録する（app/replay.js で同じ結果を再現できる）。
+//   [種類, ボタン, 判定に使った時刻, 補正前の時刻, 直前に update した時刻, 入力方法, 入力元]
+// 期限の来た判定（時間切れの MISS・長押しの完了）は「期限の時刻の順」に確定し、入力の前にもその時刻までを確定する
+// （入力と期限が常に時刻の順に処理されるので、描画の間隔に関係なく同じ判定・コンボ・スコア）。
 
 export const GRADE = Object.freeze({ PERFECT: 'PERFECT', GOOD: 'GOOD', MISS: 'MISS', SKIP: 'SKIP' });
 const POINTS = { PERFECT: 1000, GOOD: 500, MISS: 0, SKIP: 0 };
@@ -35,6 +39,8 @@ export class Judge {
     this.combo = 0;
     this.maxCombo = 0;
     this.stray = 0;
+    this.log = [];          // 入力ログ（再現用）
+    this.lastUpdate = null; // 最後に update した時刻
   }
 
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
@@ -49,6 +55,8 @@ export class Judge {
       if (this.seenInputs.has(id)) return null;
       this.seenInputs.add(id);
     }
+    this.log.push(['d', button, time, raw, this.lastUpdate, device, source]);
+    this._settleDue(time); // 入力より前に期限の来た判定を先に確定（描画の間隔に関係なく時刻の順）
     let best = null, bestAd = Infinity;
     for (const n of this.notes) {
       if (diffMs(n.time, time) > this.ms.miss) break;
@@ -85,6 +93,8 @@ export class Judge {
    * 長押しが自動で完了した後に離した場合は、その実際の時刻だけを記録する（判定は変えない）。
    */
   release(button, time, { source = 'input', raw = time, device = source } = {}) {
+    this.log.push(['u', button, time, raw, this.lastUpdate, device, source]);
+    this._settleDue(time);
     const out = [];
     for (const n of this.notes) {
       if (n.button !== button) continue;
@@ -102,22 +112,36 @@ export class Judge {
     return out;
   }
 
-  /** 時刻を進める: 長押しの完了・期限切れの MISS を確定する（描画のたびに呼ぶ）。 */
+  /**
+   * 時刻を進める: 長押しの完了・期限切れの MISS を確定する（描画のたびに呼ぶ）。
+   * 期限の来たものを期限の時刻の順に確定する（1 回で進めても、細かく進めても同じ順番）。
+   */
   update(time) {
-    const out = [];
+    this.lastUpdate = time;
+    return this._settleDue(time);
+  }
+
+  /** time までに期限の来た判定を、期限の時刻の順に確定する */
+  _settleDue(time) {
+    const due = [];
     for (const n of this.notes) {
       if (diffMs(n.time, time) > this.ms.miss) break;
       if (n.result) continue;
       if (n.holding) {
         // 必要な時間を保持した: 終了の時刻で成功を確定（ユーザーが離した時刻ではない。離した時刻は release で別に記録）
-        if (time >= n.time + n.duration) {
-          n.completedAt = n.time + n.duration;
-          n.awaitRelease = true;
-          out.push(this._settle(n, n.startGrade, n.time + n.duration, n.holdSource, 'completed'));
-        }
+        if (time >= n.time + n.duration) due.push([n.time + n.duration, n, 'completed']);
       } else if (diffMs(time, n.time) > this.ms.miss) {
-        out.push(this._settle(n, GRADE.MISS, time, 'timeout', 'timeout'));
+        due.push([n.time + this.w.miss, n, 'timeout']);
       }
+    }
+    due.sort((a, b) => a[0] - b[0] || a[1].time - b[1].time);
+    const out = [];
+    for (const [, n, kind] of due) {
+      if (kind === 'completed') {
+        n.completedAt = n.time + n.duration;
+        n.awaitRelease = true;
+        out.push(this._settle(n, n.startGrade, n.time + n.duration, n.holdSource, 'completed'));
+      } else out.push(this._settle(n, GRADE.MISS, time, 'timeout', 'timeout'));
     }
     return out;
   }
@@ -168,6 +192,7 @@ export class Judge {
 
   /** AUTO 切替時など: 長押し中のノーツを成績に数えない状態にする */
   cancelHolds() {
+    this.log.push(['c', null, null, null, this.lastUpdate, null, null]);
     for (const n of this.notes) if (n.holding) { n.holding = false; n.result = GRADE.SKIP; n.reason = 'cancelled'; }
   }
 

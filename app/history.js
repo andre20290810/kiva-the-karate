@@ -11,9 +11,20 @@ export class ScoreHistory {
     this.key = key;
     this.storage = storage;
     this.records = [];
+    this.official = [];  // 公式デモ（配布データ。この端末の履歴には保存しない・書き出さない・自己ベストや期間平均に入れない）
     this.loadError = null;
     this.load();
   }
+
+  /** 公式デモを設定（同じ ID は 1 件だけ。再読み込み・更新で重複しない） */
+  setOfficial(list) {
+    const m = new Map();
+    for (const r of Array.isArray(list) ? list : []) if (!recordError(r) && r.mode === 'demo') m.set(r.id, r);
+    this.official = [...m.values()];
+  }
+
+  /** 表示用: 公式デモ ＋ この端末の履歴 */
+  all() { return [...this.official, ...this.records]; }
 
   load() {
     try {
@@ -60,7 +71,7 @@ export class ScoreHistory {
     return { ...r, removed: before - this.records.length };
   }
 
-  get(id) { return this.records.find((r) => r.id === id) || null; }
+  get(id) { return this.records.find((r) => r.id === id) || this.official.find((r) => r.id === id) || null; }
 
   /** 書き出し（ids を省略すると全部） */
   exportText(ids = null) {
@@ -79,7 +90,7 @@ export class ScoreHistory {
     const have = new Set(this.records.map((r) => r.id));
     let added = 0, skipped = 0, invalid = 0;
     for (const r of list) {
-      if (recordError(r)) { invalid++; continue; }
+      if (recordError(r) || r.mode === 'demo') { invalid++; continue; } // 公式デモは個人の履歴に取り込まない
       if (have.has(r.id)) { skipped++; continue; }
       this.records.push(r); have.add(r.id); added++;
     }

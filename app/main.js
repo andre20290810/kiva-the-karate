@@ -16,6 +16,8 @@ import { ScoreHistory } from './history.js';
 import { ResultsView } from './results.js';
 import { resolveEffect } from './effects-catalog.js';
 import { Editor } from './editor.js';
+import { simulate, applyEvent, eventClock, replayable, snapshotNotes, JUDGE_VERSION, LOG_VERSION } from './replay.js';
+import { OfficialView } from './official-view.js';
 import { GAME } from './config.js';
 
 const $ = (s) => document.querySelector(s);
@@ -114,12 +116,50 @@ export class App {
     if (msg) $('#loadMsg').textContent = msg;
   }
 
+  /** 公式データ（/api/official）。サーバーがない環境（ローカル）や失敗時は null */
+  async fetchOfficial() {
+    try {
+      const r = await fetch(new URL('api/official', location.href), { cache: 'no-store' });
+      if (!r.ok || !(r.headers.get('content-type') || '').includes('json')) return null;
+      const d = await r.json();
+      return d?.chart?.notes ? d : null;
+    } catch { return null; }
+  }
+
+  /** 公式データが更新された（公開・復元の直後）: 配布の初期設定と公式デモを差し替える。個人用に保存した譜面・成績は変えない */
+  async applyOfficial(doc) {
+    if (!doc?.chart) return;
+    const v = validateChart(doc.chart, { frameCount: this.manifest.frameCount, gameVersion: this.version });
+    if (v.errors.length) return;
+    this.initialChart = normalizeChart(doc.chart);
+    this.distributedFingerprint = fingerprint(exportChart(this.initialChart));
+    this.official = { version: doc.version, updatedAt: doc.updatedAt, source: 'server' };
+    this.history.setOfficial(doc.demos || []);
+    this.editor?.refreshSource();
+  }
+
+  openOfficial() {
+    if (!this.officialView) this.officialView = new OfficialView(this);
+    this.officialView.open();
+  }
+
   // ---------- 読み込み ----------
   async load() {
     try {
       this.progress(0, '譜面を読み込み中…');
       const chartUrl = new URL(this.params.get('chart') || this.ver.chart, location.href).href;
-      const initial = await fetchJson(chartUrl, '初期譜面');
+      // 公式データ（サーバーの最新版。全利用者に配布）→ 取れなければ公開ビルドに同梱の初期データ
+      const off = this.params.has('chart') ? null : await this.fetchOfficial();
+      let initial, demos;
+      if (off) {
+        initial = off.chart; demos = off.demos || [];
+        this.official = { version: off.version, updatedAt: off.updatedAt, source: 'server' };
+      } else {
+        initial = await fetchJson(chartUrl, '初期譜面');
+        demos = await fetch(new URL('charts/official-demos.json', location.href), { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).then((j) => j?.records || []).catch(() => []);
+        this.official = { version: null, updatedAt: null, source: 'bundle' };
+      }
+      this.history.setOfficial(demos);
       const v0 = validateChart(initial, { gameVersion: this.version });
       if (v0.errors.length) throw new Error('初期譜面にエラーがあります:\n' + v0.errors.join('\n'));
       this.initialChart = normalizeChart(initial);
@@ -235,7 +275,9 @@ export class App {
   get t() { return this.clock ? this.clock.position() : 0; }
 
   newJudge(t) {
+    if (this.replay) { this.replayRebuild(t); return; } // リプレイ中は記録の入力ログから作り直す
     this.generation++;
+    if (this.session) this.session.judges = (this.session.judges || 0) + 1; // 1 回のプレイで判定を作り直した（シーク・編集）なら入力ログは残さない
     // 判定の設定はプレイの開始時に確定した値（プレイ中に設定を変えても次のプレイから）
     this.judge = new Judge(this.chart.notes, this.session?.settings ?? this.chart.settings);
     this.judge.on((e) => this.onJudge(e));
@@ -295,7 +337,10 @@ export class App {
     }
     const audioOk = await this.clock.unlock();
     if (this.state === 'playing') return;
-    if (this.state === 'ready' || this.state === 'ended') {
+    if (this.replay) {
+      // リプレイ: 記録の開始時刻から（成績には記録しない）
+      if (this.state === 'ready' || this.state === 'ended') { this.clock.stop(this.replay.startT); this.replayRebuild(this.replay.startT); this.results?.hide(); }
+    } else if (this.state === 'ready' || this.state === 'ended') {
       const from = this.loop.on && this.loop.a != null ? this.loop.a : -this.chart.settings.leadInSeconds;
       this.startSession(from);
       this.clock.stop(from);
@@ -386,7 +431,7 @@ export class App {
 
   retry() {
     if (!this.clock) return;
-    const from = this.loop.on && this.loop.a != null ? this.loop.a : -this.chart.settings.leadInSeconds;
+    const from = this.replay ? this.replay.startT : this.loop.on && this.loop.a != null ? this.loop.a : -this.chart.settings.leadInSeconds;
     const wasPlaying = this.state === 'playing';
     this.endSession('aborted'); // 途中のプレイは「途中終了」として残す（判定したノーツがあるとき）
     this.session = null;
@@ -419,6 +464,7 @@ export class App {
   }
 
   setAuto(on) {
+    if (this.replay && on) { this.status('リプレイ中は AUTO を使えません（「再現を終える」で通常に戻ります）', 'error'); return; }
     this.autoMode = on;
     if (this.judge) {
       // 切替時: 押しっぱなしの長押しは成績に数えず、過去のノーツはまとめて成立させない
@@ -434,6 +480,110 @@ export class App {
       if (this.session && on) this.session.autoUsed = true;
     }
     this.updateUi();
+  }
+
+  // ---------- リプレイ（保存した入力ログの再現。通常の AUTO とは別） ----------
+  /** 履歴のプレイを再現する（公式デモ・入力ログのある自分の記録）。記録時の譜面・判定条件・入力補正・再生速度で */
+  startReplay(rec) {
+    const can = replayable(rec);
+    if (!can.ok) { this.status(can.reason, 'error'); return can; }
+    if (this.state === 'playing') this.pause();
+    this.endSession('aborted');
+    this.session = null;
+    if (this.autoMode) this.setAuto(false);
+    if (this.editMode) this.setEdit(false);
+    const r = rec.replay;
+    // 判定は記録の譜面の写し。見た目（エフェクト・表示名）は今の譜面の同じノーツ（時刻・コマンドが同じとき）から
+    const cur = new Map(this.chart.notes.map((n) => [n.id, n]));
+    const notes = r.notes.map((n) => {
+      const c = cur.get(n.id);
+      const same = c && c.time === n.time && c.button === n.button && (c.duration || 0) === (n.duration || 0);
+      return same ? { ...n, effect: c.effect, label: c.label, action: c.action, sequenceId: c.sequenceId } : { ...n };
+    });
+    const prev = this.replay;
+    this.replay = { rec, notes, settings: { ...rec.settings }, events: r.events, startT: r.startT, endT: r.endT, next: 0,
+      kind: rec.mode === 'demo' ? 'demo' : 'history', prevRate: prev ? prev.prevRate : this.clock.rate };
+    this.setRate(rec.rate);
+    this.results?.hide();
+    this.state = 'ready';
+    this.clock.stop(r.startT);
+    this.replayRebuild(r.startT);
+    this.renderReplayBanner();
+    this.updateUi();
+    this.play();
+    return { ok: true };
+  }
+
+  /** time までの入力ログで判定を作り直す（シーク・最初から。判定済み・長押し・スコアを再構築し、二重加点しない） */
+  replayRebuild(t) {
+    const R = this.replay;
+    const to = Math.max(R.startT, t);
+    const { judge, next } = simulate({ notes: R.notes, settings: R.settings, startT: R.startT, events: R.events, until: to, prefix: `rp${++this.generation}` });
+    this.judge = judge;
+    this.judge.on((e) => this.onJudge(e));
+    R.next = next;
+    this.auto = null;
+    this.fx.clear();
+    this.lanes.clear();
+    for (const b of Object.keys(this.held)) this.held[b] = false;
+    // 押したままの長押し（再構築した時点）
+    for (const n of judge.notes) if (n.holding) this.held[n.button] = true;
+  }
+
+  /** 1 コマ分: その時刻までの入力を記録した順に判定へ渡す。判定を進める時刻は、次の入力の直前の時刻を越えない */
+  replayStep(t) {
+    const R = this.replay, ev = R.events;
+    while (R.next < ev.length && eventClock(ev[R.next]) <= t) {
+      const e = ev[R.next];
+      applyEvent(this.judge, e, R.next, `rp${this.generation}`);
+      if (e[0] === 'd') { this.held[e[1]] = true; this.flash[e[1]] = this.t; } else if (e[0] === 'u') this.held[e[1]] = false;
+      R.next++;
+    }
+    const nextAt = ev[R.next]?.[4];
+    this.judge.update(nextAt != null ? Math.min(t, nextAt) : t);
+    if (R.endT != null && R.next >= ev.length && t >= R.endT && R.endT < this.duration - 1e-3) this.finish(); // 途中で終えた記録はその時刻まで
+  }
+
+  replayEnded() {
+    this.status(`${this.replay.kind === 'demo' ? '公式デモ' : '履歴'}の再現が終わりました（成績・自己ベストには記録しません）。「最初から」で再生、「再現を終える」で通常に戻ります`, 'ok');
+    window.__replayEnded = { at: new Date().toISOString(), id: this.replay.rec.id };
+    this.updateUi();
+  }
+
+  /** リプレイの結果（判定・スコア・コンボ）を記録と同じ形で（確認用） */
+  replayRecord() {
+    const R = this.replay;
+    if (!R) return null;
+    return buildRecord(this.judge, { chart: { title: R.rec.chart.title, gameVersion: R.rec.chart.gameVersion, notes: R.notes }, settings: R.settings, rate: R.rec.rate, mode: R.rec.mode, kind: R.rec.kind, startT: R.startT, endT: R.endT, duration: R.rec.chart.duration, id: R.rec.id });
+  }
+
+  stopReplay() {
+    const R = this.replay;
+    if (!R) return;
+    if (this.state === 'playing') this.pause();
+    this.replay = null;
+    this.setRate(R.prevRate ?? 1);
+    this.state = 'ready';
+    const from = -this.chart.settings.leadInSeconds;
+    this.clock.stop(from);
+    this.newJudge(from);
+    this.renderReplayBanner();
+    this.status('再現を終えました。通常のプレイに戻りました', 'ok');
+    this.updateUi();
+  }
+
+  renderReplayBanner() {
+    const el = $('#replayBanner');
+    if (!el) return;
+    const R = this.replay;
+    el.hidden = !R;
+    document.documentElement.dataset.replay = R ? R.kind : '';
+    if (!R) return;
+    const rec = R.rec, ok = rec.summary.perfect + rec.summary.good;
+    $('#replayLabel').textContent = R.kind === 'demo'
+      ? `公式デモ再現中: ${rec.demo?.label ?? rec.id}（シミュレーション・成功 ${ok}/${rec.summary.total}）`
+      : `履歴リプレイ中: ${new Date(rec.at).toLocaleString('ja-JP')} のプレイ（成功 ${ok}/${rec.summary.total}）`;
+    $('#replaySub').textContent = `記録時の条件で再生: 判定幅 P±${rec.settings.perfectWindowMs}/G±${rec.settings.goodWindowMs}/M±${rec.settings.missWindowMs}・入力補正 ${rec.settings.inputOffsetMs}ms・速度 ${rec.rate}×。手動の入力は判定に入りません。成績には記録しません`;
   }
 
   // ---------- 1 回のプレイ（成績の記録） ----------
@@ -472,6 +622,8 @@ export class App {
       practiceReasons: s.practiceReasons, bgm: s.bgm, startedAt: s.startedAt, endedAt: new Date().toISOString(),
       chartSource: s.chartSource, startT: s.startT, endT: this.t, duration: this.duration,
       frameAt: (t) => { const i = this.store.indexAt(Math.max(0, t)); return { i, t: this.store.frames[i].t }; },
+      // 再現に必要な記録: 判定への入力の呼び出し（順番どおり）・譜面のノーツの写し・判定ロジックの版。判定を作り直したプレイには残さない
+      replay: s.judges === 1 ? { v: LOG_VERSION, judgeVersion: JUDGE_VERSION, startT: s.startT, endT: this.judge.lastUpdate, notes: snapshotNotes(this.judge.notes), events: this.judge.log.map((e) => e.slice()) } : null,
     });
     const saved = this.history.add(rec);
     this.lastRecord = rec;
@@ -483,6 +635,7 @@ export class App {
   finish() {
     this.state = 'ended';
     this.clock.pause();
+    if (this.replay) { this.replayEnded(); return; } // リプレイは成績・自己ベストに記録しない
     const s = this.judge.summary();
     const rec = this.endSession('end');
     const auto = rec ? rec.mode === 'auto' : this.autoMode;
@@ -500,7 +653,7 @@ export class App {
     this.held[b] = true;
     if (this.state !== 'playing') { this.flash[b] = this.t; return; }
     this.flash[b] = this.clock.position(perfMs);
-    if (this.autoMode) return; // AUTO 中の手動入力は成績に混ぜない
+    if (this.autoMode || this.replay) return; // AUTO・リプレイ中の手動入力は判定に混ぜない
     // 判定・記録は同じ時間軸。raw = 補正前の時刻、t = 入力補正（プレイ開始時に確定した値）を引いた判定用の時刻
     const raw = this.clock.position(perfMs);
     const t = raw - (this.session?.settings ?? this.chart.settings).inputOffsetMs / 1000;
@@ -509,7 +662,7 @@ export class App {
 
   onRelease(b, perfMs, o) {
     this.held[b] = false;
-    if (this.state !== 'playing' || this.autoMode) return;
+    if (this.state !== 'playing' || this.autoMode || this.replay) return;
     const raw = this.clock.position(perfMs);
     const t = raw - (this.session?.settings ?? this.chart.settings).inputOffsetMs / 1000;
     this.judge.release(b, t, { source: o.source, raw, device: o.device });
@@ -610,8 +763,8 @@ export class App {
         this.seek(this.loop.a);
         t = this.t;
       }
-      this.auto?.update(t);
-      this.judge.update(t);
+      if (this.replay) this.replayStep(t);
+      else { this.auto?.update(t); this.judge.update(t); }
       this.checkAudioSignal(t);
       if (t >= this.duration - 1e-3) { this.finish(); t = this.duration; }
     }
@@ -837,6 +990,8 @@ export class App {
       this.renderAudioInfo();
     };
     $('#btnRetry').addEventListener('click', () => this.retry());
+    $('#replayRestart').addEventListener('click', () => { if (this.replay) { this.retry(); } });
+    $('#replayStop').addEventListener('click', () => this.stopReplay());
     $('#btnAuto').addEventListener('click', () => this.setAuto(!this.autoMode));
     $('#btnEdit').addEventListener('click', () => this.setEdit(!this.editMode));
     $('#speed').addEventListener('change', (e) => this.setRate(Number(e.target.value)));
@@ -926,6 +1081,7 @@ export class App {
   }
 
   setEdit(on) {
+    if (on && this.replay) this.stopReplay(); // 編集はリプレイを終えてから
     this.editMode = on;
     if (on) this.markPractice('edit');
     if (on) this.pause();

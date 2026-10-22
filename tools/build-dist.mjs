@@ -22,6 +22,9 @@ const { GAME } = await import(pathToFileURL(join(root, 'app/config.js')).href);
 const stage = ['assets/stage/IMG_7441.JPG', 'assets/stage/IMG_7439.JPG'];
 const missing = stage.filter((f) => !existsSync(join(root, f)));
 const plan = [];
+// 公式デモ（シミュレーション。入力ログつき）。無ければ止める（node tools/make-demos.mjs で作る）
+if (!existsSync(join(root, 'charts/official-demos.json'))) { console.error('charts/official-demos.json がありません（node tools/make-demos.mjs）'); process.exit(1); }
+copy('charts/official-demos.json');
 for (const v of [{ ...GAME, label: '正式版' }]) {
   copy(v.chart);
   const chart = JSON.parse(readFileSync(join(root, v.chart), 'utf8'));

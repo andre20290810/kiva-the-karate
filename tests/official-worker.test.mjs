@@ -17,8 +17,8 @@ function kv() {
 }
 const assets = { fetch: async (req) => { const p = new URL(req.url).pathname.replace(/^\//, ''); try { return new Response(readFileSync(resolve(root, p))); } catch { return new Response('nf', { status: 404 }); } } };
 async function env(extra = {}) { return { OFFICIAL: kv(), OFFICIAL_PASSWORD_HASH: await hashPassword(PASS, { iterations: 20000 }), ASSETS: assets, ...extra }; }
-const call = (e, path, { method = 'GET', body, origin = ORIGIN, type = 'application/json', ip = '1.2.3.4' } = {}) => worker.fetch(new Request(`${ORIGIN}${path}`, {
-  method, body: body == null ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
+const call = (e, path, { method, body, origin = ORIGIN, type = 'application/json', ip = '1.2.3.4' } = {}) => worker.fetch(new Request(`${ORIGIN}${path}`, {
+  method: method ?? (body == null ? 'GET' : 'POST'), body: body == null ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
   headers: { ...(origin ? { origin } : {}), ...(type ? { 'content-type': type } : {}), 'cf-connecting-ip': ip },
 }), e);
 const chart = () => JSON.parse(readFileSync(resolve(root, 'charts/seipai_v2.json'), 'utf8'));

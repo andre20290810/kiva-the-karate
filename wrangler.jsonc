@@ -25,9 +25,15 @@
     "ALLOWED_HOST": "kiva.world-of-andersen.com",
     "SESSION_TTL": "43200"
   },
-  // ログイン試行のレート制限（IP ごと 60 秒に 10 回）
+  // ログイン試行のレート制限（IP ごと 60 秒に 10 回）・公式データの保存の試行（IP ごと 60 秒に 10 回）
   "ratelimits": [
-    { "name": "LOGIN_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } }
+    { "name": "LOGIN_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
+    { "name": "OFFICIAL_LIMITER", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } }
+  ],
+  // 公式データ（全利用者に配布する譜面・判定設定・個別エフェクト・公式デモ）の保存先（再デプロイ後も残る）。worker/official.js
+  // パスワードは secret OFFICIAL_PASSWORD_HASH（PBKDF2 のハッシュ。node tools/hash-password.mjs で作る）。Git には書かない
+  "kv_namespaces": [
+    { "binding": "OFFICIAL", "id": "589d41d1eefe4598a3152fc5586e84fd" }
   ],
   "observability": { "enabled": true }
 }

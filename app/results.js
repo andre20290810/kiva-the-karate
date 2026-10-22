@@ -6,6 +6,7 @@ import { CMD, DEVICE_LABEL, KIND_LABEL, HOLD_STATUS_LABEL, comparisonTargets, co
 import { LANE_STYLE } from './lanes.js';
 import { timeTicks } from './timeline.js';
 import { CompareView } from './compare-view.js';
+import { replayable } from './replay.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const sMs = (v) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(1)}ms`);
@@ -106,7 +107,7 @@ export class ResultsView {
   render() {
     for (const b of this.root.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === this.tab));
     const r = this.rec;
-    this.root.querySelector('#resultTitle').textContent = !r ? '成績' : r.mode === 'auto' ? 'AUTO 再生の記録（手動の成績・自己ベストには含めません）' : `成績（${KIND_LABEL[r.kind]}）`;
+    this.root.querySelector('#resultTitle').textContent = !r ? '成績' : r.mode === 'demo' ? `${r.demo?.label ?? '公式デモ'}（公式デモ／シミュレーション）` : r.mode === 'auto' ? 'AUTO 再生の記録（手動の成績・自己ベストには含めません）' : `成績（${KIND_LABEL[r.kind]}）`;
     if (this.tab === 'history') { this.body.innerHTML = this.historyHtml(); return; }
     if (this.tab === 'compare') { this.body.innerHTML = this.cmp.html(); this.cmp.after(); return; } // 比較は今の記録がなくてもよい（過去の記録同士）
     if (!r) { this.body.innerHTML = '<p class="hint">まだ記録がありません。プレイを最後まで終えるか、「履歴」から過去の記録を開いてください。</p>'; return; }
@@ -137,7 +138,7 @@ export class ResultsView {
     const m = r.summary;
     const save = this.saveState && !this.saveState.ok && r === this.app.lastRecord
       ? `<div class="res-warn" role="alert">この記録をブラウザに保存できませんでした（${esc(this.saveState.error)}）。<button type="button" data-act="exportOne">成績を JSON で保存</button></div>` : '';
-    return `${save}
+    return `${save}${this.replayBoxHtml(r)}
       <div class="res-grid">
         <div><span>スコア</span><b>${m.score.toLocaleString()}</b></div>
         <div><span>最大コンボ</span><b>${m.maxCombo}</b></div>
@@ -156,6 +157,16 @@ export class ResultsView {
       </table></div>
       ${this.conditionsHtml(r)}
       <p class="note">入力タイミングの成績です。空手の技能評価ではありません。</p>`;
+  }
+
+  /** 公式デモの説明と「このプレイを再現」（入力ログがない記録は理由を表示し、推測で作らない） */
+  replayBoxHtml(r) {
+    const can = replayable(r);
+    const ok = r.summary.perfect + r.summary.good;
+    const demo = r.mode === 'demo' ? `<p class="res-demo"><em class="rec-demo-tag">公式デモ／シミュレーション</em>${esc(r.demo?.note || '公式に用意したシミュレーションデータです（実際の利用者の実績ではありません）')}
+      実際の正答率 ${pct(ok / r.summary.total)}（成功 ${ok}／${r.summary.total} ノーツ）。入力ログを通常の判定処理に通した結果です。自己ベスト・期間平均には含めません。</p>` : '';
+    return `<div class="res-replay">${demo}<button type="button" data-replay="${esc(r.id)}" class="tbtn" ${can.ok ? '' : 'disabled'}>▶ このプレイを再現</button>
+      <span class="hint">${can.ok ? '保存された入力（ボタン・時刻）どおりに押下・解除して、判定・コンボ・スコア・エフェクトを再現します（記録時の譜面・判定条件・入力補正・速度。成績には記録しません）。通常の AUTO（全成功）とは別の機能です。' : esc(can.reason)}</span></div>`;
   }
 
   // ---------- タイミングのグラフ ----------
@@ -713,12 +724,19 @@ export class ResultsView {
       <p class="hint">2 件以上をチェックして「選択した○件を比較」で、記録同士を比べられます（直近のプレイを含めなくてもよい）。成績の履歴はこのブラウザに保存されます（譜面・編集内容とは別。成績 JSON と譜面 JSON は別の形式で、互いに上書きしません）。${this.history.records.length} 件。</p>
       ${this.history.loadError ? `<p class="res-warn">${esc(this.history.loadError)}</p>` : ''}
       <p id="histMsg" class="hint" role="status"></p>
-      <div class="res-scroll"><table class="res-table res-hist"><thead><tr><th><span class="sr">選択</span></th><th>日時</th><th>手動／AUTO・区分</th><th>スコア</th><th>成功率</th><th>平均絶対誤差</th><th>譜面</th><th>判定幅 P/G/M</th><th>速度</th><th>補正</th><th></th></tr></thead>
+      ${this.history.official.length ? `<div class="res-scroll"><table class="res-table res-hist res-demo-hist"><caption>公式デモ／シミュレーション（${this.history.official.length} 件。実際の利用者の実績ではありません。自己ベスト・期間平均には含めません）</caption>
+        <thead><tr><th><span class="sr">選択</span></th><th>名前</th><th>実際の正答率</th><th>スコア</th><th>平均絶対誤差</th><th>譜面</th><th>判定幅 P/G/M</th><th>速度</th><th>補正</th><th></th></tr></thead>
+        <tbody>${this.history.official.map((h) => { const ok = h.summary.perfect + h.summary.good; return `<tr>
+          <td><input type="checkbox" data-sel="${esc(h.id)}" ${this.selected.has(h.id) ? 'checked' : ''} aria-label="${esc(h.demo?.label ?? h.id)} を選択"></td>
+          <td><em class="rec-demo-tag">公式デモ</em>${esc(h.demo?.label ?? h.id)}</td><td>${pct(ok / h.summary.total)}（${ok}/${h.summary.total}）</td><td>${h.summary.score.toLocaleString()}</td><td>${aMs(h.summary.maeMs)}</td>
+          <td>${esc(h.chart.title || '')} <small>${esc(h.chart.hash)}</small></td><td>${h.settings.perfectWindowMs}/${h.settings.goodWindowMs}/${h.settings.missWindowMs}</td><td>${h.rate}×</td><td>${h.settings.inputOffsetMs}ms</td>
+          <td><button type="button" data-open="${esc(h.id)}">開く</button> <button type="button" data-replay="${esc(h.id)}">▶ 再現</button>${cur && h.id !== cur.id ? ` <button type="button" data-cmp="${esc(h.id)}">今の記録と比較</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : ''}
+      <div class="res-scroll"><table class="res-table res-hist"><caption>この端末の履歴（${this.history.records.length} 件）</caption><thead><tr><th><span class="sr">選択</span></th><th>日時</th><th>手動／AUTO・区分</th><th>スコア</th><th>成功率</th><th>平均絶対誤差</th><th>譜面</th><th>判定幅 P/G/M</th><th>速度</th><th>補正</th><th></th></tr></thead>
       <tbody>${list.map((h) => `<tr class="${cur && h.id === cur.id ? 'is-cur' : ''}">
         <td><input type="checkbox" data-sel="${esc(h.id)}" ${this.selected.has(h.id) ? 'checked' : ''} aria-label="${esc(when(h.at))} を選択"></td>
         <td>${esc(when(h.at))}</td><td>${h.mode === 'auto' ? 'AUTO' : '手動'}・${KIND_LABEL[h.kind]}</td><td>${h.summary.score.toLocaleString()}</td><td>${pct(h.summary.successRate)}</td><td>${aMs(h.summary.maeMs)}</td>
         <td>${esc(h.chart.title || '')} <small>${esc(h.chart.hash)}</small></td><td>${h.settings.perfectWindowMs}/${h.settings.goodWindowMs}/${h.settings.missWindowMs}</td><td>${h.rate}×</td><td>${h.settings.inputOffsetMs}ms</td>
-        <td><button type="button" data-open="${esc(h.id)}">開く</button>${cur && h.id !== cur.id ? ` <button type="button" data-cmp="${esc(h.id)}">今の記録と比較</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="11">履歴はありません</td></tr>'}</tbody></table></div>`;
+        <td><button type="button" data-open="${esc(h.id)}">開く</button>${replayable(h).ok ? ` <button type="button" data-replay="${esc(h.id)}">▶ 再現</button>` : ''}${cur && h.id !== cur.id ? ` <button type="button" data-cmp="${esc(h.id)}">今の記録と比較</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="11">履歴はありません</td></tr>'}</tbody></table></div>`;
   }
 
   download(text, name, type = 'application/json') {
@@ -740,6 +758,12 @@ export class ResultsView {
     if (card) { this.select('note', card.dataset.note, 'card'); return; }
     const b = e.target.closest('button');
     if (!b) return;
+    if (b.dataset.replay) {
+      const rec = this.history.get(b.dataset.replay);
+      const res = rec ? this.app.startReplay(rec) : { ok: false };
+      if (res?.ok) this.hide(); else this.msg(res?.reason || 'この履歴はリプレイに必要な記録がありません');
+      return;
+    }
     if (b.dataset.zoom) { this.tlZoom(b.dataset.zoom === 'fit' ? 'fit' : Number(b.dataset.zoom)); return; }
     if (b.id === 'btnResultClose') { this.hide(); return; }
     if (b.id === 'btnResultRetry') { this.hide(); this.app.retry(); return; }
@@ -760,6 +784,7 @@ export class ResultsView {
     else if (act === 'exportAll') this.download(this.history.exportText(), `seipai-${v}-scores-${this.stamp()}.json`);
     else if (act === 'exportSel') this.download(this.history.exportText([...this.selected]), `seipai-${v}-scores-${this.stamp()}.json`);
     else if (act === 'deleteSel') {
+      for (const id of [...this.selected]) if (this.history.official.some((r) => r.id === id)) this.selected.delete(id); // 公式デモは削除しない
       if (!this.selected.size || !confirm(`選択した ${this.selected.size} 件の記録を削除しますか？（元に戻せません。必要なら先に書き出してください）`)) return;
       const r = this.history.remove([...this.selected]);
       if (this.rec && this.selected.has(this.rec.id)) this.rec = null;

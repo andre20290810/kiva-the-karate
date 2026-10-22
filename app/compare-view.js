@@ -14,6 +14,9 @@ const pct = (v) => (v == null ? '—' : `${(v * 100).toFixed(1)}%`);
 const t3 = (v) => (v == null ? '—' : v.toFixed(3));
 const when = (iso) => { try { return new Date(iso).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' }); } catch { return iso; } };
 const GC = { PERFECT: 'g-perfect', GOOD: 'g-good', MISS: 'g-miss' };
+/** 記録の名前: 公式デモは名前（シミュレーションと明示）、それ以外はプレイ日時 */
+const recName = (r) => (r.mode === 'demo' ? `${r.demo?.label ?? r.id}（シミュレーション）` : when(r.at));
+const modeName = (r) => (r.mode === 'demo' ? '公式デモ' : r.mode === 'auto' ? 'AUTO' : '手動');
 /** 変化の表示（色と文字・記号で区別。凡例と同じ） */
 export const CHANGE = Object.freeze({
   up: { cls: 'k-up', mark: '▲', text: '改善' }, down: { cls: 'k-down', mark: '▼', text: '悪化' }, same: { cls: 'k-same', mark: '＝', text: '変化なし' },
@@ -60,15 +63,15 @@ export class CompareView {
   // ================= 記録の比較 =================
   /** 履歴から記録を選ぶ表（日時・スコア・譜面・判定幅・速度・手動／AUTO・区分） */
   pickerHtml() {
-    const list = this.history.records.slice().reverse();
+    const list = [...this.history.official, ...this.history.records.slice().reverse()]; // 公式デモ（シミュレーション）も選べる
     const sel = new Set(this._pick ?? this.ids); // チェック中（「比較」を押すまでは今の比較を変えない）
     return `<details class="cmp-pick" ${this.pickOpen || this.ids.length < 2 ? 'open' : ''}><summary>比較する記録を選ぶ（${sel.size} 件選択中）</summary>
-      <p class="hint">2 件以上をチェックして「比較する」。直近のプレイを含める必要はありません。条件（譜面・判定幅・速度・入力補正）が違う記録も選べますが、違いを表示し、同じ条件の改善とは区別します。</p>
+      <p class="hint">2 件以上をチェックして「比較する」。直近のプレイを含める必要はありません。公式デモ（シミュレーション）とも比較できます。条件（譜面・判定幅・速度・入力補正）が違う記録も選べますが、違いを表示し、同じ条件の改善とは区別します。</p>
       <div class="res-scroll cmp-pick-list"><table class="res-table"><thead><tr><th><span class="sr">選択</span></th><th>日時</th><th>スコア</th><th>譜面</th><th>判定幅 P/G/M</th><th>速度</th><th>補正</th><th>手動／AUTO</th><th>区分</th></tr></thead>
-      <tbody>${list.map((h) => `<tr><td><input type="checkbox" data-cpick="${esc(h.id)}" ${sel.has(h.id) ? 'checked' : ''} aria-label="${esc(when(h.at))} を比較に入れる"></td>
-        <td>${esc(when(h.at))}</td><td>${h.summary.score.toLocaleString()}</td><td>${esc(h.chart.title || '')} <small>${esc(h.chart.hash)}</small></td>
+      <tbody>${list.map((h) => `<tr><td><input type="checkbox" data-cpick="${esc(h.id)}" ${sel.has(h.id) ? 'checked' : ''} aria-label="${esc(recName(h))} を比較に入れる"></td>
+        <td>${h.mode === 'demo' ? `<em class="rec-demo-tag">公式デモ</em>${esc(h.demo?.label ?? h.id)}` : esc(when(h.at))}</td><td>${h.summary.score.toLocaleString()}</td><td>${esc(h.chart.title || '')} <small>${esc(h.chart.hash)}</small></td>
         <td>${h.settings.perfectWindowMs}/${h.settings.goodWindowMs}/${h.settings.missWindowMs}</td><td>${h.rate}×</td><td>${h.settings.inputOffsetMs}ms</td>
-        <td>${h.mode === 'auto' ? 'AUTO' : '手動'}</td><td>${KIND_LABEL[h.kind]}</td></tr>`).join('') || '<tr><td colspan="9">履歴はありません</td></tr>'}</tbody></table></div>
+        <td>${modeName(h)}</td><td>${h.mode === 'demo' ? 'シミュレーション' : KIND_LABEL[h.kind]}</td></tr>`).join('') || '<tr><td colspan="9">履歴はありません</td></tr>'}</tbody></table></div>
       <div class="cmp-pick-act"><button type="button" class="tbtn primary" data-cact="apply" ${sel.size >= 2 ? '' : 'disabled'}>選択した ${sel.size} 件を比較</button>
         <button type="button" class="tbtn" data-cact="clear" ${sel.size ? '' : 'disabled'}>選択を解除</button></div></details>`;
   }
@@ -81,7 +84,8 @@ export class CompareView {
     const base = d.base.rec;
     const legend = `<ul class="cmp-legend" aria-label="比較する記録（色と記号は画面全体で共通）">${d.recs.map((x) => {
       const r = x.rec, s = d.summary.find((y) => y.id === r.id), diff = s.conditions;
-      return `<li style="--rc:${x.color}"><span class="cmp-badge">${x.sym}</span><span><b>${esc(when(r.at))}</b> ${r.mode === 'auto' ? 'AUTO' : '手動'}・${KIND_LABEL[r.kind]}・${r.summary.score.toLocaleString()} 点
+      return `<li style="--rc:${x.color}"><span class="cmp-badge">${x.sym}</span><span>${r.mode === 'demo' ? '<em class="rec-demo-tag">公式デモ</em>' : ''}<b>${esc(recName(r))}</b> ${modeName(r)}・${r.mode === 'demo' ? 'シミュレーション' : KIND_LABEL[r.kind]}・${r.summary.score.toLocaleString()} 点
+        <small class="cmp-cond">譜面 ${esc(r.chart.hash)}・判定幅 ${r.settings.perfectWindowMs}/${r.settings.goodWindowMs}/${r.settings.missWindowMs}・速度 ${r.rate}×・補正 ${r.settings.inputOffsetMs}ms</small>
         ${r.id === base.id ? '<em class="cmp-basetag">基準</em>' : ''}${diff.length ? `<em class="cmp-warn">条件が違う: ${diff.map((c) => `${c.name} ${c.key === 'chartHash' ? '別の譜面' : `${c.b}→${c.a}`}`).join('、')}</em>` : ''}</span>
         <label class="cmp-base"><input type="radio" name="cmpBase" data-cbase="${esc(r.id)}" ${r.id === base.id ? 'checked' : ''}> 基準</label>
         <button type="button" class="cmp-rm" data-crm="${esc(r.id)}" aria-label="${esc(when(r.at))} を比較から外す" ${recs.length <= 2 ? 'disabled' : ''}>外す</button></li>`;
@@ -113,7 +117,7 @@ export class CompareView {
     const cols = d.recs.map((x) => x.rec.id);
     const S = (id) => d.summary.find((s) => s.id === id);
     const row = (label, f) => `<tr><th>${label}</th>${cols.map((id) => `<td>${f(S(id), this.history.get(id))}</td>`).join('')}</tr>`;
-    const head = `<tr><th>項目</th>${d.recs.map((x) => `<th>${this.badge(x.rec.id)} ${esc(when(x.rec.at))}</th>`).join('')}</tr>`;
+    const head = `<tr><th>項目</th>${d.recs.map((x) => `<th>${this.badge(x.rec.id)} ${esc(recName(x.rec))}</th>`).join('')}</tr>`;
     const imp = (s, r) => (r.id === d.base.rec.id ? '基準' : s.maeImprove == null ? '—' : `${fmtImp(s.maeImprove)}${s.conditions.length ? '（※条件が違う）' : ''}`);
     const t = `<div class="res-scroll"><table class="res-table cmp-sum"><caption>全体（基準の譜面と対応したノーツで集計。入力なし・ボタン違いは誤差に入れず MISS に数える）</caption><thead>${head}</thead><tbody>
       ${row('スコア', (s, r) => r.summary.score.toLocaleString())}
@@ -247,7 +251,7 @@ export class CompareView {
     sc.innerHTML = `<svg class="res-graph tl-svg" width="${W}" height="${H}" style="width:${W}px;height:${H}px" viewBox="0 0 ${W} ${H}" role="img" aria-label="正解と各記録の入力の照合（${dur.toFixed(1)} 秒）">${out.join('')}${texts.join('')}</svg>`;
     lab.innerHTML = `<svg class="res-graph tl-svg" width="${CT.labW}" height="${H}" style="width:${CT.labW}px;height:${H}px" aria-hidden="true">${rows.map((row) => row.kind === 'note'
       ? `<rect x="0" y="${row.y}" width="${CT.labW}" height="${row.h}" class="tl-row tl-row-note"/><text x="6" y="${row.y + row.h / 2 + 4}" class="tl-rs b-${row.b}">${row.label}</text>`
-      : `<rect x="0" y="${row.y}" width="${CT.labW}" height="${row.h}" class="tl-row tl-row-input"/><rect x="0" y="${row.y}" width="5" height="${row.h}" fill="${row.x.color}"/><rect x="9" y="${row.y + 8}" width="20" height="20" rx="4" fill="${row.x.color}"/><text x="19" y="${row.y + 23}" class="cmp-sym" text-anchor="middle">${row.x.sym}</text><text x="34" y="${row.y + 17}" class="tl-rs">${esc(when(row.x.rec.at))}</text><text x="34" y="${row.y + 31}" class="tl-rs">${row.x.rec.id === d.base.rec.id ? '基準' : row.x.rec.mode === 'auto' ? 'AUTO' : '手動'}・${KIND_LABEL[row.x.rec.kind]}</text>`).join('')}<text x="6" y="13" class="tl-sec">秒</text></svg>`;
+      : `<rect x="0" y="${row.y}" width="${CT.labW}" height="${row.h}" class="tl-row tl-row-input"/><rect x="0" y="${row.y}" width="5" height="${row.h}" fill="${row.x.color}"/><rect x="9" y="${row.y + 8}" width="20" height="20" rx="4" fill="${row.x.color}"/><text x="19" y="${row.y + 23}" class="cmp-sym" text-anchor="middle">${row.x.sym}</text><text x="34" y="${row.y + 17}" class="tl-rs">${esc(row.x.rec.mode === 'demo' ? (row.x.rec.demo?.label ?? '').replace('公式デモ：', 'デモ ') : when(row.x.rec.at))}</text><text x="34" y="${row.y + 31}" class="tl-rs">${row.x.rec.id === d.base.rec.id ? '基準・' : ''}${modeName(row.x.rec)}・${row.x.rec.mode === 'demo' ? 'シミュレーション' : KIND_LABEL[row.x.rec.kind]}</text>`).join('')}<text x="6" y="13" class="tl-sec">秒</text></svg>`;
     this._pps = pps;
     sc.scrollLeft = Math.max(0, X(centerT) - sc.clientWidth / 2);
     this.R.body.querySelector('.cmp-scale').textContent = `1 秒 = ${Math.round(pps)} px・全 ${dur.toFixed(1)} 秒・${d.recs.length} 件`;
@@ -290,9 +294,9 @@ export class CompareView {
     const ch = (c) => { const k = CHANGE[c.kind]; return `<span class="cmp-chg ${k.cls}">${k.mark} ${esc(c.kind === 'base' || c.kind === 'na' ? c.label : c.label)}</span>`; };
     const rows = row.cells.map((c) => {
       const rec = this.history.get(c.id), rn = rec.notes.find((q) => q.id === n.id);
-      if (c.status !== 'ok') return `<tr><th>${this.badge(c.id)} ${esc(when(rec.at))}</th><td colspan="${n.hold ? 8 : 7}">${esc(c.why)}</td></tr>`;
+      if (c.status !== 'ok') return `<tr><th>${this.badge(c.id)} ${esc(recName(rec))}</th><td colspan="${n.hold ? 8 : 7}">${esc(c.why)}</td></tr>`;
       const o = c.obs, fi = o.input ? (rn.frames?.input ?? this.R.frameAt(o.input.time)) : null;
-      return `<tr><th>${this.badge(c.id)} ${esc(when(rec.at))}${c.id === base.id ? ' <em class="cmp-basetag">基準</em>' : ''}</th>
+      return `<tr><th>${this.badge(c.id)} ${esc(recName(rec))}${c.id === base.id ? ' <em class="cmp-basetag">基準</em>' : ''}</th>
         <td>${CMD[n.button]}／${n.button} ${t3(n.time)} 秒</td>
         <td>${o.input ? `${o.input.button} を ${t3(o.input.time)} 秒 <small>${DEVICE_LABEL[o.input.device] || o.input.device || ''}</small>` : '<b>入力なし</b>'}</td>
         <td>${o.d == null ? '—' : `${sMs(o.d)} ${o.d < 0 ? '早い' : o.d > 0 ? '遅い' : ''}`}</td><td>${aMs(o.abs)}</td>
@@ -313,7 +317,7 @@ export class CompareView {
     const legend = `<ul class="res-legend" aria-label="比較表の凡例">${Object.values(CHANGE).map((k) => `<li><span class="cmp-chg ${k.cls}">${k.mark} ${k.text}</span></li>`).join('')}<li><span>セル: 判定と早い／遅い（符号付き ms）。改善量は基準の絶対誤差 − その記録の絶対誤差</span></li></ul>`;
     const filters = `<div class="res-filter" role="group" aria-label="技で絞り込み">${BUTTONS.map((b) => `<button type="button" data-ccmd="${b}" aria-pressed="${this.cmdFilter.has(b)}">${CMD[b]}</button>`).join('')}</div>
       <div class="res-filter" role="group" aria-label="ノーツの絞り込み">${[['all', 'すべて'], ['up', '▲ 改善したノーツ'], ['down', '▼ 悪化したノーツ'], ['miss', '✕ MISS を含むノーツ']].map(([k, l]) => `<button type="button" data-crow="${k}" aria-pressed="${this.rowFilter === k}">${l}（${d.rows.filter((r) => this.cmdFilter.has(r.note.button) && (k === 'all' || (k === 'up' && r.improved) || (k === 'down' && r.worsened) || (k === 'miss' && r.hasMiss))).length}）</button>`).join('')}</div>`;
-    const head = `<tr><th class="cmx-t">時刻</th><th class="cmx-c">コマンド</th><th class="cmx-i">ID</th>${d.recs.map((x) => `<th>${this.badge(x.rec.id)}<br><small>${esc(when(x.rec.at))}</small></th>`).join('')}</tr>`;
+    const head = `<tr><th class="cmx-t">時刻</th><th class="cmx-c">コマンド</th><th class="cmx-i">ID</th>${d.recs.map((x) => `<th>${this.badge(x.rec.id)}<br><small>${esc(recName(x.rec))}</small></th>`).join('')}</tr>`;
     const body = rows.map((r) => `<tr><th class="cmx-t">${t3(r.note.time)}</th><th class="cmx-c"><b class="nc-cmd" data-b="${r.note.button}">${CMD[r.note.button]}</b>${r.note.hold ? '<small> 長押し</small>' : ''}</th><th class="cmx-i">${esc(r.note.id)}</th>${r.cells.map((c) => {
       const k = CHANGE[c.change.kind], o = c.obs;
       const main = c.status !== 'ok' ? `<span class="cmx-na">${c.status === 'changed' ? '条件変更' : '対応なし'}</span>` : `<span class="${GC[o.result] || ''}">${VIS.grades[o.result]?.mark || ''} ${o.noInput ? '入力なし' : `${o.result} ${sMs(o.d)}`}</span>`;
