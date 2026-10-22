@@ -31,7 +31,7 @@ export class Editor {
 
   // ---------- 変更の記録 ----------
   /** 譜面を変更する唯一の入口。fn(chart) で書き換え → 検証 → 履歴・自動保存・判定の作り直し */
-  apply(fn, label = '編集') {
+  apply(fn, label = '編集', { rejudge = true } = {}) {
     const before = structuredClone(this.chart);
     const next = structuredClone(this.chart);
     fn(next);
@@ -44,12 +44,12 @@ export class Editor {
     if (this.undoStack.length > 200) this.undoStack.shift();
     this.redoStack = [];
     this.app.chart = normalizeChart(next);
-    this.afterChange(label);
+    this.afterChange(label, { rejudge });
     return true;
   }
 
-  afterChange(label) {
-    this.app.chartChanged();
+  afterChange(label, { rejudge = true } = {}) {
+    if (rejudge) this.app.chartChanged(); // タイミング判定の設定だけの変更はプレイ中の判定を作り直さない（次のプレイから）
     for (const id of [...this.selected]) if (!this.chart.notes.some((n) => n.id === id)) this.selected.delete(id);
     this.autosave();
     this.refresh();

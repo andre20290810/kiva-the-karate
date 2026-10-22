@@ -50,6 +50,7 @@
         <button type="button" id="btnAudio" class="tbtn warn" hidden>🔈 音声を再試行</button>
         <button type="button" id="btnAuto" class="tbtn" aria-pressed="false" title="譜面どおりに自動入力（記録は手動プレイと区別）">AUTO</button>
         <button type="button" id="btnEdit" class="tbtn" aria-pressed="false">編集</button>
+        <button type="button" id="btnScores" class="tbtn" title="成績と履歴（入力タイミング・過去との比較）">成績</button>
         <details id="more">
           <summary class="tbtn" title="設定"><span aria-hidden="true">⚙</span><span class="sum-label">設定</span></summary>
           <div class="settings">
@@ -58,14 +59,19 @@
             <div class="mixrow"><span>元動画の音声</span><input id="mixVoice" type="range" min="0" max="1" step="0.01" aria-label="元動画の音声の音量"><label><input id="muteVoice" type="checkbox"> ミュート</label></div>
             <label>エフェクトの強さ <input id="fxStrength" type="range" min="0" max="1" step="0.05"></label>
             <label><input id="lowFx" type="checkbox"> 低負荷（歪み・ぼかしを省略）</label>
-            <fieldset>
-              <legend>判定（譜面 JSON に保存）</legend>
-              <label>入力補正 <input id="inputOffset" type="number" step="5" min="-300" max="300"> ms</label>
-              <p class="hint">＋にすると、押した時刻をその分だけ早い時刻として判定します（いつも LATE になる＝画面や音より入力が遅れて届く場合に＋）。−はその逆です。</p>
-              <label>PERFECT ± <input id="winPerfect" type="number" step="5" min="10" max="200"> ms</label>
-              <label>GOOD ± <input id="winGood" type="number" step="5" min="20" max="300"> ms</label>
-              <label>許容限界 ± <input id="winMiss" type="number" step="5" min="30" max="400"> ms</label>
-              <label>長押しの終了の許容 <input id="winRelease" type="number" step="10" min="0" max="500"> ms</label>
+            <fieldset id="timingBox">
+              <legend>タイミング判定（譜面 JSON に保存）</legend>
+              <p class="hint">ずれ＝入力した時刻 − 正解の時刻（マイナスは早い、プラスは遅い）。幅は譜面の時間軸の ms（再生速度 0.5 倍では実時間はこの 2 倍）。
+                境界ちょうどは内側です。プレイ中に保存した設定は、次のプレイ（開始・リトライ）から適用します。</p>
+              <label>PERFECT ± <input id="winPerfect" data-timing="perfectWindowMs" type="number" step="1" min="10" max="200" inputmode="numeric"> ms</label><p class="tmean" data-mean="perfectWindowMs"></p>
+              <label>GOOD ± <input id="winGood" data-timing="goodWindowMs" type="number" step="1" min="20" max="300" inputmode="numeric"> ms</label><p class="tmean" data-mean="goodWindowMs"></p>
+              <label>許容限界（MISS）± <input id="winMiss" data-timing="missWindowMs" type="number" step="1" min="30" max="400" inputmode="numeric"> ms</label><p class="tmean" data-mean="missWindowMs"></p>
+              <label>息の押し始め（GOOD）± <input id="winHoldStart" data-timing="holdStartWindowMs" type="number" step="1" min="10" max="400" inputmode="numeric"> ms</label><p class="tmean" data-mean="holdStartWindowMs"></p>
+              <label>息の早離しの許容 <input id="winRelease" data-timing="holdReleaseWindowMs" type="number" step="10" min="0" max="1000" inputmode="numeric"> ms</label><p class="tmean" data-mean="holdReleaseWindowMs"></p>
+              <label>入力補正 <input id="inputOffset" data-timing="inputOffsetMs" type="number" step="5" min="-300" max="300" inputmode="numeric"> ms</label><p class="tmean" data-mean="inputOffsetMs"></p>
+              <p class="hint">入力補正: ＋にすると、押した時刻をその分だけ早い時刻として判定します（いつも遅い側にずれる＝入力が遅れて届く場合に＋）。成績のずれは補正後の値です。</p>
+              <ul id="timingErr" class="err" role="alert"></ul>
+              <div class="timing-row"><button type="button" id="timingSave" class="tbtn primary">保存</button><button type="button" id="timingReset" class="tbtn">初期設定に戻す</button><span id="timingState" class="hint"></span></div>
             </fieldset>
             <div id="chartSrc" class="chartsrc" hidden>
               <p id="chartSrcText" class="hint"></p>

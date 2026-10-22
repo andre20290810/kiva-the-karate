@@ -19,13 +19,46 @@ export const ACTION_LABEL = Object.freeze({
 
 export const DEFAULT_SETTINGS = Object.freeze({
   inputOffsetMs: 0,        // + にすると入力を遅い側へ補正（入力時刻からこの分を引いて判定）
-  perfectWindowMs: 60,
-  goodWindowMs: 120,
-  missWindowMs: 180,       // これより外の入力はどのノーツにも当てない（空振り）
-  holdReleaseWindowMs: 150, // 長押しの終了より この分 早く離しても成功
+  perfectWindowMs: 60,     // |ずれ| ≤ この値で PERFECT
+  goodWindowMs: 120,       // |ずれ| ≤ この値で GOOD
+  missWindowMs: 180,       // 許容限界: これより外の入力はどのノーツにも当てない（空振り）。内側で GOOD より外は MISS
+  holdStartWindowMs: 120,  // 息（長押し）の押し始め: |ずれ| ≤ この値で GOOD（PERFECT は perfectWindowMs）。無い譜面は goodWindowMs と同じ
+  holdReleaseWindowMs: 150, // 長押しの終了より この分 早く離しても成功（早離しの許容）
   leadInSeconds: 2,        // 開始前の待ち時間（この間は 0 秒のコマを表示）
   laneLeadSeconds: 2.4,    // レーンの右端から判定位置まで流れる時間（縦横で同じ）
 });
+
+/** タイミング判定の設定の範囲（ms）。設定画面と譜面の検証で共通 */
+export const TIMING_RANGES = Object.freeze({
+  inputOffsetMs: [-300, 300], perfectWindowMs: [10, 200], goodWindowMs: [20, 300], missWindowMs: [30, 400],
+  holdStartWindowMs: [10, 400], holdReleaseWindowMs: [0, 1000],
+});
+export const TIMING_KEYS = Object.freeze(Object.keys(TIMING_RANGES));
+
+/** タイミング判定の設定を検証（範囲・整数・大小関係）。エラー文の配列（空なら正しい） */
+export function validateTiming(st) {
+  const errs = [];
+  const NAME = { inputOffsetMs: '入力補正', perfectWindowMs: 'PERFECT', goodWindowMs: 'GOOD', missWindowMs: '許容限界（MISS）', holdStartWindowMs: '息の押し始め（GOOD）', holdReleaseWindowMs: '息の早離しの許容' };
+  for (const [k, [lo, hi]] of Object.entries(TIMING_RANGES)) {
+    const v = st[k];
+    if (!isNum(v)) errs.push(`${NAME[k]}: 数値を入れてください`);
+    else if (!Number.isInteger(v)) errs.push(`${NAME[k]}: 1 ms 単位の整数にしてください`);
+    else if (v < lo || v > hi) errs.push(`${NAME[k]}: ${lo}〜${hi} ms の範囲にしてください（${v}）`);
+  }
+  if (!errs.length) {
+    if (!(st.perfectWindowMs <= st.goodWindowMs)) errs.push('PERFECT は GOOD 以下にしてください');
+    if (!(st.goodWindowMs <= st.missWindowMs)) errs.push('GOOD は許容限界（MISS）以下にしてください');
+    if (!(st.perfectWindowMs <= st.holdStartWindowMs && st.holdStartWindowMs <= st.missWindowMs)) errs.push('息の押し始め（GOOD）は PERFECT 以上・許容限界以下にしてください');
+  }
+  return errs;
+}
+
+/** 譜面の settings に既定値を補う（息の押し始めが無い譜面は GOOD と同じ幅＝従来どおり） */
+export function fillSettings(settings = {}) {
+  const st = { ...DEFAULT_SETTINGS, ...settings };
+  if (settings.holdStartWindowMs == null) st.holdStartWindowMs = st.goodWindowMs;
+  return st;
+}
 export const DEFAULT_DISPLAY = Object.freeze({
   subjectAnchor: { x: 0.5, y: 0.5 },
   referenceHeightRatio: 0.55,
@@ -76,8 +109,9 @@ export function validateChart(chart, { frameCount, durationSeconds, gameVersion 
   if (asrc != null && !(typeof asrc === 'string' || (Array.isArray(asrc) && asrc.length && asrc.every((x) => typeof x === 'string' && x)))) {
     err('audio.src は音声ファイルのパス（文字列）か、その配列（先頭から順に試す）です');
   }
-  const st = { ...DEFAULT_SETTINGS, ...(chart.settings || {}) };
+  const st = fillSettings(chart.settings || {});
   for (const k of Object.keys(DEFAULT_SETTINGS)) if (!isNum(st[k])) err(`settings.${k} が数値ではありません`);
+  for (const m of validateTiming(st)) err(`判定の設定: ${m}`);
   if (!(st.perfectWindowMs > 0 && st.perfectWindowMs <= st.goodWindowMs && st.goodWindowMs <= st.missWindowMs)) {
     err('判定幅は 0 < PERFECT ≤ GOOD ≤ 許容限界 の順にしてください');
   }
@@ -134,7 +168,7 @@ export function validateChart(chart, { frameCount, durationSeconds, gameVersion 
 export function normalizeChart(chart) {
   const c = structuredClone(chart);
   c.gameVersion = chartVersion(chart);
-  c.settings = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
+  c.settings = fillSettings(c.settings || {});
   c.display = {
     ...DEFAULT_DISPLAY, ...(c.display || {}),
     subjectAnchor: { ...DEFAULT_DISPLAY.subjectAnchor, ...(c.display?.subjectAnchor || {}) },

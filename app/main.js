@@ -9,7 +9,10 @@ import { FrameStore } from './frames.js';
 import { Effects } from './fx.js';
 import { LaneRenderer, LANE_STYLE } from './lanes.js';
 import { BACKGROUNDS, orientationOf, containRect, coverRect, laneRect, standingHeight, landscapeSubject, subjectTransform } from './layout.js';
-import { normalizeChart, validateChart, exportChart, BUTTON_INFO } from './chart.js';
+import { normalizeChart, validateChart, exportChart, BUTTON_INFO, TIMING_KEYS, validateTiming, DEFAULT_SETTINGS } from './chart.js';
+import { buildRecord } from './score.js';
+import { ScoreHistory } from './history.js';
+import { ResultsView } from './results.js';
 import { resolveEffect } from './effects-catalog.js';
 import { Editor } from './editor.js';
 import { GAME } from './config.js';
@@ -92,6 +95,8 @@ export class App {
     this.held = { Y: false, X: false, A: false, B: false };
     this.flash = { Y: -9, X: -9, A: -9, B: -9 };
     this.log = [];
+    this.session = null;   // 1 回のプレイ（開始〜終了・リトライ）。判定の設定はこの開始時に確定する
+    this.history = new ScoreHistory(this.keys.history);
     window.__app = this;
   }
 
@@ -217,7 +222,7 @@ export class App {
     new ResizeObserver(() => this.resize()).observe($('#stageWrap'));
     window.addEventListener('orientationchange', () => setTimeout(() => this.resize(), 200));
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.pause(); });
-    window.addEventListener('pagehide', () => this.pause());
+    window.addEventListener('pagehide', () => { this.pause(); this.endSession('aborted'); });
     this.editor = new Editor(this, $('#editor'));
     this.bindUi();
     this.raf();
@@ -228,7 +233,8 @@ export class App {
 
   newJudge(t) {
     this.generation++;
-    this.judge = new Judge(this.chart.notes, this.chart.settings);
+    // 判定の設定はプレイの開始時に確定した値（プレイ中に設定を変えても次のプレイから）
+    this.judge = new Judge(this.chart.notes, this.session?.settings ?? this.chart.settings);
     this.judge.on((e) => this.onJudge(e));
     this.judge.resetFrom(t);
     this.auto = this.autoMode ? new AutoPlayer(this.judge, { generation: this.generation }) : null;
@@ -288,10 +294,15 @@ export class App {
     if (this.state === 'playing') return;
     if (this.state === 'ready' || this.state === 'ended') {
       const from = this.loop.on && this.loop.a != null ? this.loop.a : -this.chart.settings.leadInSeconds;
+      this.startSession(from);
       this.clock.stop(from);
       this.newJudge(from);
       this.log = [];
-      $('#result').hidden = true;
+      this.results?.hide();
+    } else if (!this.session) {
+      // シーク・編集の後など、途中から再生を始めた（練習）
+      this.startSession(this.t);
+      this.newJudge(this.t);
     }
     this.input.releaseAll();
     this.clock.play(this.clock.position());
@@ -374,10 +385,12 @@ export class App {
     if (!this.clock) return;
     const from = this.loop.on && this.loop.a != null ? this.loop.a : -this.chart.settings.leadInSeconds;
     const wasPlaying = this.state === 'playing';
+    this.endSession('aborted'); // 途中のプレイは「途中終了」として残す（判定したノーツがあるとき）
+    this.session = null;
     this.clock.stop(from);
     this.newJudge(from);
     this.log = [];
-    $('#result').hidden = true;
+    this.results?.hide();
     this.state = 'ready';
     if (wasPlaying || !this.editMode) this.play(); else this.updateUi();
   }
@@ -386,6 +399,7 @@ export class App {
   seek(t) {
     if (!this.clock) return;
     const to = Math.max(-this.chart.settings.leadInSeconds, Math.min(t, this.duration));
+    this.markPractice(this.loop.on && Math.abs(to - (this.loop.a ?? NaN)) < 1e-6 ? 'loop' : 'seek');
     this.clock.seek(to);
     this.newJudge(to);
     if (this.state === 'ended') this.state = 'paused';
@@ -394,6 +408,8 @@ export class App {
   }
 
   setRate(r) {
+    if (this.session && this.session.rate !== r && this.judge?.notes.some((n) => n.result && n.result !== 'SKIP')) this.markPractice('rate-change');
+    else if (this.session) this.session.rate = r;
     this.clock?.setRate(r);
     $('#speed').value = String(r);
     this.editor?.syncRate(r);
@@ -412,31 +428,66 @@ export class App {
         this.auto.onRelease = (b) => { this.held[b] = false; };
       }
       for (const b of Object.keys(this.held)) this.held[b] = this.input.isDown(b);
-      this.usedAuto = this.usedAuto || on;
+      if (this.session && on) this.session.autoUsed = true;
     }
     this.updateUi();
+  }
+
+  // ---------- 1 回のプレイ（成績の記録） ----------
+  /** プレイの開始: 判定の設定（判定幅・入力補正）・速度・BGM をここで確定する */
+  startSession(from) {
+    const st = structuredClone(this.chart.settings);
+    const reasons = [];
+    if (this.loop.on) reasons.push('loop');
+    if (this.editMode) reasons.push('edit');
+    if (from > -this.chart.settings.leadInSeconds + 1e-3) reasons.push('mid-start');
+    this.session = {
+      settings: st, startedAt: new Date().toISOString(), startT: from, rate: this.clock?.rate ?? 1,
+      autoUsed: this.autoMode, practiceReasons: reasons, saved: false,
+      bgm: this.mixMode ? { id: this.audioPrefs.bgm, label: this.ver.bgm.find((t) => t.id === this.audioPrefs.bgm)?.label ?? '', muted: !!this.audioPrefs.mutes.bgm } : null,
+      chartSource: this.chartSource,
+    };
+    if (this.settingsPending) { this.settingsPending = false; this.renderTimingState?.(); }
+  }
+
+  /** 練習として扱う（シーク・区間ループ・途中の速度変更・編集） */
+  markPractice(reason) {
+    const s = this.session;
+    if (!s || s.saved) return;
+    if (!s.practiceReasons.includes(reason)) s.practiceReasons.push(reason);
+  }
+
+  /** プレイの終わり: 記録を作って履歴に保存（判定したノーツが 1 つも無ければ残さない） */
+  endSession(reason) {
+    const s = this.session;
+    if (!s || s.saved || !this.judge) return null;
+    if (!this.judge.notes.some((n) => n.result && n.result !== 'SKIP') && !this.judge.strays.length) return null;
+    s.saved = true;
+    const kind = s.practiceReasons.length ? 'practice' : reason === 'end' ? 'full' : 'aborted';
+    const rec = buildRecord(this.judge, {
+      chart: this.chart, settings: s.settings, rate: s.rate, mode: s.autoUsed || this.autoMode ? 'auto' : 'manual', kind,
+      practiceReasons: s.practiceReasons, bgm: s.bgm, startedAt: s.startedAt, endedAt: new Date().toISOString(),
+      chartSource: s.chartSource, startT: s.startT, endT: this.t,
+    });
+    const saved = this.history.add(rec);
+    this.lastRecord = rec;
+    this.lastSave = saved;
+    window.__lastRecord = rec;
+    return rec;
   }
 
   finish() {
     this.state = 'ended';
     this.clock.pause();
     const s = this.judge.summary();
-    const auto = this.autoMode || this.usedAuto;
-    const rec = { auto, ...s, gameVersion: this.version, at: new Date().toISOString() };
-    window.__lastResult = { ...rec, log: this.log };
-    if (!auto) {
+    const rec = this.endSession('end');
+    const auto = rec ? rec.mode === 'auto' : this.autoMode;
+    window.__lastResult = { auto, ...s, gameVersion: this.version, at: new Date().toISOString(), log: this.log };
+    if (!auto && rec?.kind === 'full') {
       const best = JSON.parse(store.get(this.keys.best) || 'null');
-      if (!best || s.score > best.score) store.set(this.keys.best, JSON.stringify(rec));
+      if (!best || s.score > best.score) store.set(this.keys.best, JSON.stringify({ auto, ...s, gameVersion: this.version, at: rec.at }));
     }
-    $('#resultTitle').textContent = auto ? 'AUTO 再生の記録（手動プレイの成績には含めません）' : '結果';
-    $('#resultBody').innerHTML = `<dl>
-      <dt>達成率</dt><dd>${(s.achievement * 100).toFixed(1)}%</dd>
-      <dt>スコア</dt><dd>${s.score.toLocaleString()}</dd>
-      <dt>最大コンボ</dt><dd>${s.maxCombo}</dd>
-      <dt>PERFECT / GOOD / MISS</dt><dd>${s.perfect} / ${s.good} / ${s.miss}</dd>
-      ${s.skip ? `<dt>対象外（シークで飛ばした）</dt><dd>${s.skip}</dd>` : ''}</dl>
-      <p class="note">入力タイミングの成績です。空手の技能評価ではありません。</p>`;
-    $('#result').hidden = false;
+    if (rec) this.results.show(rec, { saved: this.lastSave });
     this.updateUi();
   }
 
@@ -446,15 +497,18 @@ export class App {
     if (this.state !== 'playing') { this.flash[b] = this.t; return; }
     this.flash[b] = this.clock.position(perfMs);
     if (this.autoMode) return; // AUTO 中の手動入力は成績に混ぜない
-    const t = this.clock.position(perfMs) - this.chart.settings.inputOffsetMs / 1000;
-    this.judge.press(b, t, { id: o.id, source: o.source });
+    // 判定・記録は同じ時間軸。raw = 補正前の時刻、t = 入力補正（プレイ開始時に確定した値）を引いた判定用の時刻
+    const raw = this.clock.position(perfMs);
+    const t = raw - (this.session?.settings ?? this.chart.settings).inputOffsetMs / 1000;
+    this.judge.press(b, t, { id: o.id, source: o.source, raw, device: o.device });
   }
 
   onRelease(b, perfMs, o) {
     this.held[b] = false;
     if (this.state !== 'playing' || this.autoMode) return;
-    const t = this.clock.position(perfMs) - this.chart.settings.inputOffsetMs / 1000;
-    this.judge.release(b, t, { source: o.source });
+    const raw = this.clock.position(perfMs);
+    const t = raw - (this.session?.settings ?? this.chart.settings).inputOffsetMs / 1000;
+    this.judge.release(b, t, { source: o.source, raw, device: o.device });
   }
 
   onJudge(e) {
@@ -707,10 +761,12 @@ export class App {
     if (!this.mixMode || this.state === 'playing' || this.state === 'loading') return;
     if (this.state === 'paused' || this.state === 'ended') {
       const from = -this.chart.settings.leadInSeconds;
+      this.endSession('aborted');
+      this.session = null;
       this.clock.stop(from);
       this.newJudge(from);
       this.log = [];
-      $('#result').hidden = true;
+      this.results?.hide();
       this.state = 'ready';
     }
     this.audioPrefs.bgm = id;
@@ -777,7 +833,8 @@ export class App {
     $('#btnAuto').addEventListener('click', () => this.setAuto(!this.autoMode));
     $('#btnEdit').addEventListener('click', () => this.setEdit(!this.editMode));
     $('#speed').addEventListener('change', (e) => this.setRate(Number(e.target.value)));
-    $('#btnResultClose').addEventListener('click', () => { $('#result').hidden = true; });
+    this.results = new ResultsView(this);
+    $('#btnScores').addEventListener('click', () => this.results.openHistory());
     const s = this.chart.settings;
     const bindNum = (sel, get, set) => {
       const el = $(sel);
@@ -792,16 +849,7 @@ export class App {
     const low = $('#lowFx');
     low.checked = this.fx.low;
     low.addEventListener('change', () => { this.prefs.lowFx = low.checked; this.fx.setQuality({ low: low.checked }); this.savePrefs(); });
-    // 譜面に保存する設定（JSON に入る）
-    const chartNum = (sel, key, min, max) => bindNum(sel, () => this.chart.settings[key], (v) => {
-      const val = Math.max(min, Math.min(max, v));
-      this.editor.apply((c) => { c.settings[key] = val; }, `設定 ${key}`);
-    });
-    chartNum('#inputOffset', 'inputOffsetMs', -300, 300);
-    chartNum('#winPerfect', 'perfectWindowMs', 10, 200);
-    chartNum('#winGood', 'goodWindowMs', 20, 300);
-    chartNum('#winMiss', 'missWindowMs', 30, 400);
-    chartNum('#winRelease', 'holdReleaseWindowMs', 0, 500);
+    this.bindTimingUi();
     void s;
     window.addEventListener('keydown', (e) => {
       if (e.target?.closest?.('input, select, textarea')) return;
@@ -810,14 +858,69 @@ export class App {
     });
   }
 
+  // ---------- タイミング判定の設定（譜面 JSON の settings。編集モード・JSON 入出力と同じ値） ----------
+  /** 設定欄の入力 → 値（数値にできないものは NaN） */
+  timingDraft() {
+    const out = {};
+    for (const k of TIMING_KEYS) { const el = $(`[data-timing="${k}"]`); out[k] = el.value.trim() === '' ? NaN : Number(el.value); }
+    return out;
+  }
+
+  bindTimingUi() {
+    for (const k of TIMING_KEYS) $(`[data-timing="${k}"]`).addEventListener('input', () => this.renderTimingState());
+    $('#timingSave').addEventListener('click', () => this.saveTiming(this.timingDraft()));
+    $('#timingReset').addEventListener('click', () => {
+      const def = Object.fromEntries(TIMING_KEYS.map((k) => [k, DEFAULT_SETTINGS[k]]));
+      for (const k of TIMING_KEYS) $(`[data-timing="${k}"]`).value = def[k];
+      this.saveTiming(def, '判定の設定を初期設定に戻しました');
+    });
+    this.syncSettingsUi();
+  }
+
+  /** 検証して保存（不正なら保存しない）。プレイ中は判定を作り直さず、次のプレイ（開始・リトライ）から適用 */
+  saveTiming(vals, msg = '判定の設定を保存しました') {
+    const errs = validateTiming(vals);
+    if (errs.length) { this.renderTimingState(); return false; }
+    const ok = this.editor.apply((c) => { for (const k of TIMING_KEYS) c.settings[k] = vals[k]; }, '判定の設定を変更', { rejudge: false });
+    if (!ok) return false;
+    const active = this.session && !this.session.saved && this.state !== 'ready' && this.state !== 'ended';
+    if (active) this.settingsPending = true;
+    else this.newJudge(this.t); // プレイしていないときはすぐ使う
+    this.status(active ? `${msg}。今のプレイは開始時の設定のまま判定し、次のプレイ（開始・リトライ）から適用します` : msg, 'ok');
+    this.syncSettingsUi();
+    return true;
+  }
+
+  /** 設定欄の表示: 意味（±ms ＝ 秒）・エラー・保存の可否 */
+  renderTimingState() {
+    const v = this.timingDraft(), cur = this.chart.settings;
+    const errs = validateTiming(v);
+    const sec = (ms) => (Math.abs(ms) / 1000).toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+    const ok = (x) => Number.isFinite(x);
+    const mean = {
+      perfectWindowMs: ok(v.perfectWindowMs) ? `±${v.perfectWindowMs}ms＝正解時刻の ${sec(v.perfectWindowMs)} 秒前〜${sec(v.perfectWindowMs)} 秒後で PERFECT` : '',
+      goodWindowMs: ok(v.goodWindowMs) ? `±${v.goodWindowMs}ms＝PERFECT の外側から ${sec(v.goodWindowMs)} 秒前〜${sec(v.goodWindowMs)} 秒後まで GOOD` : '',
+      missWindowMs: ok(v.missWindowMs) ? `±${v.missWindowMs}ms＝GOOD の外側〜${sec(v.missWindowMs)} 秒は MISS（そのノーツを使う）。それより外の入力は「余分な入力」` : '',
+      holdStartWindowMs: ok(v.holdStartWindowMs) ? `息の押し始め: ±${v.holdStartWindowMs}ms（${sec(v.holdStartWindowMs)} 秒）以内で GOOD（PERFECT は PERFECT の幅）` : '',
+      holdReleaseWindowMs: ok(v.holdReleaseWindowMs) ? `息: 終わりの ${sec(v.holdReleaseWindowMs)} 秒前より後に離せば成功。それより前に離すと早離し（MISS）` : '',
+      inputOffsetMs: ok(v.inputOffsetMs) ? (v.inputOffsetMs === 0 ? '補正なし' : `${v.inputOffsetMs > 0 ? '+' : ''}${v.inputOffsetMs}ms＝押した時刻を ${sec(v.inputOffsetMs)} 秒${v.inputOffsetMs > 0 ? '早い' : '遅い'}時刻として判定`) : '',
+    };
+    for (const k of TIMING_KEYS) $(`[data-mean="${k}"]`).textContent = mean[k];
+    $('#timingErr').innerHTML = errs.map((e) => `<li>${e}</li>`).join('');
+    const changed = TIMING_KEYS.some((k) => v[k] !== cur[k]);
+    $('#timingSave').disabled = !!errs.length || !changed;
+    $('#timingState').textContent = errs.length ? '保存できません（上のエラーを直してください）'
+      : changed ? '未保存の変更があります' : this.settingsPending ? '保存済み（次のプレイから適用）' : '保存済み';
+  }
+
   syncSettingsUi() {
-    for (const [sel, key] of [['#inputOffset', 'inputOffsetMs'], ['#winPerfect', 'perfectWindowMs'], ['#winGood', 'goodWindowMs'], ['#winMiss', 'missWindowMs'], ['#winRelease', 'holdReleaseWindowMs']]) {
-      $(sel).value = this.chart.settings[key];
-    }
+    for (const k of TIMING_KEYS) { const el = $(`[data-timing="${k}"]`); if (el) el.value = this.chart.settings[k]; }
+    if ($('#timingSave')) this.renderTimingState();
   }
 
   setEdit(on) {
     this.editMode = on;
+    if (on) this.markPractice('edit');
     if (on) this.pause();
     this.editor.setOpen(on);
     this.updateUi();

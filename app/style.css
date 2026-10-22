@@ -160,3 +160,78 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
 @media (min-width: 900px) { #edNote { grid-column: span 2; } }
 .chartsrc { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; display: grid; gap: 6px; }
 .chartsrc .hint { margin: 0; }
+/* 成績画面（全画面・スクロール） */
+#result { position: fixed; inset: 0; z-index: 20; padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); place-items: stretch center; }
+#result .card.results { max-width: 920px; max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; overscroll-behavior: contain; }
+.res-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; position: sticky; top: -12px; background: var(--panel); padding-top: 4px; z-index: 1; }
+.res-head h2 { margin: 0 !important; font-size: 16px !important; }
+.res-tabs { display: flex; gap: 4px; flex-wrap: wrap; position: sticky; top: 30px; background: var(--panel); z-index: 1; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.res-tabs button { appearance: none; border: 1px solid var(--line); background: var(--panel2); color: var(--fg); border-radius: 8px; padding: 6px 10px; min-height: 36px; font: inherit; }
+.res-tabs button[aria-selected=true] { background: #ffb347; color: #1a120c; font-weight: 700; }
+.res-body { display: grid; gap: 10px; }
+.res-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.res-grid > div { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; display: grid; gap: 2px; }
+.res-grid span { font-size: 12px; color: var(--dim); }
+.res-grid b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.res-grid small { font-size: 11px; color: var(--dim); }
+.res-grid .better b, .res-table .better { color: #8ee69a; }
+.res-grid .worse b, .res-table .worse { color: #ff9a8a; }
+.res-table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+.res-table caption { text-align: left; color: #ffd9b3; font-weight: 700; padding: 4px 0; }
+.res-table th, .res-table td { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+.res-table thead th { color: var(--dim); font-weight: 600; white-space: nowrap; }
+.res-scroll { overflow-x: auto; }
+.res-detail tr.g-miss td:nth-child(6) { color: #ff9a8a; }
+.res-detail tr.g-perfect td:nth-child(6) { color: #ffe17a; }
+.res-detail tr.g-good td:nth-child(6) { color: #9fe7ff; }
+.hold-row td { font-size: 11px; color: var(--dim); }
+.hold-row span { display: inline-block; margin-right: 12px; }
+.res-cond { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 12px; margin: 0; }
+.res-cond dt { color: var(--dim); }
+.res-cond dd { margin: 0; }
+.res-warn { background: #3a2410; border: 1px solid #ffb347; border-radius: 8px; padding: 6px 8px; font-size: 12px; margin: 0; }
+.res-filter { display: flex; gap: 4px; flex-wrap: wrap; }
+.res-filter button { appearance: none; border: 1px solid var(--line); background: var(--panel2); color: var(--dim); border-radius: 16px; padding: 4px 12px; min-height: 32px; font: inherit; }
+.res-filter button[aria-pressed=true] { color: var(--fg); border-color: #ffb347; }
+.res-filter button[aria-pressed=true]::before { content: '✓ '; }
+.res-graph { width: 100%; height: auto; background: #120c08; border-radius: 8px; font-family: inherit; }
+.res-graph .band-good { fill: rgba(120, 200, 255, 0.13); }
+.res-graph .band-perfect { fill: rgba(255, 215, 120, 0.22); }
+.res-graph .tick { stroke: rgba(255, 255, 255, 0.08); }
+.res-graph .axis0 { stroke: #fff; stroke-width: 1.5; }
+.res-graph .rowsep { stroke: rgba(255, 255, 255, 0.07); }
+.res-graph text { fill: #cbb9a3; font-size: 11px; }
+.res-graph .tick-l, .res-graph .axis-l { text-anchor: middle; }
+.res-graph .axis-l { fill: #fff; font-weight: 700; }
+.res-graph .row-l { fill: #f2e6d8; font-size: 13px; font-weight: 700; }
+.res-graph .dir-l { fill: #ffd9a0; font-weight: 700; }
+.res-graph .band-l { font-size: 10px; }
+.res-graph .pair { stroke: rgba(255, 255, 255, 0.35); stroke-width: 1; }
+.res-graph g.g-perfect { fill: #ffe17a; stroke: #ffe17a; }
+.res-graph g.g-good { fill: #9fe7ff; stroke: #9fe7ff; }
+.res-graph g.g-miss { fill: none; stroke: #ff7a7a; stroke-width: 2.4; }
+.res-graph g.base { fill: none !important; stroke-width: 1.6; opacity: 0.8; }
+.res-graph g.base.g-perfect, .res-graph g.base.g-good { stroke: #d8d8d8; }
+.res-none ul { margin: 4px 0 0; padding-left: 1.2em; font-size: 12px; columns: 2; }
+.res-sel select { font: inherit; max-width: 100%; color: var(--fg); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; min-height: 34px; }
+.res-hist-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.res-hist-actions button, .res-hist td button, .res-warn button, .res-file { appearance: none; border: 1px solid var(--line); background: var(--panel2); color: var(--fg); border-radius: 8px; padding: 4px 10px; min-height: 34px; font: inherit; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; }
+.res-file input { display: none; }
+.res-hist-actions .danger { border-color: #ff7a7a; }
+.res-hist tr.is-cur td { background: #2b1a0c; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+/* タイミング判定の設定 */
+#timingBox .tmean { font-size: 11px; color: #ffd9a0; margin: -2px 0 2px; min-height: 1em; }
+#timingBox input { width: 5.5em; }
+#timingBox .err { color: #ff9a9a; font-size: 12px; margin: 0; padding-left: 1.2em; }
+#timingBox .err:empty { display: none; }
+.timing-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+#result .res-cond { grid-template-columns: auto 1fr; gap: 2px 12px; }
+#result .res-cond dd { text-align: left; font-weight: 400; }
+#result .res-hist td button, #result .res-hist-actions button, #result .res-warn button { min-height: 34px; padding: 4px 10px; }
+.res-table td, .res-table th { white-space: nowrap; }
+.res-detail .hold-row td { white-space: normal; }
+.res-graph .row-l { font-size: 12px; }
+.res-head-btns { display: flex; gap: 6px; }
+.chartsrc[hidden] { display: none; }
+#timingBox button:disabled { opacity: 0.45; cursor: not-allowed; }

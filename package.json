@@ -3,13 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/game2d.test.mjs tests/layout.test.mjs tests/config.test.mjs tests/effects.test.mjs tests/auth-worker.test.mjs tests/server-security.test.mjs",
+    "test": "node --test tests/game2d.test.mjs tests/layout.test.mjs tests/config.test.mjs tests/effects.test.mjs tests/score.test.mjs tests/auth-worker.test.mjs tests/server-security.test.mjs",
     "start": "node tools/serve.mjs 8177",
     "test:browser": "node tests/game2d-browser.mjs",
     "test:audio": "node tests/audio-browser.mjs",
     "test:bgm": "node tests/bgm-browser.mjs",
     "test:editor": "node tests/editor-fx-browser.mjs",
     "test:chart": "node tests/chart-browser.mjs",
+    "test:scores": "node tests/scores-browser.mjs",
     "sfx:render": "node tools/sfx/render.mjs",
     "build:dist": "node tools/build-dist.mjs"
   },

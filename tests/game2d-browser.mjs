@@ -126,8 +126,10 @@ for (const [name, vp] of Object.entries(VIEWS)) {
   check(uniq.size === nFrames && back === 0, `${nFrames} 枚すべてを順番どおりに表示（${uniq.size} 種、逆行 ${back} 回${missing.length ? `、未表示 ${missing.slice(0, 5)}` : ''}）`);
   await p.screenshot({ path: `${out}/auto_end.png` });
   check(errors.length === 0, `AUTO 通し: ページエラーなし ${errors.slice(0, 2).join(' | ')}`);
+  // 終了後は成績画面（全画面）。そのリトライで次のプレイへ
+  check(await p.evaluate(() => !document.querySelector('#result').hidden && /AUTO/.test(document.querySelector('#resultTitle').textContent)), '終了後に成績画面（AUTO の記録と表示）');
   // フレーム落ち: 描画を 250ms ずつ止めながら AUTO で 20〜45 秒を再生しても取りこぼさない
-  await p.click('#btnRetry');
+  await p.click('#btnResultRetry');
   await p.evaluate(() => window.__app.seek(20));
   const jank = setInterval(() => p.evaluate(() => { const t = performance.now(); while (performance.now() - t < 250); }).catch(() => {}), 400);
   await p.waitForFunction(() => window.__app.t > 45, null, { timeout: 60000, polling: 300 });

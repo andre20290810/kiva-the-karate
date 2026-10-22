@@ -14,6 +14,7 @@ export class Input {
     this.onPress = null;   // (button, perfMs, {id, source})
     this.onRelease = null; // (button, perfMs, {source})
     this.down = new Map(); // button → Set(source)
+    this.devices = new Map(); // button → 押したときの入力方法（離したときの記録用）
     this.keys = new Set();
     this.pointers = new Map(); // pointerId → button
     this.padPrev = new Map();
@@ -25,20 +26,22 @@ export class Input {
 
   isDown(b) { return (this.down.get(b)?.size || 0) > 0; }
 
-  _press(b, perfMs, source) {
+  /** device: 記録用の入力方法（keyboard | touch | mouse | pen | gamepad） */
+  _press(b, perfMs, source, device = source === 'key' ? 'keyboard' : source.startsWith('pad') ? 'gamepad' : 'mouse') {
     let s = this.down.get(b);
     if (!s) this.down.set(b, (s = new Set()));
     const was = s.size > 0;
     s.add(source);
     if (was || !this.enabled) return; // 別経路で既に押している（同じボタンの二重押下は 1 回）
-    this.onPress?.(b, perfMs, { id: `${source}:${++seq}`, source });
+    this.devices.set(b, device);
+    this.onPress?.(b, perfMs, { id: `${source}:${++seq}`, source, device });
   }
 
   _release(b, perfMs, source) {
     const s = this.down.get(b);
     if (!s || !s.has(source)) return;
     s.delete(source);
-    if (s.size === 0 && this.enabled) this.onRelease?.(b, perfMs, { source });
+    if (s.size === 0 && this.enabled) this.onRelease?.(b, perfMs, { source, device: this.devices.get(b) ?? source });
   }
 
   attachKeyboard(target = window) {
@@ -67,7 +70,7 @@ export class Input {
         if (this.pointers.has(e.pointerId)) return;
         this.pointers.set(e.pointerId, b);
         try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-        this._press(b, e.timeStamp, 'pointer');
+        this._press(b, e.timeStamp, 'pointer', e.pointerType === 'touch' ? 'touch' : e.pointerType === 'pen' ? 'pen' : 'mouse');
       });
       const up = (e) => {
         if (this.pointers.get(e.pointerId) !== b) return;

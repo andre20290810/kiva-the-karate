@@ -7,8 +7,8 @@ import { validateChart, normalizeChart, exportChart, parseChartText, chartVersio
 const read = (rel) => JSON.parse(readFileSync(new URL(`../${rel}`, import.meta.url)));
 
 test('正式版: 旧 ver2 の保存先・譜面・素材のまま（ブラウザの保存内容を引き継ぐ）', () => {
-  // 既存の保存先は変えない（deviceDefault・chartBase・chartBackup は後から追加）
-  assert.deepEqual({ ...GAME.keys }, { autosave: 'kiva2d.v2.chart.autosave', deviceDefault: 'kiva2d.v2.chart.default', chartBase: 'kiva2d.v2.chart.base', chartBackup: 'kiva2d.v2.chart.backup', best: 'kiva2d.v2.best.manual', audio: 'kiva2d.v2.audio' });
+  // 既存の保存先は変えない（deviceDefault・chartBase・chartBackup・history は後から追加）
+  assert.deepEqual({ ...GAME.keys }, { autosave: 'kiva2d.v2.chart.autosave', deviceDefault: 'kiva2d.v2.chart.default', chartBase: 'kiva2d.v2.chart.base', chartBackup: 'kiva2d.v2.chart.backup', history: 'kiva2d.v2.history', best: 'kiva2d.v2.best.manual', audio: 'kiva2d.v2.audio' });
   assert.equal(GAME.gameVersion, 'v2');
   assert.equal(GAME.chart, 'charts/seipai_v2.json');
   const c = read(GAME.chart);

@@ -1,28 +1,37 @@
 // 判定（純粋ロジック・DOM 非依存）。手動入力も AUTO も、この press / release を通る。
-// 時刻はすべて時間軸の秒（入力補正は呼び出し側で適用済み）。
+// 時刻はすべて時間軸の秒（入力補正は呼び出し側で適用済み。補正前の時刻は raw として記録だけする）。
+// ずれ = 入力時刻 − 正解時刻（マイナス = 早い、プラス = 遅い）。境界は ms で比べ、境界ちょうどは内側（|ずれ| ≤ 幅）。
+// 記録: ノーツに当たった入力（hit）、長押しの離した時刻（release）、どのノーツにも当たらなかった入力（strays）。
+// 判定は確定したら変えない（後からの入力を別のノーツへ付け替えない）。入力のない MISS には入力時刻・ずれを入れない。
 
 export const GRADE = Object.freeze({ PERFECT: 'PERFECT', GOOD: 'GOOD', MISS: 'MISS', SKIP: 'SKIP' });
 const POINTS = { PERFECT: 1000, GOOD: 500, MISS: 0, SKIP: 0 };
+/** 秒の差 → ms（µs で丸めて浮動小数の誤差を消す。60.0000000001 ms を 60 ms として境界内にする） */
+export const diffMs = (a, b) => Math.round((a - b) * 1e6) / 1e3;
 
 export class Judge {
   /**
    * @param {Array<{id:string,time:number,button:string,input:'tap'|'hold',duration?:number}>} notes
-   * @param {{perfectWindowMs:number,goodWindowMs:number,missWindowMs:number,holdReleaseWindowMs:number}} settings
+   * @param {{perfectWindowMs:number,goodWindowMs:number,missWindowMs:number,holdReleaseWindowMs:number,holdStartWindowMs?:number}} settings
    */
   constructor(notes, settings) {
-    this.w = {
-      perfect: settings.perfectWindowMs / 1000, good: settings.goodWindowMs / 1000,
-      miss: settings.missWindowMs / 1000, release: settings.holdReleaseWindowMs / 1000,
+    this.ms = {
+      perfect: settings.perfectWindowMs, good: settings.goodWindowMs, miss: settings.missWindowMs,
+      holdStart: settings.holdStartWindowMs ?? settings.goodWindowMs, release: settings.holdReleaseWindowMs,
     };
-    if (!(this.w.perfect > 0 && this.w.perfect <= this.w.good && this.w.good <= this.w.miss)) throw new Error('判定幅が不正です');
+    this.w = { perfect: this.ms.perfect / 1000, good: this.ms.good / 1000, miss: this.ms.miss / 1000, release: this.ms.release / 1000 };
+    const m = this.ms;
+    if (!(m.perfect > 0 && m.perfect <= m.good && m.good <= m.miss && m.perfect <= m.holdStart && m.holdStart <= m.miss)) throw new Error('判定幅が不正です');
     this.notes = notes.map((n) => ({
       id: n.id, time: n.time, button: n.button, input: n.input, duration: n.input === 'hold' ? n.duration : 0,
       sequenceId: n.sequenceId ?? null, src: n,
       result: null, holding: false, startGrade: null, delta: null, points: 0, reason: null, judgedAt: null,
+      hit: null, release: null, completedAt: null, awaitRelease: false,
     })).sort((a, b) => a.time - b.time);
     this.byId = new Map(this.notes.map((n) => [n.id, n]));
     this.listeners = new Set();
     this.seenInputs = new Set();
+    this.strays = [];
     this.combo = 0;
     this.maxCombo = 0;
     this.stray = 0;
@@ -31,47 +40,64 @@ export class Judge {
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   emit(ev) { for (const fn of this.listeners) fn(ev); }
 
-  /** ボタンを押した。id が同じ入力は 1 回しか処理しない（タッチとクリックの二重処理対策）。 */
-  press(button, time, { id, source = 'input' } = {}) {
+  /**
+   * ボタンを押した。id が同じ入力は 1 回しか処理しない（タッチとクリックの二重処理対策）。
+   * o.raw: 入力補正の前の時刻、o.device: keyboard|touch|mouse|gamepad|auto（記録用）
+   */
+  press(button, time, { id, source = 'input', raw = time, device = source } = {}) {
     if (id != null) {
       if (this.seenInputs.has(id)) return null;
       this.seenInputs.add(id);
     }
-    let best = null;
+    let best = null, bestAd = Infinity;
     for (const n of this.notes) {
-      if (n.time - time > this.w.miss) break;
+      if (diffMs(n.time, time) > this.ms.miss) break;
       if (n.button !== button || n.result || n.holding) continue;
-      const d = Math.abs(time - n.time);
-      if (d <= this.w.miss && (!best || d < Math.abs(time - best.time))) best = n;
+      const ad = Math.abs(diffMs(time, n.time));
+      if (ad <= this.ms.miss && ad < bestAd) { best = n; bestAd = ad; }
     }
+    const input = { time, raw, device, button, source };
     if (!best) {
       this.stray++;
-      this.emit({ type: 'stray', button, time, source });
+      this.strays.push(input);
+      this.emit({ type: 'stray', button, time, source, input });
       return null;
     }
-    const delta = time - best.time;
-    const ad = Math.abs(delta);
-    const grade = ad <= this.w.perfect ? GRADE.PERFECT : ad <= this.w.good ? GRADE.GOOD : GRADE.MISS;
-    best.delta = delta;
+    const deltaMs = diffMs(time, best.time);
+    const ad = Math.abs(deltaMs);
+    const goodMs = best.input === 'hold' ? this.ms.holdStart : this.ms.good;
+    const grade = ad <= this.ms.perfect ? GRADE.PERFECT : ad <= goodMs ? GRADE.GOOD : GRADE.MISS;
+    best.delta = deltaMs / 1000;
+    best.hit = { ...input, deltaMs, rawDeltaMs: diffMs(raw, best.time) };
     if (best.input === 'hold' && grade !== GRADE.MISS) {
       best.holding = true;
       best.startGrade = grade;
       best.holdSource = source;
-      const ev = { type: 'holdStart', note: best, grade, time, delta, source };
+      const ev = { type: 'holdStart', note: best, grade, time, delta: best.delta, source, input };
       this.emit(ev);
       return ev;
     }
-    return this._settle(best, grade, time, source, grade === GRADE.MISS ? (delta < 0 ? 'early' : 'late') : null);
+    return this._settle(best, grade, time, source, grade === GRADE.MISS ? (deltaMs < 0 ? 'early' : 'late') : null);
   }
 
-  /** ボタンを離した。長押し中のノーツがあれば、終了に届いたかを判定する。 */
-  release(button, time, { source = 'input' } = {}) {
+  /**
+   * ボタンを離した。長押し中のノーツがあれば、終了に届いたかを判定する。
+   * 長押しが自動で完了した後に離した場合は、その実際の時刻だけを記録する（判定は変えない）。
+   */
+  release(button, time, { source = 'input', raw = time, device = source } = {}) {
     const out = [];
     for (const n of this.notes) {
-      if (!n.holding || n.button !== button) continue;
-      const end = n.time + n.duration;
-      if (time >= end - this.w.release) out.push(this._settle(n, n.startGrade, time, source, null));
-      else out.push(this._settle(n, GRADE.MISS, time, source, 'early-release'));
+      if (n.button !== button) continue;
+      if (n.holding) {
+        const end = n.time + n.duration;
+        n.release = { time, raw, device, deltaMs: diffMs(time, end) };
+        if (diffMs(end, time) <= this.ms.release) out.push(this._settle(n, n.startGrade, time, source, 'released'));
+        else out.push(this._settle(n, GRADE.MISS, time, source, 'early-release'));
+      } else if (n.awaitRelease) {
+        n.awaitRelease = false;
+        n.release = { time, raw, device, deltaMs: diffMs(time, n.time + n.duration) };
+        this.emit({ type: 'holdRelease', note: n, time, source });
+      }
     }
     return out;
   }
@@ -80,11 +106,16 @@ export class Judge {
   update(time) {
     const out = [];
     for (const n of this.notes) {
-      if (n.time - time > this.w.miss) break;
+      if (diffMs(n.time, time) > this.ms.miss) break;
       if (n.result) continue;
       if (n.holding) {
-        if (time >= n.time + n.duration) out.push(this._settle(n, n.startGrade, n.time + n.duration, n.holdSource, null));
-      } else if (time > n.time + this.w.miss) {
+        // 必要な時間を保持した: 終了の時刻で成功を確定（ユーザーが離した時刻ではない。離した時刻は release で別に記録）
+        if (time >= n.time + n.duration) {
+          n.completedAt = n.time + n.duration;
+          n.awaitRelease = true;
+          out.push(this._settle(n, n.startGrade, n.time + n.duration, n.holdSource, 'completed'));
+        }
+      } else if (diffMs(time, n.time) > this.ms.miss) {
         out.push(this._settle(n, GRADE.MISS, time, 'timeout', 'timeout'));
       }
     }
@@ -122,12 +153,15 @@ export class Judge {
   resetFrom(time) {
     for (const n of this.notes) {
       n.holding = false;
+      n.awaitRelease = false;
       if (n.time >= time - 1e-6) {
         n.result = null; n.delta = null; n.points = 0; n.reason = null; n.startGrade = null; n.judgedAt = null;
+        n.hit = null; n.release = null; n.completedAt = null;
       } else if (!n.result) {
         n.result = GRADE.SKIP; n.reason = 'skipped';
       }
     }
+    this.strays = this.strays.filter((s) => s.time < time - 1e-6);
     this.combo = 0;
     this.seenInputs.clear();
   }
