@@ -443,3 +443,4 @@ td.k-na { background: repeating-linear-gradient(45deg, rgba(255,255,255,0.04) 0 
 .per-form .per-cond { display: grid; grid-template-columns: auto minmax(0, 1fr); }
 .per-range input[type=date] { min-width: 0; flex: 1 1 130px; }
 .cmp-mode button { white-space: normal; text-align: left; }
+.res-body { grid-template-columns: minmax(0, 1fr); } /* 中の表の最小幅で本文が広がらない（表は枠の中でスクロール） */
