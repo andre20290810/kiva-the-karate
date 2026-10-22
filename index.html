@@ -54,11 +54,19 @@
         <details id="more">
           <summary class="tbtn" title="設定"><span aria-hidden="true">⚙</span><span class="sum-label">設定</span></summary>
           <div class="settings">
-            <label>速度 <select id="speed"><option value="1">1×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label>
-            <div class="mixrow"><span>BGM</span><input id="mixBgm" type="range" min="0" max="1" step="0.01" aria-label="BGM の音量"><label><input id="muteBgm" type="checkbox"> ミュート</label></div>
-            <div class="mixrow"><span>元動画の音声</span><input id="mixVoice" type="range" min="0" max="1" step="0.01" aria-label="元動画の音声の音量"><label><input id="muteVoice" type="checkbox"> ミュート</label></div>
-            <label>エフェクトの強さ <input id="fxStrength" type="range" min="0" max="1" step="0.05"></label>
-            <label><input id="lowFx" type="checkbox"> 低負荷（歪み・ぼかしを省略）</label>
+            <div class="set-col">
+              <label>速度 <select id="speed"><option value="1">1×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label>
+              <div class="mixrow"><span>BGM</span><input id="mixBgm" type="range" min="0" max="1" step="0.01" aria-label="BGM の音量"><label><input id="muteBgm" type="checkbox"> ミュート</label></div>
+              <div class="mixrow"><span>元動画の音声</span><input id="mixVoice" type="range" min="0" max="1" step="0.01" aria-label="元動画の音声の音量"><label><input id="muteVoice" type="checkbox"> ミュート</label></div>
+              <label>エフェクトの強さ <input id="fxStrength" type="range" min="0" max="1" step="0.05"></label>
+              <label><input id="lowFx" type="checkbox"> 低負荷（歪み・ぼかしを省略）</label>
+              <div id="chartSrc" class="chartsrc" hidden>
+                <p id="chartSrcText" class="hint"></p>
+                <button type="button" id="btnUseDistributed" class="tbtn">公開版の設定に切り替える</button>
+              </div>
+              <p class="hint" id="audioInfo">音声: 読み込み中</p>
+              <p class="hint">キーボード: Y X A B ／ Space 開始・一時停止 ／ R リトライ。ゲームパッド（標準配置）: 上 = Y、左 = X、下 = A、右 = B（ボタンの印字ではなく位置で対応）。</p>
+            </div>
             <fieldset id="timingBox">
               <legend>タイミング判定（譜面 JSON に保存）</legend>
               <p class="hint">ずれ＝入力した時刻 − 正解の時刻（マイナスは早い、プラスは遅い）。幅は譜面の時間軸の ms（再生速度 0.5 倍では実時間はこの 2 倍）。
@@ -73,12 +81,6 @@
               <ul id="timingErr" class="err" role="alert"></ul>
               <div class="timing-row"><button type="button" id="timingSave" class="tbtn primary">保存</button><button type="button" id="timingReset" class="tbtn">初期設定に戻す</button><span id="timingState" class="hint"></span></div>
             </fieldset>
-            <div id="chartSrc" class="chartsrc" hidden>
-              <p id="chartSrcText" class="hint"></p>
-              <button type="button" id="btnUseDistributed" class="tbtn">公開版の設定に切り替える</button>
-            </div>
-            <p class="hint" id="audioInfo">音声: 読み込み中</p>
-            <p class="hint">キーボード: Y X A B ／ Space 開始・一時停止 ／ R リトライ。ゲームパッド（標準配置）: 上 = Y、左 = X、下 = A、右 = B（ボタンの印字ではなく位置で対応）。</p>
           </div>
         </details>
       </div>

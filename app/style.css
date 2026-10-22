@@ -340,3 +340,23 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); o
 .nc-imgs { justify-content: center; }
 .nc .nc-imgs .nc-fig { flex: 0 1 150px; }
 .tl-svg .tl-hit { fill: transparent; }
+
+/* ---------- 成績・設定の横幅を編集画面にそろえる ----------
+   基準: 編集画面（操作パネル #panel の内側）= 画面の左右から 10px ＋ セーフエリア。最大幅の制限なし。
+   成績（全画面のダイアログ）と設定（⚙ のパネル）も同じ左右の端に置き、中身は広がった幅を使う（文字・ボタンの大きさは変えない） */
+:root { --edge-l: calc(10px + var(--safe-l)); --edge-r: calc(10px + var(--safe-r)); }
+#result { padding: max(8px, env(safe-area-inset-top)) var(--edge-r) max(8px, env(safe-area-inset-bottom)) var(--edge-l); justify-items: stretch; place-items: stretch; }
+#result .card.results { max-width: none; width: 100%; margin: 0; }
+#more[open] .settings { left: var(--edge-l); right: var(--edge-r); width: auto; max-width: none;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; gap: 10px 14px; }
+.set-col { display: grid; gap: 8px; min-width: 0; align-content: start; }
+#timingBox { min-width: 0; margin: 0; }
+.settings input[type=range] { flex: 1 1 auto; min-width: 0; max-width: 460px; }
+.settings label, .settings .hint, #timingBox .tmean { overflow-wrap: anywhere; }
+/* 広い画面ではカードを 4〜5 枚まで並べる（1 枚の大きさは変えずに件数を増やす） */
+@media (min-width: 1400px) { .nc-scroller { --nc-w: calc((100% - 30px) / 4); } }
+@media (min-width: 1800px) { .nc-scroller { --nc-w: calc((100% - 40px) / 5); } }
+/* 広い設定パネル: 項目名・入力・単位を離さない（行の右端まで引き伸ばさない） */
+.set-col > label { justify-content: flex-start; gap: 10px; }
+.set-col > label:has(> input[type=checkbox]:first-child) { gap: 6px; }
+#timingBox label { display: grid; grid-template-columns: minmax(9em, 15em) auto auto; justify-content: start; align-items: center; gap: 8px; }

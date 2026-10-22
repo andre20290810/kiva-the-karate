@@ -81,7 +81,7 @@ export class ResultsView {
     window.addEventListener('keydown', (e) => { if (e.code === 'Escape' && !this.root.hidden) this.hide(); });
     // 画面の回転・大きさの変更: 図の幅を合わせ直す
     let raf = 0;
-    window.addEventListener('resize', () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { if (!this.root.hidden && ['timing', 'compare'].includes(this.tab)) this.render(); else if (!this.root.hidden && this.tab === 'detail') this.renderTimeline(); }); });
+    window.addEventListener('resize', () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { if (!this.root.hidden && ['timing', 'compare'].includes(this.tab)) this.render(); else if (!this.root.hidden && this.tab === 'detail') { this.keepTlCenter(); this.render(); } }); });
   }
 
   get history() { return this.app.history; }
@@ -165,8 +165,8 @@ export class ResultsView {
   graphSvg(r, series, pairs = null) {
     const s = r.settings, R = Math.max(s.missWindowMs, ...series.flatMap((x) => x.notes.map((n) => Math.abs(n.d ?? 0)))) * 1.05;
     const rows = BTN.filter((b) => this.filter.has(b));
-    // 幅は画面に合わせる（スマホの縦でも文字が読める大きさ）
-    const W = Math.max(340, Math.min(640, Math.round(this.body.clientWidth || 640))), L = 48, Rm = 12, top = 30, rowH = 46, H = top + rows.length * rowH + 34;
+    // 幅は表示領域いっぱい（1:1 で描くので、広い画面でも文字は大きくならず、目盛りの間隔が広がる）
+    const W = Math.max(340, Math.min(1800, Math.round(this.body.clientWidth || 640))), L = 48, Rm = 12, top = 30, rowH = 46, H = top + rows.length * rowH + 34;
     const cx = L + (W - L - Rm) / 2, half = (W - L - Rm) / 2;
     const X = (v) => cx + (v / R) * half;
     const rowY = (b) => top + rows.indexOf(b) * rowH + rowH / 2;
@@ -285,10 +285,11 @@ export class ResultsView {
 
   /** 小さな時間軸: 正解（0）・判定の範囲・採用した入力・採用していない入力。文字は印の上の 2 段に重ならないように置く */
   miniTimeline(r, n, inputs) {
-    const s = r.settings, W = 280, H = 84, L = 10, Rm = 10, cy = 50;
+    // 幅はカードの実際の幅（1:1。カードが広いほど目盛りが広がり、文字の大きさは同じ）
+    const s = r.settings, W = Math.max(200, Math.round(this.miniW || 280)), H = 84, L = 10, Rm = 10, cy = 50;
     const R = Math.max(s.missWindowMs * 1.15, ...inputs.map((x) => Math.abs(x.deltaMs ?? 0) + 15));
     const X = (v) => L + ((v + R) / (2 * R)) * (W - L - Rm);
-    let g = `<svg class="res-graph nc-axis" viewBox="0 0 ${W} ${H}" role="img" aria-label="正解の時刻と入力の位置（ms）">`;
+    let g = `<svg class="res-graph nc-axis" viewBox="0 0 ${W} ${H}" data-w="${W}" role="img" aria-label="正解の時刻と入力の位置（ms）">`;
     g += `<rect x="${X(-s.missWindowMs)}" y="${cy - 11}" width="${X(s.missWindowMs) - X(-s.missWindowMs)}" height="22" class="band-miss"/>`;
     g += `<rect x="${X(-s.goodWindowMs)}" y="${cy - 11}" width="${X(s.goodWindowMs) - X(-s.goodWindowMs)}" height="22" class="${VIS.bands.good.cls}"/>`;
     g += `<rect x="${X(-s.perfectWindowMs)}" y="${cy - 11}" width="${X(s.perfectWindowMs) - X(-s.perfectWindowMs)}" height="22" class="${VIS.bands.perfect.cls}"/>`;
@@ -641,6 +642,16 @@ export class ResultsView {
     tl?.addEventListener('wheel', (e) => { if (!e.ctrlKey) return; e.preventDefault(); this.tlZoom(e.deltaY < 0 ? 1 : -1); }, { passive: false });
     const sc = this.body.querySelector('.nc-scroller');
     if (!sc) return;
+    // 小さな時間軸をカードの実際の幅で描き直す（拡大して文字が大きくならないように）
+    const ax = sc.querySelector('.nc-axis');
+    if (ax && Math.abs(ax.clientWidth - Number(ax.dataset.w)) > 2) {
+      this.miniW = ax.clientWidth;
+      const byId = new Map(this.rec.notes.map((n) => [n.id, n]));
+      for (const c of sc.querySelectorAll('.nc')) {
+        const n = byId.get(c.dataset.note), old = c.querySelector('.nc-axis');
+        if (n && old) old.outerHTML = this.miniTimeline(this.rec, n, this.relatedInputs(this.rec, n));
+      }
+    }
     const cards = [...sc.querySelectorAll('.nc')];
     const pos = this.body.querySelector('.nc-pos');
     const update = () => {
