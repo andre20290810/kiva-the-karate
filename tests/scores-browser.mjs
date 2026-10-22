@@ -311,11 +311,12 @@ const startPlay = (p) => p.evaluate(async () => { const a = window.__app; a.stat
   await startPlay(p);
   await p.evaluate((ev) => window.__run(90, ev), ev2);
   const R2 = await p.evaluate(() => window.__lastRecord);
-  await p.click('[data-tab=compare]');
-  let cmp = await p.evaluate(() => document.querySelector('#resultBody').textContent);
-  check(R2.kind === 'full' && /同じ条件の記録です/.test(cmp) && /スコアの差/.test(cmp) && /改善/.test(cmp) && best1.id !== R2.id, '前回（同条件）と比較: スコア差・成功率の差・平均絶対誤差の改善量');
-  const pairs = await p.evaluate(() => document.querySelectorAll('.res-graph line.pair').length);
-  check(pairs > 40, '同じ譜面: 同じノーツの前回と今回の入力位置を同じ目盛りで比較', `${pairs} 本`);
+  // 前回（1 回目）と今回（2 回目）を比較: 履歴の「今の記録と比較」→ 記録の比較
+  await p.click('[data-tab=history]');
+  await p.click(`[data-cmp="${best1.id}"]`);
+  await p.waitForTimeout(400);
+  let cmp = await p.evaluate(() => ({ t: document.querySelector('#resultBody').textContent, cells: document.querySelectorAll('.cmx td[data-cnote]').length, base: window.__app.results.cmp.data?.base.rec.id }));
+  check(R2.kind === 'full' && cmp.base === best1.id && /平均絶対誤差の改善/.test(cmp.t) && /改善/.test(cmp.t) && cmp.cells === 59 * 2 && best1.id !== R2.id, '前回と今回を比較: 平均絶対誤差の改善・ノーツ別の比較表（同じノーツを ID で対応）', `${cmp.cells} セル`);
 
   // AUTO（自己ベスト・前回の候補から除外）と練習（シーク）
   await p.evaluate(() => window.__app.retry());
@@ -340,11 +341,11 @@ const startPlay = (p) => p.evaluate(async () => { const a = window.__app; a.stat
   await startPlay(p);
   await p.evaluate((ev) => window.__run(90, ev), ev2);
   const RS = await p.evaluate(() => window.__lastRecord);
-  await p.selectOption('[data-tab=compare]', { index: 0 }).catch(() => {});
-  await p.click('[data-tab=compare]');
-  await p.selectOption('[data-compare]', R2.id);
+  await p.click('[data-tab=history]');
+  await p.click(`[data-cmp="${R2.id}"]`);
+  await p.waitForTimeout(300);
   cmp = await p.evaluate(() => document.querySelector('#resultBody').textContent);
-  check(RS.rate === 0.5 && RS.kind === 'full' && /条件が違います/.test(cmp) && /再生速度 1 → 0.5/.test(cmp) && /実際に経過した時間はこの 2.0 倍/.test(await p.evaluate(() => { document.querySelector('[data-tab=summary]').click(); return document.querySelector('#resultBody').textContent; })),
+  check(RS.rate === 0.5 && RS.kind === 'full' && /条件が違う: 再生速度 1→0\.5/.test(cmp) && /※条件が違う/.test(cmp) && /実際に経過した時間はこの 2.0 倍/.test(await p.evaluate(() => { document.querySelector('[data-tab=summary]').click(); return document.querySelector('#resultBody').textContent; })),
     '速度 0.5×: 記録に速度、条件の違いを明示、ms の基準（譜面の時間軸）を表示');
   const rs = await p.evaluate(() => window.__lastRecord.notes.find((n) => n.id === 'n074').input.deltaMs);
   check(rs === 10, '速度 0.5× でもずれは判定と同じ時間軸の ms', `${rs}`);

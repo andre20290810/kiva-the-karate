@@ -5,6 +5,7 @@
 import { CMD, DEVICE_LABEL, KIND_LABEL, HOLD_STATUS_LABEL, comparisonTargets, compareRecords, conditionDiffs, chartHash } from './score.js';
 import { LANE_STYLE } from './lanes.js';
 import { timeTicks } from './timeline.js';
+import { CompareView } from './compare-view.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const sMs = (v) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(1)}ms`);
@@ -58,11 +59,11 @@ export class ResultsView {
     this.tab = 'summary';
     this.filter = new Set(BTN);
     this.gradeFilter = 'all';
-    this.compareTo = 'previous';
     this.selected = new Set();
     this.selNote = null;   // 照合タイムライン・カードで選んだノーツ
     this.selExtra = null;  // 選んだ余分な入力（extras の番号）
     this.tlPps = null;     // 照合タイムラインの拡大率（1 秒あたりの px）
+    this.cmp = new CompareView(this); // 比較（記録の比較・期間平均の比較）
     this.root.innerHTML = `
       <div class="card results" tabindex="-1">
         <div class="res-head">
@@ -107,6 +108,7 @@ export class ResultsView {
     const r = this.rec;
     this.root.querySelector('#resultTitle').textContent = !r ? '成績' : r.mode === 'auto' ? 'AUTO 再生の記録（手動の成績・自己ベストには含めません）' : `成績（${KIND_LABEL[r.kind]}）`;
     if (this.tab === 'history') { this.body.innerHTML = this.historyHtml(); return; }
+    if (this.tab === 'compare') { this.body.innerHTML = this.cmp.html(); this.cmp.after(); return; } // 比較は今の記録がなくてもよい（過去の記録同士）
     if (!r) { this.body.innerHTML = '<p class="hint">まだ記録がありません。プレイを最後まで終えるか、「履歴」から過去の記録を開いてください。</p>'; return; }
     this.body.innerHTML = this.tab === 'summary' ? this.summaryHtml(r) : this.tab === 'timing' ? this.timingHtml(r) : this.tab === 'detail' ? this.detailHtml(r) : this.compareHtml(r);
     if (this.tab === 'detail') this.afterDetail();
@@ -694,50 +696,8 @@ export class ResultsView {
     cv.dataset.ready = '1';
   }
 
-  // ---------- 比較 ----------
-  compareTarget(r) {
-    const list = this.history.records;
-    const t = comparisonTargets(r, list);
-    if (this.compareTo === 'previous') return { rec: t.previous, label: '前回（同条件）' };
-    if (this.compareTo === 'best') return { rec: t.best, label: '同条件の自己ベスト（手動・通しプレイ）' };
-    const sel = list.find((h) => h.id === this.compareTo);
-    return { rec: sel || null, label: '選択した記録' };
-  }
-
-  compareHtml(r) {
-    const list = this.history.records.filter((h) => h.id !== r.id).slice().reverse();
-    const { rec: base, label } = this.compareTarget(r);
-    const opts = `<option value="previous" ${this.compareTo === 'previous' ? 'selected' : ''}>前回（同条件）</option>
-      <option value="best" ${this.compareTo === 'best' ? 'selected' : ''}>同条件の自己ベスト</option>
-      ${list.map((h) => `<option value="${esc(h.id)}" ${this.compareTo === h.id ? 'selected' : ''}>${esc(when(h.at))} ${h.mode === 'auto' ? 'AUTO' : '手動'}・${KIND_LABEL[h.kind]} ${h.summary.score.toLocaleString()} 点</option>`).join('')}`;
-    const head = `<label class="res-sel">比較する記録 <select data-compare>${opts}</select></label>
-      <p class="hint">同条件 = 同じ譜面・判定幅・入力補正・再生速度の手動プレイ。AUTO は自己ベスト・同条件の候補に入りません。練習（シーク・区間ループなど）は通しプレイの自己ベストに入りません。</p>`;
-    if (r.mode === 'auto') return `${head}<p class="res-warn">この記録は AUTO 再生です（手動の成績と比較する対象ではありません）。</p>${base ? this.compareBody(r, base, label) : ''}`;
-    if (!base) return `${head}<p>${label}の記録がありません。</p>`;
-    return head + this.compareBody(r, base, label);
-  }
-
-  compareBody(r, base, label) {
-    const c = compareRecords(r, base);
-    const diffs = c.conditions.length
-      ? `<div class="res-warn" role="note"><b>条件が違います</b>（数値はそのまま比べられません）: ${c.conditions.map((d) => `${d.name} ${d.key === 'chartHash' ? '別の譜面' : `${d.b} → ${d.a}`}`).join('、')}</div>` : '<p class="hint">同じ条件の記録です。</p>';
-    const good = (v) => (v == null ? '' : v > 0 ? 'better' : v < 0 ? 'worse' : '');
-    const word = (v, up, down) => (v == null ? '' : v > 0 ? up : v < 0 ? down : '変化なし');
-    const pts = this.points(r), bpts = this.points(base);
-    return `<p>比較: ${label} ／ ${esc(when(base.at))} の${base.mode === 'auto' ? 'AUTO' : '手動'}・${KIND_LABEL[base.kind]}</p>${diffs}
-      <div class="res-grid">
-        <div class="${good(c.scoreDiff)}"><span>スコアの差</span><b>${sgn(c.scoreDiff, ' 点', 0)}</b><small>${base.summary.score.toLocaleString()} → ${r.summary.score.toLocaleString()}</small></div>
-        <div class="${good(c.successRatePt)}"><span>成功率の差</span><b>${sgn(c.successRatePt, ' pt')}</b><small>${pct(base.summary.successRate)} → ${pct(r.summary.successRate)}</small></div>
-        <div class="${good(c.maeImproveMs)}"><span>平均絶対誤差</span><b>${c.maeImproveMs == null ? '—' : `${Math.abs(c.maeImproveMs).toFixed(1)}ms ${word(c.maeImproveMs, '改善', '悪化')}`}</b><small>${aMs(base.summary.maeMs)} → ${aMs(r.summary.maeMs)}</small></div>
-        <div><span>平均符号付き誤差</span><b>${sMs(base.summary.meanMs)} → ${sMs(r.summary.meanMs)}</b></div>
-        <div class="${good(c.sdImproveMs)}"><span>ばらつき（標準偏差）</span><b>${aMs(base.summary.sdMs)} → ${aMs(r.summary.sdMs)}</b></div>
-      </div>
-      <div class="res-scroll"><table class="res-table"><caption>技ごとの変化</caption><thead><tr><th>技</th><th>成功率</th><th>差</th><th>平均絶対誤差</th><th>改善量</th><th>平均符号付き</th></tr></thead>
-        <tbody>${BTN.map((b) => { const x = c.byCmd[b]; return `<tr><th>${CMD[b]}／${b}</th><td>${pct(x.base.successRate)} → ${pct(x.cur.successRate)}</td><td class="${good(x.successRatePt)}">${sgn(x.successRatePt, ' pt')}</td>
-          <td>${aMs(x.base.maeMs)} → ${aMs(x.cur.maeMs)}</td><td class="${good(x.maeImproveMs)}">${x.maeImproveMs == null ? '—' : `${Math.abs(x.maeImproveMs).toFixed(1)}ms ${word(x.maeImproveMs, '改善', '悪化')}`}</td><td>${sMs(x.base.meanMs)} → ${sMs(x.cur.meanMs)}</td></tr>`; }).join('')}</tbody></table></div>
-      ${c.sameChart ? `${this.filterHtml()}<p class="hint">同じノーツの入力位置（同じ目盛り）。線で同じノーツを結んでいます。</p>${this.legendHtml(r, { compare: true })}
-        ${this.graphSvg(r, [{ notes: bpts, style: 'base', label: '比較' }, { notes: pts, style: 'cur', label: '今回' }], c.pairs)}` : '<p class="hint">譜面が違うため、ノーツごとの比較はできません。</p>'}`;
-  }
+  // ---------- 比較 ----------（compare-view.js）
+  compareHtml() { return this.cmp.html(); }
 
   // ---------- 履歴 ----------
   historyHtml() {
@@ -745,24 +705,25 @@ export class ResultsView {
     const cur = this.rec;
     return `<div class="res-hist-actions">
         <button type="button" data-act="exportAll">履歴を JSON で書き出す</button>
+        <button type="button" data-act="cmpSel" class="primary-act" ${this.selected.size >= 2 ? '' : 'disabled'}>選択した ${this.selected.size} 件を比較</button>
         <button type="button" data-act="exportSel" ${this.selected.size ? '' : 'disabled'}>選択を書き出す</button>
         <label class="res-file">履歴 JSON を読み込む<input type="file" accept="application/json,.json" data-import></label>
         <button type="button" data-act="deleteSel" class="danger" ${this.selected.size ? '' : 'disabled'}>選択を削除</button>
       </div>
-      <p class="hint">成績の履歴はこのブラウザに保存されます（譜面・編集内容とは別。成績 JSON と譜面 JSON は別の形式で、互いに上書きしません）。${this.history.records.length} 件。</p>
+      <p class="hint">2 件以上をチェックして「選択した○件を比較」で、記録同士を比べられます（直近のプレイを含めなくてもよい）。成績の履歴はこのブラウザに保存されます（譜面・編集内容とは別。成績 JSON と譜面 JSON は別の形式で、互いに上書きしません）。${this.history.records.length} 件。</p>
       ${this.history.loadError ? `<p class="res-warn">${esc(this.history.loadError)}</p>` : ''}
       <p id="histMsg" class="hint" role="status"></p>
-      <div class="res-scroll"><table class="res-table res-hist"><thead><tr><th><span class="sr">選択</span></th><th>日時</th><th>区分</th><th>スコア</th><th>成功率</th><th>平均絶対誤差</th><th>速度</th><th>判定幅 P/G/M</th><th></th></tr></thead>
+      <div class="res-scroll"><table class="res-table res-hist"><thead><tr><th><span class="sr">選択</span></th><th>日時</th><th>手動／AUTO・区分</th><th>スコア</th><th>成功率</th><th>平均絶対誤差</th><th>譜面</th><th>判定幅 P/G/M</th><th>速度</th><th>補正</th><th></th></tr></thead>
       <tbody>${list.map((h) => `<tr class="${cur && h.id === cur.id ? 'is-cur' : ''}">
         <td><input type="checkbox" data-sel="${esc(h.id)}" ${this.selected.has(h.id) ? 'checked' : ''} aria-label="${esc(when(h.at))} を選択"></td>
         <td>${esc(when(h.at))}</td><td>${h.mode === 'auto' ? 'AUTO' : '手動'}・${KIND_LABEL[h.kind]}</td><td>${h.summary.score.toLocaleString()}</td><td>${pct(h.summary.successRate)}</td><td>${aMs(h.summary.maeMs)}</td>
-        <td>${h.rate}×</td><td>${h.settings.perfectWindowMs}/${h.settings.goodWindowMs}/${h.settings.missWindowMs}</td>
-        <td><button type="button" data-open="${esc(h.id)}">開く</button>${cur && h.id !== cur.id ? ` <button type="button" data-cmp="${esc(h.id)}">今の記録と比較</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="9">履歴はありません</td></tr>'}</tbody></table></div>`;
+        <td>${esc(h.chart.title || '')} <small>${esc(h.chart.hash)}</small></td><td>${h.settings.perfectWindowMs}/${h.settings.goodWindowMs}/${h.settings.missWindowMs}</td><td>${h.rate}×</td><td>${h.settings.inputOffsetMs}ms</td>
+        <td><button type="button" data-open="${esc(h.id)}">開く</button>${cur && h.id !== cur.id ? ` <button type="button" data-cmp="${esc(h.id)}">今の記録と比較</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="11">履歴はありません</td></tr>'}</tbody></table></div>`;
   }
 
-  download(text, name) {
+  download(text, name, type = 'application/json') {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    a.href = URL.createObjectURL(new Blob([text], { type }));
     a.download = name;
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -772,6 +733,7 @@ export class ResultsView {
   stamp() { return new Date().toISOString().replace(/[:T]/g, '-').slice(0, 16); }
 
   onClick(e) {
+    if (this.tab === 'compare' && this.cmp.onClick(e)) return;
     const item = e.target.closest('[data-sel]');
     if (item && item.closest('.tl-scroll')) { const [k, id] = item.dataset.sel.split(/:(.*)/s); this.select(k, id, 'tl'); return; }
     const card = !e.target.closest('button') && e.target.closest('.nc[data-note]');
@@ -790,9 +752,10 @@ export class ResultsView {
     if (b.dataset.grade) { this.gradeFilter = b.dataset.grade; this.keepTlCenter(); this.render(); return; }
     if (b.dataset.nav) { this.navStep?.(Number(b.dataset.nav)); return; }
     if (b.dataset.open) { this.rec = this.history.get(b.dataset.open); this.selNote = null; this.selExtra = null; this.tlPps = null; this.saveState = null; this.tab = 'summary'; this.render(); return; }
-    if (b.dataset.cmp) { this.compareTo = b.dataset.cmp; this.tab = 'compare'; this.render(); return; }
+    if (b.dataset.cmp) { this.cmp.setIds([b.dataset.cmp, this.rec.id]); this.tab = 'compare'; this.render(); return; }
     const act = b.dataset.act;
     const v = this.app.version;
+    if (act === 'cmpSel') { if (this.selected.size >= 2) { this.cmp.setIds([...this.selected]); this.tab = 'compare'; this.render(); } return; }
     if (act === 'exportOne' && this.rec) this.download(JSON.stringify({ schema: 'kiva-score-history/1', exportedAt: new Date().toISOString(), records: [this.rec] }, null, 2) + '\n', `seipai-${v}-score-${this.stamp()}.json`);
     else if (act === 'exportAll') this.download(this.history.exportText(), `seipai-${v}-scores-${this.stamp()}.json`);
     else if (act === 'exportSel') this.download(this.history.exportText([...this.selected]), `seipai-${v}-scores-${this.stamp()}.json`);
@@ -808,10 +771,12 @@ export class ResultsView {
 
   async onChange(e) {
     const t = e.target;
-    if (t.matches('[data-compare]')) { this.compareTo = t.value; this.render(); return; }
+    if (this.tab === 'compare' && this.cmp.onChange(e)) return;
     if (t.matches('[data-sel]')) {
       if (t.checked) this.selected.add(t.dataset.sel); else this.selected.delete(t.dataset.sel);
       for (const b of this.root.querySelectorAll('[data-act=exportSel],[data-act=deleteSel]')) b.disabled = !this.selected.size;
+      const cb = this.root.querySelector('[data-act=cmpSel]');
+      if (cb) { cb.disabled = this.selected.size < 2; cb.textContent = `選択した ${this.selected.size} 件を比較`; }
       return;
     }
     if (t.matches('[data-import]')) {

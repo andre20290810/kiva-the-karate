@@ -198,6 +198,10 @@ test('照合タイムラインと編集画面の目盛りは同じ（timeline.js
   const n = timeTicks(0, 20, 10);
   assert.equal(n.length, 21);
   assert.deepEqual(n.filter((x) => x.label).map((x) => x.label), ['0s', '5s', '10s', '15s', '20s']);
+  // とても狭い（スマホの全体表示 1 秒 = 3px）: 数字は重ならない間隔（20 秒）、線は 5 秒ごと
+  const w = timeTicks(0, 80, 3);
+  assert.deepEqual(w.filter((x) => x.label).map((x) => x.label), ['0s', '20s', '40s', '60s', '80s']);
+  assert.ok(w.every((x) => x.t % 5 === 0));
   const { readFileSync } = await import('node:fs');
   for (const f of ['app/editor.js', 'app/results.js']) assert.match(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8'), /timeTicks\(/, `${f} は共通の目盛りを使う`);
 });
