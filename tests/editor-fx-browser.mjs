@@ -92,7 +92,9 @@ for (const [label, vp] of [['縦 393x852', { width: 393, height: 852 }], ['横 8
   // この端末のデフォルトとして保存 → 再読み込み
   check(/未保存の編集/.test(await p.textContent('#edSource')), '保存前は「未保存の編集」と表示');
   await p.click('[data-act=saveDefault]');
-  check(/この端末のデフォルト/.test(await p.textContent('#edSource')) && /公開版は変わりません/.test(await p.textContent('#edFile')), '保存後は「この端末のデフォルト」と表示し、公開版は変わらないことを明示');
+  check(/この端末のデフォルト/.test(await p.textContent('#edSource')) && /公式データ（ほかの利用者）は変わりません/.test(await p.textContent('#edFile'))
+    && /個人用に保存/.test(await p.textContent('[data-act=saveDefault]')) && /公式データとして保存・公開/.test(await p.textContent('[data-act=official]')),
+    '保存後は「この端末のデフォルト」と表示し、公式データは変わらないことを明示（「個人用に保存」と「公式データとして保存・公開」は別のボタン）');
   await p.goto(base); await ready(p);
   let st = await p.evaluate((id) => ({ src: window.__app.chartSource, n: window.__app.chart.notes.find((x) => x.id === id), status: document.querySelector('#status').textContent }), target.id);
   check(st.src === 'default' && st.n.button === 'X' && st.n.effect?.id === 1 && st.n.effect.intensity === 1.4 && /この端末のデフォルト/.test(st.status), '再読み込み後もこの端末のデフォルトで起動', st.status);
