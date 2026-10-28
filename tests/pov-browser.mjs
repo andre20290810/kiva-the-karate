@@ -38,7 +38,7 @@ const open = async (ctx, path = 'pov.html') => {
   const p = await ctx.newPage();
   const errs = [];
   p.on('pageerror', (e) => errs.push(e.message));
-  p.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
+  p.on('console', (m) => { if (m.type() === 'error' && !/cloudflareinsights|ERR_TUNNEL_CONNECTION_FAILED/.test(m.text() + (m.location()?.url || ''))) errs.push(m.text()); });
   await p.addInitScript(() => {
     window.__gum = 0;
     const md = navigator.mediaDevices;
@@ -213,7 +213,7 @@ const at = async (p, t) => { await p.evaluate((t) => window.__pov.setTime(t), t)
   await p.click('#more > summary');
   await p.click('#btnPov');
   await waitPov(p);
-  check(/pov\.html$/.test(p.url()), 'POV のページに移る');
+  check(/\/pov(\.html)?$/.test(new URL(p.url()).pathname), 'POV のページに移る（公開サイトでは /pov）');
   await p.click('#povBack');
   await p.waitForFunction(() => ['ready', 'paused', 'playing'].includes(window.__app?.state), null, { timeout: 120000 });
   check(new URL(p.url()).pathname.endsWith('/'), '戻るでゲームに戻り、ゲームが使える状態');
