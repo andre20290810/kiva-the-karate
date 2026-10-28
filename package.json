@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/game2d.test.mjs tests/layout.test.mjs tests/config.test.mjs tests/effects.test.mjs tests/score.test.mjs tests/compare.test.mjs tests/replay.test.mjs tests/official-worker.test.mjs tests/auth-worker.test.mjs tests/server-security.test.mjs",
+    "test": "node --test tests/game2d.test.mjs tests/layout.test.mjs tests/config.test.mjs tests/effects.test.mjs tests/score.test.mjs tests/compare.test.mjs tests/replay.test.mjs tests/pov-pose.test.mjs tests/official-worker.test.mjs tests/auth-worker.test.mjs tests/server-security.test.mjs",
     "start": "node tools/serve.mjs 8177",
     "test:browser": "node tests/game2d-browser.mjs",
     "test:audio": "node tests/audio-browser.mjs",
@@ -16,7 +16,8 @@
     "test:compare": "node tests/compare-browser.mjs",
     "test:official": "node tests/official-browser.mjs",
     "sfx:render": "node tools/sfx/render.mjs",
-    "build:dist": "node tools/build-dist.mjs"
+    "build:dist": "node tools/build-dist.mjs",
+    "test:pov": "node tests/pov-browser.mjs"
   },
   "devDependencies": {
     "playwright-core": "1.64.1"

@@ -14,12 +14,13 @@ const allowStandIn = process.argv.includes('--allow-stand-in');
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 const copy = (rel) => cpSync(join(root, rel), join(out, rel), { recursive: true });
-for (const rel of ['index.html', 'app']) copy(rel);
+for (const rel of ['index.html', 'pov.html', 'app']) copy(rel);
 mkdirSync(join(out, 'charts'), { recursive: true });
 
 // 正式版の譜面・人物画像（manifest と cut/）・音声・BGM だけ（終了した ver1 の素材は含めない）。欠けていれば止める（--allow-missing-assets を除く）
 const { GAME } = await import(pathToFileURL(join(root, 'app/config.js')).href);
-const stage = ['assets/stage/IMG_7441.JPG', 'assets/stage/IMG_7439.JPG'];
+// 背景: ゲームの舞台 2 枚と、POV / 正解動作ガイドの道場（利用者の提供素材）
+const stage = ['assets/stage/IMG_7441.JPG', 'assets/stage/IMG_7439.JPG', 'assets/dojo_pov.jpg'];
 const missing = stage.filter((f) => !existsSync(join(root, f)));
 const plan = [];
 // 公式デモ（シミュレーション。入力ログつき）。無ければ止める（node tools/make-demos.mjs で作る）
@@ -52,7 +53,8 @@ if (missing.length) {
   }
   for (const f of stage) copy(f);
 }
-// 旧 3D の素材やライブラリが紛れ込んでいないことを確認
+// 旧 3D の素材やライブラリが紛れ込んでいないことを確認（POV / 正解動作ガイドが遅延読み込みする Three.js 1 ファイルだけは許可）
+const ALLOWED_3D = [join(out, 'app/pov/vendor/three.module.min.js')];
 let n = 0, bytes = 0;
 const bad = [];
 const walk = (d) => {
@@ -61,7 +63,7 @@ const walk = (d) => {
     if (s.isDirectory()) walk(p);
     else {
       n++; bytes += s.size;
-      if (['.glb', '.gltf', '.blend', '.mp4'].includes(extname(f).toLowerCase()) || /three/i.test(f)) bad.push(p);
+      if (['.glb', '.gltf', '.blend', '.mp4'].includes(extname(f).toLowerCase()) || (/three/i.test(f) && !ALLOWED_3D.includes(p) && !/THREE_LICENSE\.txt$/.test(f))) bad.push(p);
     }
   }
 };

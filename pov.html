@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c130d">
+<meta name="robots" content="noindex, nofollow">
+<title>POV / 正解動作ガイド — KIVA THE KARATE</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="app/pov/pov.css">
+</head>
+<body>
+<div id="pov">
+  <header id="povHead">
+    <a id="povBack" class="pbtn" href="./" aria-label="ゲームに戻る">← 戻る</a>
+    <div class="ttl"><b>POV AR / 正解動作ガイド</b><small id="povKind">2D背景を用いた主観視点シミュレーション（実空間に固定する AR ではありません）</small></div>
+  </header>
+
+  <main id="povStage" aria-label="視点の表示">
+    <div id="bgLayer" aria-hidden="true">
+      <img id="bgDojo" alt="" src="assets/dojo_pov.jpg" decoding="async">
+      <video id="bgCam" playsinline muted hidden></video>
+      <video id="bgFile" playsinline muted hidden></video>
+    </div>
+    <canvas id="povGl" aria-label="正解動作の人体モデル"></canvas>
+    <div id="horizon" hidden aria-hidden="true"><span>視線の水平</span></div>
+    <div id="demoBadge" role="status">DEMO / 人工的な動作、空手の正解ではありません</div>
+    <div id="warnBadge" hidden role="status" aria-live="polite"></div>
+    <figure id="pip" hidden><img id="pipImg" alt="同じ時刻の元映像のコマ（2D）"><figcaption id="pipCap">元映像のコマ（2D）</figcaption></figure>
+    <div id="povMsg" role="status" aria-live="polite">読み込み中…</div>
+  </main>
+
+  <section id="povPanel" aria-label="操作パネル">
+    <button type="button" id="panelToggle" class="pbtn" aria-expanded="true" aria-controls="panelBody">▼ 操作パネルをたたむ</button>
+    <div id="panelBody">
+      <div class="row seg" role="radiogroup" aria-label="背景" data-group="bg">
+        <span class="lab">背景</span>
+        <button type="button" class="pbtn" data-v="dojo" aria-pressed="true">DOJO</button>
+        <button type="button" class="pbtn" data-v="camera" aria-pressed="false">LIVE CAMERA</button>
+        <button type="button" class="pbtn" data-v="file" aria-pressed="false">VIDEO FILE</button>
+      </div>
+      <div class="row seg" role="radiogroup" aria-label="視点" data-group="view">
+        <span class="lab">視点</span>
+        <button type="button" class="pbtn" data-v="eye" aria-pressed="true">EYE<small>一人称</small></button>
+        <button type="button" class="pbtn" data-v="over" aria-pressed="false">OVER SHOULDER<small>背面確認</small></button>
+        <button type="button" class="pbtn" data-v="third" aria-pressed="false">THIRD PERSON<small>全身検証</small></button>
+      </div>
+      <div class="row seg" role="radiogroup" aria-label="表示" data-group="display">
+        <span class="lab">表示</span>
+        <button type="button" class="pbtn" data-v="solid" aria-pressed="true">SOLID<small>立体腕・手・脚</small></button>
+        <button type="button" class="pbtn" data-v="skeleton" aria-pressed="false">SKELETON<small>関節・骨</small></button>
+        <button type="button" class="pbtn" data-v="both" aria-pressed="false">BOTH</button>
+        <button type="button" class="pbtn" data-v="off" aria-pressed="false">OFF</button>
+      </div>
+      <p id="viewNote" class="note"></p>
+      <div class="row transport">
+        <button type="button" id="btnPlay" class="pbtn primary" aria-label="再生">▶</button>
+        <button type="button" id="btnPrev" class="pbtn" aria-label="前のコマ">◀|</button>
+        <button type="button" id="btnNext" class="pbtn" aria-label="次のコマ">|▶</button>
+        <input type="range" id="seek" min="0" max="82.2" step="0.01" value="0" aria-label="シーク">
+        <output id="timeLab">0.00 s・コマ 0000</output>
+      </div>
+      <div class="row seg" role="radiogroup" aria-label="速度" data-group="speed">
+        <span class="lab">速度</span>
+        <button type="button" class="pbtn" data-v="0.5" aria-pressed="false">0.5×</button>
+        <button type="button" class="pbtn" data-v="1" aria-pressed="true">1×</button>
+        <button type="button" class="pbtn" data-v="1.5" aria-pressed="false">1.5×</button>
+        <label class="chk"><input type="checkbox" id="stepMode"> 0.2 秒のコマのまま（補間しない）</label>
+      </div>
+      <canvas id="timeline" height="64" aria-label="頭と胴体の向き・警告の時間グラフ（タップでシーク）"></canvas>
+
+      <details id="adjust">
+        <summary class="pbtn">調整（透明度・スケール・FOV・オフセット）</summary>
+        <div class="grid">
+          <label>透明度 <input type="range" data-k="opacity" min="0.15" max="1" step="0.05"><output></output></label>
+          <label>スケール <input type="range" data-k="scale" min="0.7" max="1.3" step="0.01"><output></output></label>
+          <label>視野角 FOV（縦） <input type="range" data-k="fov" min="40" max="110" step="1"><output></output></label>
+          <label>視線の上下補正 <input type="range" data-k="pitchOffset" min="-45" max="30" step="1"><output></output></label>
+          <label>カメラ前後（体から） <input type="range" data-k="offFwd" min="-0.3" max="0.3" step="0.01"><output></output></label>
+          <label>カメラ左右 <input type="range" data-k="offSide" min="-0.3" max="0.3" step="0.01"><output></output></label>
+          <label>高さ（カメラ上下） <input type="range" data-k="offUp" min="-0.4" max="0.4" step="0.01"><output></output></label>
+          <label>背面確認の距離 <input type="range" data-k="backDist" min="0.4" max="0.8" step="0.02"><output></output></label>
+          <label>全身検証の方位 <input type="range" data-k="orbit" min="-180" max="180" step="5"><output></output></label>
+          <label>指の曲げ（固定。実測ではない） <input type="range" data-k="curl" min="0" max="1" step="0.05"><output></output></label>
+          <label>向きの平滑化（前後のコマ） <input type="range" data-k="smooth" min="0" max="4" step="1"><output></output></label>
+          <label>背景の拡大 <input type="range" data-k="bgZoom" min="1" max="2" step="0.05"><output></output></label>
+          <label>背景の上下位置 <input type="range" data-k="bgY" min="0" max="100" step="1"><output></output></label>
+          <label>前方の基準 <select data-k="fwdSource"><option value="head">頭（耳・鼻）</option><option value="body">胴体（肩・腰）</option></select></label>
+          <label class="chk"><input type="checkbox" data-k="mirror"> 左右反転</label>
+          <label class="chk"><input type="checkbox" data-k="horizon"> 視線の水平線を表示</label>
+          <label class="chk"><input type="checkbox" data-k="pip"> 元映像のコマ（2D）を小さく表示</label>
+        </div>
+        <button type="button" id="btnReset" class="pbtn">リセット（調整を初期値に）</button>
+      </details>
+
+      <details id="dataBox">
+        <summary class="pbtn">正解動作データ（3D 関節）の読み込み</summary>
+        <p id="dataState" class="note"></p>
+        <div class="row wrap">
+          <label class="pbtn file">CSV / JSON を選ぶ<input type="file" id="poseFile" accept=".csv,.json,.txt,text/csv,application/json"></label>
+          <button type="button" id="btnDemo" class="pbtn">DEMO に戻す</button>
+        </div>
+        <div class="grid">
+          <label>データの時刻のずれ（秒） <input type="number" id="timeOffset" step="0.01" value="0"></label>
+          <label>信頼度のしきい値 <input type="number" id="confTh" step="0.05" min="0" max="1" value="0.5"></label>
+          <label class="chk"><input type="checkbox" id="interpLow"> 信頼度不足の点も前後から補間する</label>
+        </div>
+        <button type="button" id="btnReprocess" class="pbtn">この条件で読み直す</button>
+        <div id="report" class="report"></div>
+        <div class="row wrap">
+          <button type="button" id="btnSampleCsv" class="pbtn">入力形式の見本 CSV（DEMO の値）</button>
+          <button type="button" id="btnExport" class="pbtn">処理後のデータを JSON で保存</button>
+        </div>
+        <p class="note">入力形式: MediaPipe Pose Landmarker の <b>worldLandmarks</b>（33 点・メートル・腰の中点が原点・y が下）。CSV は <code>time,joint,x,y,z,visibility</code>（1 行 = 1 関節）か、1 行 = 1 コマの横長（<code>time,x0,y0,z0,v0,…</code>）。JSON は <code>{"frames":[{"t":0,"worldLandmarks":[{"x":…,"y":…,"z":…,"visibility":…}, …33]}]}</code>。詳しくは README の「POV / 正解動作ガイド」。読み込んだファイルは端末の中だけで使い、送信も書き換えもしません。</p>
+      </details>
+
+      <details id="videoBox" hidden>
+        <summary class="pbtn">背景の動画ファイル</summary>
+        <div class="row wrap">
+          <label class="pbtn file">動画を選ぶ<input type="file" id="videoFile" accept="video/*"></label>
+          <label>動画の時刻のずれ（秒） <input type="number" id="videoOffset" step="0.05" value="0"></label>
+        </div>
+      </details>
+
+      <details id="diagBox">
+        <summary class="pbtn">診断（視点の推定・骨の当てはめ）</summary>
+        <pre id="diag" aria-live="off"></pre>
+      </details>
+
+      <div class="row wrap">
+        <button type="button" id="btnShot" class="pbtn">比較画像（背景のみ／重ねた結果）</button>
+      </div>
+    </div>
+  </section>
+
+  <dialog id="shotDlg">
+    <h2>背景のみ／重ねた結果</h2>
+    <div class="shots"><figure><img id="shotBg" alt="背景のみ"><figcaption>背景のみ</figcaption></figure><figure><img id="shotMix" alt="重ねた結果"><figcaption>重ねた結果</figcaption></figure></div>
+    <div class="row wrap"><a id="dlBg" class="pbtn" download="pov_background.png">背景のみを保存</a><a id="dlMix" class="pbtn" download="pov_overlay.png">重ねた結果を保存</a><button type="button" class="pbtn" id="shotClose">閉じる</button></div>
+  </dialog>
+</div>
+<script type="module" src="app/pov/main.js"></script>
+</body>
+</html>
